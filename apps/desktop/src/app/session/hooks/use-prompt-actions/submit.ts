@@ -6,7 +6,12 @@ import { type ChatMessage, textPart } from '@/lib/chat-messages'
 import { optimisticAttachmentRef } from '@/lib/chat-runtime'
 import { sanitizeComposerInput } from '@/lib/composer-input-sanitize'
 import { setMutableRef } from '@/lib/mutable-ref'
-import { isVoicePlaybackActive, stopVoicePlayback } from '@/lib/voice-playback'
+import {
+  isVoicePlaybackActive,
+  markVoicePlaybackInterrupted,
+  stopVoicePlayback,
+  takeVoicePlaybackInterrupted
+} from '@/lib/voice-playback'
 import {
   $composerAttachments,
   clearComposerAttachments,
@@ -144,8 +149,13 @@ export function useSubmitPrompt(deps: SubmitPromptDeps) {
 
       // Typing barge-in: a new send silences any in-flight spoken reply.
       if (isVoicePlaybackActive()) {
+        markVoicePlaybackInterrupted()
         stopVoicePlayback()
       }
+
+      // Barged mid-speech (here or via the voice loop's VAD)? Flag the submit
+      // so the backend notes the interruption to the model.
+      const interrupted = takeVoicePlaybackInterrupted()
 
       // Queue drains carry their source session explicitly. A background drain
       // must never inherit the currently selected session after the user moves
@@ -463,7 +473,11 @@ export function useSubmitPrompt(deps: SubmitPromptDeps) {
 
         try {
           await withSessionBusyRetry(() =>
-            requestGateway('prompt.submit', { session_id: sessionId, text }, PROMPT_SUBMIT_REQUEST_TIMEOUT_MS)
+            requestGateway(
+              'prompt.submit',
+              { session_id: sessionId, text, ...(interrupted && { interrupted }) },
+              PROMPT_SUBMIT_REQUEST_TIMEOUT_MS
+            )
           )
         } catch (firstErr) {
           const recoverStoredSessionId = targetStoredSessionId ?? selectedStoredSessionIdRef.current
@@ -491,7 +505,11 @@ export function useSubmitPrompt(deps: SubmitPromptDeps) {
               }
 
               await withSessionBusyRetry(() =>
-                requestGateway('prompt.submit', { session_id: recoveredId, text }, PROMPT_SUBMIT_REQUEST_TIMEOUT_MS)
+                requestGateway(
+                  'prompt.submit',
+                  { session_id: recoveredId, text, ...(interrupted && { interrupted }) },
+                  PROMPT_SUBMIT_REQUEST_TIMEOUT_MS
+                )
               )
             } else {
               submitErr = firstErr

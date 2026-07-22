@@ -11817,6 +11817,41 @@ def test_tts_stream_begin_barges_in_on_previous_pipeline(monkeypatch):
     server._tts_stream_stop()
 
 
+def test_tts_stream_stop_latches_interruption_for_next_turn(monkeypatch):
+    """Cutting live speech (interrupt / typing barge) marks the latch the next
+    turn's model note consumes; a mode change (user_barge=False) does not."""
+    import tools.tts_streaming as ts
+
+    ts._interrupted_at = None
+    monkeypatch.setenv("HERMES_VOICE_TTS", "1")
+    monkeypatch.setenv("HERMES_VOICE", "0")
+    _fake_tts_modules(monkeypatch)
+
+    server._tts_stream_begin()
+    server._tts_stream_stop()  # default: user barge
+    assert ts.take_speech_interrupted() is True
+
+    server._tts_stream_begin()
+    server._tts_stream_stop(user_barge=False)  # /voice off
+    assert ts.take_speech_interrupted() is False
+
+
+def test_tts_stream_stop_after_natural_finish_does_not_latch(monkeypatch):
+    """Speech that already finished (done set) isn't an interruption."""
+    import tools.tts_streaming as ts
+
+    ts._interrupted_at = None
+    monkeypatch.setenv("HERMES_VOICE_TTS", "1")
+    monkeypatch.setenv("HERMES_VOICE", "0")
+    _fake_tts_modules(monkeypatch)
+
+    server._tts_stream_begin()
+    with server._tts_stream_lock:
+        server._tts_stream_state["done"].set()
+    server._tts_stream_stop()
+    assert ts.take_speech_interrupted() is False
+
+
 def test_tts_stream_vad_barge_in_cuts_pipeline(monkeypatch):
     """User speech during playback (listen_for_speech → True) stops TTS and
     emits voice.interrupted."""

@@ -3,6 +3,7 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import { useI18n } from '@/i18n'
 import { monitorSpeechDuringPlayback } from '@/lib/voice-barge-in'
 import {
+  markVoicePlaybackInterrupted,
   playSpeechText,
   type SpeechStreamSession,
   startSpeechStream,
@@ -252,6 +253,7 @@ export function useVoiceConversation({
         stopBargeMonitorRef.current?.()
         stopBargeMonitorRef.current = monitorSpeechDuringPlayback(() => {
           barged = true
+          markVoicePlaybackInterrupted()
           stopVoicePlayback()
         })
 
@@ -288,6 +290,7 @@ export function useVoiceConversation({
       // listening instead of finishing the interrupted answer.
       stopBargeMonitorRef.current = monitorSpeechDuringPlayback(() => {
         barged = true
+        markVoicePlaybackInterrupted()
         stopVoicePlayback()
       })
 
