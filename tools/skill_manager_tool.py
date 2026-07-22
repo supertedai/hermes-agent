@@ -810,8 +810,21 @@ def _atomic_write_text(file_path: Path, content: str, encoding: str = "utf-8") -
 # Core actions
 # =============================================================================
 
+# SYMBIOSE (BL-2290, Morten 2026-07-23): alt Opus lager havner automatisk i sin egen kategori.
+# Uten dette blandes Opus-genererte skills med Nous sine 19 medfoelgende, og etter hvert som Opus
+# lager flere er det umulig aa se hva som er systemets eget. Kategorien er en katalog
+# (_resolve_skill_dir), saa dette grupperer dem ogsaa fysisk — og GUI-ens SkillsPage filtrerer paa
+# category, saa de blir en egen seksjon uten frontend-endring.
+DEFAULT_SKILL_CATEGORY = "opus"
+
+
 def _create_skill(name: str, content: str, category: str = None) -> Dict[str, Any]:
-    """Create a new user skill with SKILL.md content."""
+    """Create a new user skill with SKILL.md content.
+
+    Uten eksplisitt kategori havner skillen i DEFAULT_SKILL_CATEGORY (opus) — automatisk
+    merking av alt Opus selv lager, per Morten-direktiv."""
+    if category is None:
+        category = DEFAULT_SKILL_CATEGORY
     # Validate name
     err = _validate_name(name)
     if err:
