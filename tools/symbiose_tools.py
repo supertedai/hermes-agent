@@ -37,6 +37,13 @@ _IOT_ROUTES = {
 }
 
 
+def _safe_int(v, default: int) -> int:
+    try:
+        return int(v)
+    except (TypeError, ValueError):
+        return default
+
+
 def _get(path: str, timeout: int = 15) -> str:
     try:
         with urllib.request.urlopen(API_BASE + path, timeout=timeout) as r:
@@ -102,7 +109,9 @@ registry.register(
     },
     handler=lambda args, **kw: _get(
         "/graph/query?" + urllib.parse.urlencode(
-            {"query": args.get("cypher", ""), "limit": int(args.get("limit") or 25)})),
+            # defensiv koersjon (reviewer BL-2298): modell-emittert limit kan være "all" e.l.
+            # — feilveier skal returnere JSON, aldri kaste ValueError ut av handleren.
+            {"query": args.get("cypher", ""), "limit": _safe_int(args.get("limit"), 25)})),
     emoji="🕸️",
     max_result_size_chars=10000,
 )
