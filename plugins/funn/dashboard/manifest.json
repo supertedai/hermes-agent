@@ -1,0 +1,14 @@
+{
+  "name": "funn",
+  "label": "Funn",
+  "description": "Funn-loopen: chat (Hermes + OpenWebUI) → funn → proposal → drainer → BL — hele sveisen synlig (BL-2368)",
+  "icon": "Lightbulb",
+  "version": "0.1.0",
+  "tab": {
+    "path": "/funn",
+    "position": "after:kanban"
+  },
+  "entry": "dist/index.js",
+  "css": "dist/style.css",
+  "api": "plugin_api.py"
+}
