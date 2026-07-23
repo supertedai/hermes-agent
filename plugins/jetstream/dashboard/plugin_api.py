@@ -30,7 +30,7 @@ _Q_SOURCES = (
     "OPTIONAL MATCH (j)-[:CONSUMED_BY]->(c) "
     "RETURN j.name AS name, j.source_kind AS kind, j.domain AS domain, "
     "       j.migration_status AS migration, j.consumer_status AS consumer_status, "
-    "       j.endpoint_hint AS endpoint, j.legacy_container AS container, "
+    "       j.endpoint_hint AS endpoint, j.legacy_container AS container, j.nokkelref AS nokkelref, "
     "       count(c) AS consumers, toString(j.updated_at) AS updated "
     "ORDER BY j.domain, j.name"
 )

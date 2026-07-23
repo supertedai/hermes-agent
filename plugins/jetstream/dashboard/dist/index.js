@@ -170,6 +170,32 @@
           "sett / rotér nøkkel")));
   }
 
+  function SourceRow({ s, refresh, setMsg, expanded, onToggle }) {
+    const mig = MIG[s.migration] || { label: s.migration || "?", cls: "js-badge-legacy" };
+    const rows = [
+      h("tr", { key: s.name + "-r", className: "js-row", onClick: onToggle },
+        h("td", { className: "js-name" }, s.name),
+        h("td", null, s.kind || ""),
+        h("td", null, h("span", { className: "js-badge " + mig.cls }, mig.label)),
+        h("td", null, s.consumers > 0
+          ? h("span", { className: "js-consumer-ok" }, "✓ " + s.consumers + " konsument" + (s.consumers > 1 ? "er" : ""))
+          : h("span", { className: "js-consumer-missing" }, "ingen ⚠ (D4)")),
+        h("td", { className: "js-endpoint", title: s.endpoint || "" },
+          (s.endpoint || "—").length > 48 ? (s.endpoint || "").slice(0, 45) + "…" : (s.endpoint || "—")),
+        h("td", { className: "js-container" }, (s.nokkelref || []).join(", ") || "—")),
+    ];
+    if (expanded) {
+      rows.push(h("tr", { key: s.name + "-x", className: "js-row-expanded" },
+        h("td", { colSpan: 6 },
+          h("div", { className: "js-detail" },
+            s.container ? h("span", null, "legacy-container: " + s.container + " · ") : null,
+            h("span", null, "konsum-status: " + (s.consumer_status || "?")),
+            s.updated ? h("span", null, " · oppdatert: " + s.updated) : null),
+          h(ActionBar, { s, refresh, setMsg }))));
+    }
+    return rows;
+  }
+
   function JetstreamEnvView() {
     const [tick, setTick] = useState(0);
     const [msg, setMsg] = useState(null);

@@ -1,6 +1,6 @@
 {
   "name": "jetstream",
-  "label": "Env",
+  "label": "Jetstream",
   "description": "Jetstream env: kilderegisteret (API/RSS/…) + nøkler — den ENE flaten alle agenter, workers og Morten legger inn og leser fra (BL-2354)",
   "icon": "Radio",
   "version": "0.2.0",
