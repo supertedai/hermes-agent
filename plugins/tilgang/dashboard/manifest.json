@@ -1,0 +1,11 @@
+{
+  "name": "tilgang",
+  "label": "Tilgang",
+  "description": "Tilgangskartet: hvem når hva (SSH/tunnel/sudo) + creds-lager (write-only, verdier bor kun i .11-storen) — BL-2378",
+  "icon": "KeyRound",
+  "version": "0.1.0",
+  "tab": { "path": "/tilgang", "position": "after:kanban" },
+  "entry": "dist/index.js",
+  "css": "dist/style.css",
+  "api": "plugin_api.py"
+}
