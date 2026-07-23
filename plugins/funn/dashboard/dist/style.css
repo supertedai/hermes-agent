@@ -27,3 +27,5 @@
 .fn-ev-label { font-size: .7rem; opacity: .6; margin-top: .3rem; }
 .fn-ev-text { font-size: .82rem; white-space: pre-wrap; }
 .fn-err { color: #c55; padding: .4rem 0; font-size: .85rem; }
+
+.fn-bl { font-family: monospace; font-size: .78rem; background: rgba(120,100,220,.14); color: #86c; padding: .1rem .45rem; border-radius: 6px; white-space: nowrap; }

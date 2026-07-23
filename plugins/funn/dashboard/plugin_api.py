@@ -19,6 +19,8 @@ _Q_CHAT_FINDINGS = (
     "OPTIONAL MATCH (p)-[:EVIDENCED_BY]->(c:ConversationTurn) "
     "RETURN p.title AS title, p.category AS category, p.confidence AS confidence, "
     "coalesce(p.status,'proposed') AS status, p.source AS source, "
+    "p.bl_number AS bl_number, p.assigned_agent AS assigned_agent, "
+    "coalesce(p.triage_status,'') AS triage_status, "
     "toString(p.created_at) AS created, left(coalesce(c.user_message,''),400) AS user_msg, "
     "left(coalesce(c.assistant_message,''),400) AS assistant_msg "
     "ORDER BY p.created_at DESC"

@@ -54,22 +54,27 @@
           "høstet av 120B fra Hermes + OpenWebUI-samtaler — klikk for chat-evidens")),
       h("table", { className: "fn-table" },
         h("thead", null, h("tr", null,
-          ["funn", "type", "sikkerhet", "status", "flate", "når"].map((c) =>
+          ["funn", "type", "sikkerhet", "BL → agent", "status", "flate", "når"].map((c) =>
             h("th", { key: c }, c)))),
         h("tbody", null, rows.flatMap((f, i) => {
           const key = f.title + i;
+          const bl = f.bl_number
+            ? h("span", { className: "fn-bl" }, "BL-" + f.bl_number + " → "
+                + (f.assigned_agent || "").replace("symbiose-", ""))
+            : h("span", { className: "fn-dim" }, "u-triagert");
           const out = [h("tr", { key, className: "fn-row",
                               onClick: () => setOpen(open === key ? null : key) },
             h("td", { className: "fn-title" }, f.title),
             h("td", null, h("span", { className: "fn-badge " + (CAT[f.category] || "") },
               f.category)),
             h("td", null, f.confidence != null ? Number(f.confidence).toFixed(2) : ""),
+            h("td", null, bl),
             h("td", null, h("span", { className: "fn-badge " + ST(f.status) }, f.status)),
             h("td", null, (f.source || "").replace("chat:", "")),
             h("td", { className: "fn-dim" }, (f.created || "").slice(0, 16)))];
           if (open === key) {
             out.push(h("tr", { key: key + "-x", className: "fn-evidence" },
-              h("td", { colSpan: 6 },
+              h("td", { colSpan: 7 },
                 h("div", { className: "fn-ev-block" },
                   h("div", { className: "fn-ev-label" }, "BRUKER:"),
                   h("div", { className: "fn-ev-text" }, f.user_msg || "—"),
