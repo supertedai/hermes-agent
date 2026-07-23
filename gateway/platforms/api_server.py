@@ -5463,6 +5463,38 @@ class APIServerAdapter(BasePlatformAdapter):
                         "firewalling this port to trusted networks only.",
                         self.name, self._host,
                     )
+                    # BL-2370 FAIL-CLOSED (symbiose-reviewer BLOCK-1): på en
+                    # nettverkstilgjengelig bind med usandboxet lokal backend
+                    # NEKTES oppstart hvis plattformens RESOLVERTE toolsets
+                    # inneholder utførelses-primitiver — med mindre operatøren
+                    # eksplisitt har satt HERMES_APISERVER_ALLOW_EXECUTION=1
+                    # (materialiseringen av Mortens fremtidige opt-in). Uten
+                    # dette var vernet én fail-open config-linje: mistes
+                    # platform_toolsets.api_server, faller plattformen tilbake
+                    # til FULL verktøyflate mot et offentlig-tilstøtende
+                    # endepunkt (ngrok-frontend holder nøkkelen).
+                    import os as _os
+                    if _os.environ.get("HERMES_APISERVER_ALLOW_EXECUTION") != "1":
+                        _danger = {
+                            "terminal", "process", "file", "code_execution",
+                            "delegation", "cronjob", "browser", "computer_use",
+                        }
+                        try:
+                            from hermes_cli.tools_config import _get_platform_tools
+                            from hermes_cli.config import load_config as _lc
+                            _resolved = set(
+                                _get_platform_tools(_lc() or {}, "api_server") or [])
+                        except Exception:
+                            _resolved = _danger  # uleselig config = anta farlig
+                        _hit = sorted(_resolved & _danger)
+                        if _hit:
+                            raise RuntimeError(
+                                f"[{self.name}] NEKTER oppstart (fail-closed, BL-2370): "
+                                f"nettverkstilgjengelig + lokal backend + utførelses-"
+                                f"toolsets {_hit} resolvert for api_server. Sett "
+                                f"platform_toolsets.api_server til et trygt sett, eller "
+                                f"HERMES_APISERVER_ALLOW_EXECUTION=1 for eksplisitt opt-in."
+                            )
 
             self._runner = web.AppRunner(self._app)
             await self._runner.setup()
