@@ -1,0 +1,14 @@
+{
+  "name": "jetstream",
+  "label": "Jetstream",
+  "description": "Verden→Symbiose ingest-registeret: alle eksterne kilder, konsum-kontrakt og migreringsstatus (BL-2348)",
+  "icon": "Radio",
+  "version": "0.1.0",
+  "tab": {
+    "path": "/jetstream",
+    "position": "after:kanban"
+  },
+  "entry": "dist/index.js",
+  "css": "dist/style.css",
+  "api": "plugin_api.py"
+}
