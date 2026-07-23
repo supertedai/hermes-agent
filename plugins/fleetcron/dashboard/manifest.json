@@ -1,0 +1,14 @@
+{
+  "name": "fleetcron",
+  "label": "Cron",
+  "description": "Hele symbiosens planlagte kjøring på ett brett: Hermes-jobber (.15) + flåte-cron fra .11/.12/.13 (launchd+crontab via grafen) — BL-2363",
+  "icon": "Clock",
+  "version": "0.1.0",
+  "tab": {
+    "path": "/cron",
+    "override": "/cron"
+  },
+  "entry": "dist/index.js",
+  "css": "dist/style.css",
+  "api": "plugin_api.py"
+}
