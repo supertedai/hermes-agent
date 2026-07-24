@@ -1,0 +1,11 @@
+{
+  "name": "intelligens",
+  "label": "Intelligens",
+  "description": "Meta-loopen: ble Opus smartere? Intelligens-indeks-trajektorie + forseglet baseline + før/etter-eval (BL-2409, ADR-019)",
+  "icon": "Brain",
+  "version": "0.1.0",
+  "tab": { "path": "/intelligens", "position": "after:kanban" },
+  "entry": "dist/index.js",
+  "css": "dist/style.css",
+  "api": "plugin_api.py"
+}

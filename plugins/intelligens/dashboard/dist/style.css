@@ -1,0 +1,27 @@
+.iq-wrap { padding: 1.2rem 1.6rem; max-width: 1050px; }
+.iq-header h2 { margin: 0 0 .2rem; }
+.iq-sub { opacity: .75; margin: 0 0 1rem; font-size: .9rem; max-width: 760px; }
+.iq-stats { display: flex; gap: .7rem; margin-bottom: 1.3rem; flex-wrap: wrap; }
+.iq-stat { text-align: center; padding: .6rem 1.1rem; min-width: 130px; }
+.iq-stat-n { font-size: 1.35rem; font-weight: 700; }
+.iq-stat-l { font-size: .72rem; opacity: .7; margin-top: .15rem; }
+.iq-v-up .iq-stat-n { color: #2a6; }
+.iq-v-down .iq-stat-n { color: #c55; }
+.iq-v-flat .iq-stat-n { opacity: .8; }
+.iq-v-warn .iq-stat-n { color: #a80; }
+.iq-section { margin-bottom: 1.4rem; }
+.iq-h { margin: .6rem 0 .4rem; font-size: 1rem; }
+.iq-dim { opacity: .6; font-weight: 400; font-size: .8rem; }
+.iq-note { margin-top: .3rem; }
+.iq-sparkwrap { color: #4a9; margin: .3rem 0 .6rem; }
+.iq-spark { max-width: 100%; }
+.iq-table { width: 100%; border-collapse: collapse; font-size: .85rem; }
+.iq-table th { text-align: left; padding: .3rem .5rem; opacity: .6;
+  border-bottom: 1px solid rgba(128,128,128,.3); font-weight: 500; }
+.iq-row td { padding: .3rem .5rem; border-bottom: 1px solid rgba(128,128,128,.12); }
+.iq-name { font-weight: 600; white-space: nowrap; }
+.iq-badge { padding: .1rem .5rem; border-radius: 10px; font-size: .74rem; }
+.iq-sealed { background: rgba(40,170,100,.18); color: #2a6; }
+.iq-proposed { background: rgba(40,140,200,.15); color: #29c; }
+.iq-foot { font-size: .78rem; opacity: .65; margin-top: 1.2rem; max-width: 760px; }
+.iq-err { color: #c55; } .iq-loading { opacity: .6; }
