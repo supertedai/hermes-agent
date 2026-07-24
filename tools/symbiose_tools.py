@@ -281,3 +281,37 @@ registry.register(
     emoji="\U0001F50D",
     max_result_size_chars=9000,
 )
+
+
+registry.register(
+    name="propose_action",
+    toolset="symbiose",
+    schema={
+        "name": "propose_action",
+        "description": ("Foresla en system-/fleet-handling (f.eks. restart av en daemon, en fiks). Skriver et "
+                        "GATET forslag som IKKE kjores for Morten godkjenner (propose-first, aldri direkte "
+                        "aktuering). Returnerer proposal_id + risk_level. Bruk nar du vil ENDRE noe, ikke bare observere."),
+        "parameters": {"type": "object", "properties": {
+            "command": {"type": "string", "description": "Konkret kommando/handling som foreslas"},
+            "reasoning": {"type": "string", "description": "Begrunnelsen for handlingen"},
+        }, "required": ["command", "reasoning"]},
+    },
+    handler=lambda args, **kw: _post("/agi/proposals/command", {
+        "command": args.get("command",""), "reasoning": args.get("reasoning",""),
+        "created_by": "opus-hermes-gui"}),
+    emoji="\U0001F4E4",
+    max_result_size_chars=3000,
+)
+
+registry.register(
+    name="list_proposals",
+    toolset="symbiose",
+    schema={
+        "name": "list_proposals",
+        "description": "List gatede forslag (propose->approve->execute) med status og risk. Se hva som venter pa Mortens godkjenning.",
+        "parameters": {"type": "object", "properties": {}, "required": []},
+    },
+    handler=lambda args, **kw: _get("/agi/proposals/?limit=15", timeout=20),
+    emoji="\U0001F4CB",
+    max_result_size_chars=8000,
+)
