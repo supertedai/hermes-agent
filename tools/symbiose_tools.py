@@ -172,7 +172,7 @@ registry.register(
         "description": "Symbiose-flåtens helse: containere, oppetid, ressurser (meta-introspeksjon).",
         "parameters": {"type": "object", "properties": {}, "required": []},
     },
-    handler=lambda args, **kw: _get("/api/v1/meta_introspection", timeout=20),
+    handler=lambda args, **kw: _post("/api/v1/meta_introspection", {"operation": "introspect", "user_id": "morten"}, timeout=25),
     emoji="💓",
     max_result_size_chars=8000,
 )
