@@ -315,3 +315,32 @@ registry.register(
     emoji="\U0001F4CB",
     max_result_size_chars=8000,
 )
+
+
+registry.register(
+    name="learning_trends",
+    toolset="symbiose",
+    schema={
+        "name": "learning_trends",
+        "description": ("Laerings-EFFEKTIVITET over tid: parameter-trender, korreksjonsrate, hva som "
+                        "forbedres eller degraderer. For a se om systemet faktisk laerer bedre."),
+        "parameters": {"type": "object", "properties": {}, "required": []},
+    },
+    handler=lambda args, **kw: _get("/api/v1/learning/trends/morten", timeout=20),
+    emoji="\U0001F4C8",
+    max_result_size_chars=7000,
+)
+
+registry.register(
+    name="shadow_tests",
+    toolset="symbiose",
+    schema={
+        "name": "shadow_tests",
+        "description": ("Shadow/A-B-tester: for-etter-maling av endringer (prompts, parametre, invariants) "
+                        "mot baseline FOR de gar live. Kjernen i kontrollert laering og rollback."),
+        "parameters": {"type": "object", "properties": {}, "required": []},
+    },
+    handler=lambda args, **kw: _get("/api/v1/learning/shadow-tests", timeout=20),
+    emoji="\U0001F9EA",
+    max_result_size_chars=7000,
+)
