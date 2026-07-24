@@ -259,3 +259,25 @@ registry.register(
     emoji="\U0001F578",
     max_result_size_chars=6000,
 )
+
+
+registry.register(
+    name="qdrant_search",
+    toolset="symbiose",
+    schema={
+        "name": "qdrant_search",
+        "description": ("DIREKTE semantisk/vektor-sok i Symbiose Qdrant (RAG-laget) — ikke via den trege "
+                        "ask-pipelinen. Rask etter oppvarming (forste cold-kall ~40-60s). Collections: "
+                        "efc, private, theory, semantic_mesh m.fl."),
+        "parameters": {"type": "object", "properties": {
+            "query": {"type": "string", "description": "Soketekst"},
+            "collection": {"type": "string", "description": "Qdrant-collection (default efc)"},
+            "limit": {"type": "integer", "description": "Antall treff (default 5)"},
+        }, "required": ["query"]},
+    },
+    handler=lambda args, **kw: _post("/api/v1/qdrant/search", {
+        "query": args.get("query",""), "collection": args.get("collection") or "efc",
+        "limit": _safe_int(args.get("limit"), 5)}, timeout=100),
+    emoji="\U0001F50D",
+    max_result_size_chars=9000,
+)
