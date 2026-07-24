@@ -176,3 +176,34 @@ registry.register(
     emoji="💓",
     max_result_size_chars=8000,
 )
+
+
+registry.register(
+    name="fleet_status",
+    toolset="symbiose",
+    schema={
+        "name": "fleet_status",
+        "description": ("Worker/daemon-flatens tilstand: total, helse-fordeling, problem-daemons "
+                        "(ikke-healthy) og stale (healthy men gammel heartbeat). Bruk for a svare pa "
+                        "hvilke workers finnes og hvordan star de."),
+        "parameters": {"type": "object", "properties": {
+            "stale_minutes": {"type": "integer", "description": "Heartbeat eldre enn dette (min) = stale (default 30)"},
+        }, "required": []},
+    },
+    handler=lambda args, **kw: _get("/fleet/status?stale_minutes=%d&problem_limit=40" % _safe_int(args.get("stale_minutes"), 30)),
+    emoji="\U0001F681",
+    max_result_size_chars=10000,
+)
+
+registry.register(
+    name="learning_status",
+    toolset="symbiose",
+    schema={
+        "name": "learning_status",
+        "description": "Symbioses laerings-loop: erfaringer, laerte monstre, suksessrate, reparasjoner (self-improvement).",
+        "parameters": {"type": "object", "properties": {}, "required": []},
+    },
+    handler=lambda args, **kw: _get("/learning/status", timeout=20),
+    emoji="\U0001F4C8",
+    max_result_size_chars=8000,
+)
