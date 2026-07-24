@@ -207,3 +207,36 @@ registry.register(
     emoji="\U0001F4C8",
     max_result_size_chars=8000,
 )
+
+
+registry.register(
+    name="active_goals",
+    toolset="symbiose",
+    schema={
+        "name": "active_goals",
+        "description": "Aktive OpusGoals med prioritet (P0-P3) og status. Bruk for malbilde / hva bor gjores.",
+        "parameters": {"type": "object", "properties": {}, "required": []},
+    },
+    handler=lambda args, **kw: _get("/graph/query?" + urllib.parse.urlencode({
+        "query": "MATCH (g:OpusGoal) WHERE g.status=\x27active\x27 RETURN g.title AS title, g.priority AS prio, g.status AS status ORDER BY g.priority LIMIT 20",
+        "limit": 20})),
+    emoji="\U0001F3AF",
+    max_result_size_chars=6000,
+)
+
+registry.register(
+    name="recent_changes",
+    toolset="symbiose",
+    schema={
+        "name": "recent_changes",
+        "description": "Nylige beslutninger/innsikter skrevet til Symbiose-grafen (hva ble nylig endret eller laert).",
+        "parameters": {"type": "object", "properties": {
+            "limit": {"type": "integer", "description": "Antall (default 10)"},
+        }, "required": []},
+    },
+    handler=lambda args, **kw: _get("/graph/query?" + urllib.parse.urlencode({
+        "query": "MATCH (f:SelfKnowledgeFact) WHERE f.kind IN [\x27decision\x27,\x27insight\x27,\x27plan\x27] RETURN f.key AS key, f.kind AS kind, toString(f.updated_at) AS at ORDER BY f.updated_at DESC LIMIT " + str(_safe_int(args.get("limit"), 10)),
+        "limit": _safe_int(args.get("limit"), 10)})),
+    emoji="\U0001F4DD",
+    max_result_size_chars=6000,
+)
