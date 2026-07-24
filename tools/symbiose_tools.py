@@ -240,3 +240,22 @@ registry.register(
     emoji="\U0001F4DD",
     max_result_size_chars=6000,
 )
+
+
+registry.register(
+    name="gnn_similar",
+    toolset="symbiose",
+    schema={
+        "name": "gnn_similar",
+        "description": ("Finn konsepter GNN-naermest et gitt konsept (multi-tier embedding-similaritet). "
+                        "DIREKTE GNN-lag, ikke via den trege ask-pipelinen. Konseptnavn ma matche eksakt "
+                        "(bruk graph_query for a finne gyldige navn forst)."),
+        "parameters": {"type": "object", "properties": {
+            "concept": {"type": "string", "description": "Eksakt konseptnavn"},
+            "top_k": {"type": "integer", "description": "Antall (default 8)"},
+        }, "required": ["concept"]},
+    },
+    handler=lambda args, **kw: _get("/gnn/similar/" + urllib.parse.quote(str(args.get("concept",""))) + "?top_k=" + str(_safe_int(args.get("top_k"), 8)), timeout=40),
+    emoji="\U0001F578",
+    max_result_size_chars=6000,
+)
