@@ -851,6 +851,80 @@ def _make_request_fingerprint(body: Dict[str, Any], keys: List[str]) -> str:
     return sha256(repr(subset).encode("utf-8")).hexdigest()
 
 
+# Opt-in header a *first-party* streaming client sets to also receive the
+# agent's internal thinking + subagent activity as custom SSE events on the
+# /v1/chat/completions channel.  Absent/falsey (Open WebUI, OpenAI SDKs, any
+# external client) → the stream stays exactly as before: content chunks plus
+# the pre-existing ``event: hermes.tool.progress`` lifecycle events, and the
+# internal thinking/subagent_progress stay off the wire (matching the historic
+# "intentionally not forwarded" behaviour).  BL-2506.
+_STREAM_INTERNALS_HEADER = "X-Hermes-Stream-Internals"
+
+
+def _flag_is_truthy(value: Optional[str]) -> bool:
+    """True for the usual affirmative header spellings; False otherwise."""
+    return str(value or "").strip().lower() in ("1", "true", "yes", "on")
+
+
+def _map_internal_progress_event(
+    event_type: str,
+    tool_name: Optional[str] = None,
+    preview: Optional[str] = None,
+    **kwargs: Any,
+) -> Optional[tuple]:
+    """Map a raw agent progress event to a tagged SSE queue item, or None.
+
+    Pure (no I/O) so it is unit-testable without a running server.  Only the
+    *internal* thinking + subagent events are mapped; tool lifecycle events
+    (``tool.started``/``tool.completed``/``tool.failed``) return None because
+    the structured ``tool_start_callback``/``tool_complete_callback`` already
+    own the ``hermes.tool.progress`` channel — forwarding them here too would
+    duplicate every tool event.  Event shapes mirror the canonical consumer
+    ``tools/delegation_live_log.observe`` and the emit sites in
+    ``tools/delegate_tool``.
+
+    Returns ``("__hermes_thinking__", payload)`` for agent/subagent reasoning,
+    ``("__hermes_subagent__", payload)`` for delegation activity, else None.
+    """
+    et = str(event_type or "")
+    if et == "_thinking":
+        # cb("_thinking", <text>) — the text rides in the tool_name slot.
+        txt = str(tool_name or preview or "").strip()
+        return ("__hermes_thinking__", {"scope": "agent", "delta": txt}) if txt else None
+    if et == "reasoning.available":
+        # cb("reasoning.available", "_thinking", <text>, None)
+        txt = str(preview or "").strip()
+        return ("__hermes_thinking__", {"scope": "agent", "delta": txt}) if txt else None
+    if et == "subagent.thinking":
+        txt = str(preview or "").strip()
+        return ("__hermes_subagent__", {"phase": "thinking", "text": txt}) if txt else None
+    if et == "subagent.start":
+        return ("__hermes_subagent__", {"phase": "start", "text": str(preview or "").strip()})
+    if et == "subagent.text":
+        txt = str(preview or "")
+        return ("__hermes_subagent__", {"phase": "text", "text": txt}) if txt else None
+    if et == "subagent.tool":
+        return ("__hermes_subagent__", {
+            "phase": "tool",
+            "tool": str(tool_name or "").strip(),
+            "text": str(preview or "").strip(),
+        })
+    if et in ("subagent.progress", "subagent_progress"):
+        # Legacy summary may ride in preview OR the tool_name positional slot.
+        txt = str(preview or tool_name or "").strip()
+        return ("__hermes_subagent__", {"phase": "progress", "text": txt}) if txt else None
+    if et == "subagent.complete":
+        return ("__hermes_subagent__", {
+            "phase": "complete",
+            "status": kwargs.get("status"),
+            "duration": kwargs.get("duration_seconds"),
+            "summary": str(kwargs.get("summary") or preview or "").strip(),
+        })
+    # tool.started/completed/failed, subagent.spawn_requested, and any other
+    # event are intentionally dropped on this channel.
+    return None
+
+
 def _derive_chat_session_id(
     system_prompt: Optional[str],
     first_user_message: str,
@@ -2799,6 +2873,11 @@ class APIServerAdapter(BasePlatformAdapter):
             import queue as _q
             _stream_q: _q.Queue = _q.Queue()
 
+            # First-party opt-in: also stream internal thinking + subagent
+            # activity as custom SSE events.  Default off → byte-identical to
+            # the historic behaviour for Open WebUI / OpenAI SDK clients.
+            _stream_internals = _flag_is_truthy(request.headers.get(_STREAM_INTERNALS_HEADER))
+
             def _on_delta(delta):
                 # Filter out None — the agent fires stream_delta_callback(None)
                 # to signal the CLI display to close its response box before
@@ -2858,14 +2937,23 @@ class APIServerAdapter(BasePlatformAdapter):
                     "status": "completed",
                 }))
 
+            # Internal thinking + subagent activity ride on
+            # ``tool_progress_callback``.  It is wired ONLY when the client
+            # opted in via _STREAM_INTERNALS_HEADER; ``_on_progress`` maps just
+            # the thinking/subagent events (via the pure
+            # ``_map_internal_progress_event``) and deliberately drops
+            # tool.started/completed/failed — those are owned by the structured
+            # ``tool_start_callback``/``tool_complete_callback`` (which carry the
+            # tool_call id), so forwarding them here too would duplicate every
+            # tool event.  When the header is absent the callback is None and the
+            # stream is byte-identical to the historic behaviour.  BL-2506.
+            def _on_progress(event_type, tool_name=None, preview=None, args=None, **kwargs):
+                item = _map_internal_progress_event(event_type, tool_name, preview, **kwargs)
+                if item is not None:
+                    _stream_q.put(item)
+
             # Start agent in background.  agent_ref is a mutable container
             # so the SSE writer can interrupt the agent on client disconnect.
-            #
-            # ``tool_progress_callback`` is intentionally not wired here:
-            # it would duplicate every emit because ``run_agent`` fires it
-            # side-by-side with ``tool_start_callback``/``tool_complete_callback``.
-            # The structured callbacks are strictly richer (they carry
-            # the tool_call id), so they own the chat-completions SSE channel.
             agent_ref = [None]
             agent_task = asyncio.ensure_future(self._run_agent(
                 user_message=user_message,
@@ -2875,6 +2963,7 @@ class APIServerAdapter(BasePlatformAdapter):
                 stream_delta_callback=_on_delta,
                 tool_start_callback=_on_tool_start,
                 tool_complete_callback=_on_tool_complete,
+                tool_progress_callback=(_on_progress if _stream_internals else None),
                 agent_ref=agent_ref,
                 gateway_session_key=gateway_session_key,
                 route=route,
@@ -3059,6 +3148,18 @@ class APIServerAdapter(BasePlatformAdapter):
                     event_data = json.dumps(item[1])
                     await response.write(
                         f"event: hermes.tool.progress\ndata: {event_data}\n\n".encode()
+                    )
+                elif isinstance(item, tuple) and len(item) == 2 and item[0] == "__hermes_subagent__":
+                    # Opt-in only (see _STREAM_INTERNALS_HEADER): delegation activity.
+                    event_data = json.dumps(item[1], ensure_ascii=False)
+                    await response.write(
+                        f"event: hermes.subagent.progress\ndata: {event_data}\n\n".encode()
+                    )
+                elif isinstance(item, tuple) and len(item) == 2 and item[0] == "__hermes_thinking__":
+                    # Opt-in only (see _STREAM_INTERNALS_HEADER): agent/subagent reasoning.
+                    event_data = json.dumps(item[1], ensure_ascii=False)
+                    await response.write(
+                        f"event: hermes.thinking\ndata: {event_data}\n\n".encode()
                     )
                 else:
                     content_chunk = {
