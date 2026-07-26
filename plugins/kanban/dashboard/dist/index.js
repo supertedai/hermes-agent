@@ -8,6 +8,12 @@
  * Plain IIFE, no build step. Uses window.__HERMES_PLUGIN_SDK__ for React +
  * shadcn primitives; HTML5 drag-and-drop for card movement on desktop and
  * a pointer-based fallback for touch.
+ *
+ * NATIVE: rendered entirely with the Nous DS-komponenter (Card/CardHeader/
+ * CardTitle/CardContent/Badge/Button/Input/Select/…) + Hermes' egne tailwind-
+ * klasser — samme komponentbibliotek som Keys/Skills/Plugins/Funn-sidene.
+ * Ingen håndrullet CSS (style.css er tom med vilje). Columns are sharp DS
+ * Cards; task cards are flat border blocks (no rounded gamified chrome).
  */
 (function () {
   "use strict";
@@ -18,7 +24,7 @@
   const { React } = SDK;
   const h = React.createElement;
   const {
-    Card, CardContent,
+    Card, CardHeader, CardTitle, CardContent,
     Badge, Button, Input, Label, Select, SelectOption,
   } = SDK.components;
   const { useState, useEffect, useCallback, useMemo, useRef } = SDK.hooks;
@@ -151,15 +157,55 @@
     return tx(t, key, FALLBACK_DIAGNOSTIC_EVENT_LABELS[kind]);
   }
 
-  const COLUMN_DOT = {
-    triage: "hermes-kanban-dot-triage",
-    todo: "hermes-kanban-dot-todo",
-    ready: "hermes-kanban-dot-ready",
-    running: "hermes-kanban-dot-running",
-    blocked: "hermes-kanban-dot-blocked",
-    done: "hermes-kanban-dot-done",
-    archived: "hermes-kanban-dot-archived",
+  // Status-dot colours (informative colour coding — a dot is a dot, not a
+  // gamified card). Rendered as a small round span with an inline background.
+  const DOT_COLOR = {
+    triage: "#b47dd6",
+    todo: "var(--color-muted-foreground)",
+    ready: "#d4b348",
+    running: "#3fb97d",
+    blocked: "var(--color-destructive, #d14a4a)",
+    done: "#4a8cd1",
+    archived: "var(--color-border)",
   };
+  const DOT_CLS = "inline-block w-2 h-2 rounded-full shrink-0";
+  function dotStyle(status) { return { background: DOT_COLOR[status] || "var(--color-muted-foreground)" }; }
+
+  // Severity → tailwind text colour (diagnostics/attention/warnings).
+  function sevColor(sev) {
+    return sev === "critical" ? "text-red-500"
+      : sev === "error" ? "text-orange-500"
+      : "text-amber-500";
+  }
+  // Severity → border+bg for the attention strip container.
+  function sevBorderBg(sev) {
+    return sev === "critical" ? "border-red-500/55 bg-red-500/10"
+      : sev === "error" ? "border-orange-500/45 bg-orange-500/[0.08]"
+      : "border-amber-500/35 bg-amber-500/[0.06]";
+  }
+  // Severity → left-border+bg for an individual diagnostic card.
+  function diagBorderBg(sev) {
+    return sev === "critical" ? "border-l-[3px] border-red-500 bg-red-500/[0.07]"
+      : sev === "error" ? "border-l-[3px] border-orange-500 bg-orange-500/[0.06]"
+      : "border-l-[3px] border-amber-500 bg-amber-500/5";
+  }
+  // Warning badge (per-card) colour + weight.
+  function warnBadgeCls(sev) {
+    return cn("text-[0.75rem] ml-1 cursor-help", sevColor(sev),
+      (sev === "error" || sev === "critical") ? "font-bold" : "");
+  }
+  // Run-history left-border colour by outcome.
+  function runBorderClass(r) {
+    if (!r.ended_at) return "border-l-2 border-emerald-500";
+    const o = r.outcome || r.status || "ended";
+    if (o === "completed") return "border-l-2 border-blue-500";
+    if (o === "reclaimed") return "border-l-2 border-amber-500";
+    if (o === "blocked" || o === "crashed" || o === "timed_out" ||
+        o === "gave_up" || o === "spawn_failed") {
+      return "border-l-2 border-destructive bg-destructive/[0.06]";
+    }
+    return "border-l-2 border-gray-500";
+  }
 
   function isDiagnosticEvent(kind) {
     return Object.prototype.hasOwnProperty.call(FALLBACK_DIAGNOSTIC_EVENT_LABELS, kind);
@@ -380,10 +426,10 @@
   function MarkdownBlock(props) {
     const enabled = props.enabled !== false;
     if (!enabled) {
-      return h("pre", { className: "hermes-kanban-pre" }, props.source || "");
+      return h("pre", { className: "m-0 px-2.5 py-2 whitespace-pre-wrap break-words bg-foreground/[0.04] border border-border font-mono text-[0.8rem] leading-relaxed text-foreground" }, props.source || "");
     }
     return h("div", {
-      className: "hermes-kanban-md",
+      className: "text-[0.85rem] leading-relaxed text-foreground [&_p]:my-1 [&_ul]:my-1 [&_ul]:ml-4 [&_ul]:list-disc [&_li]:my-0.5 [&_a]:text-ring [&_a]:underline [&_h1]:text-[1.05rem] [&_h2]:text-[0.95rem] [&_h3]:text-[0.88rem] [&_h4]:text-[0.82rem] [&_h1]:mt-2 [&_h2]:mt-2 [&_strong]:font-semibold [&_code]:font-mono [&_code]:text-[0.8rem] [&_code]:px-1 [&_code]:bg-foreground/[0.08] [&_pre]:my-1.5 [&_pre]:p-2 [&_pre]:border [&_pre]:border-border [&_pre]:overflow-x-auto",
       dangerouslySetInnerHTML: { __html: sanitizeMarkdownHtml(renderMarkdown(props.source || "")) },
     });
   }
@@ -403,7 +449,9 @@
       if (e.pointerType !== "touch") return;
       e.preventDefault();
       const proxy = el.cloneNode(true);
-      proxy.classList.add("hermes-kanban-touch-proxy");
+      proxy.style.boxShadow = "0 8px 20px rgba(0,0,0,0.35)";
+      proxy.style.transform = "scale(1.02)";
+      proxy.style.transition = "none";
       document.body.appendChild(proxy);
       let lastTarget = null;
 
@@ -417,8 +465,8 @@
         const trash = under && under.closest && under.closest("[data-kanban-trash]");
         const target = col || trash;
         if (target !== lastTarget) {
-          if (lastTarget) lastTarget.classList.remove("hermes-kanban-column--drop");
-          if (target) target.classList.add("hermes-kanban-column--drop");
+          if (lastTarget) { lastTarget.style.outline = ""; lastTarget.style.outlineOffset = ""; }
+          if (target) { target.style.outline = "2px solid var(--color-ring)"; target.style.outlineOffset = "-2px"; }
           lastTarget = target;
         }
       }
@@ -427,7 +475,7 @@
         document.removeEventListener("pointerup", up);
         document.removeEventListener("pointercancel", up);
         if (lastTarget) {
-          lastTarget.classList.remove("hermes-kanban-column--drop");
+          lastTarget.style.outline = ""; lastTarget.style.outlineOffset = "";
           const status = lastTarget.getAttribute("data-kanban-column");
           const isTrash = lastTarget.hasAttribute("data-kanban-trash");
           if (isTrash) {
@@ -1043,7 +1091,7 @@
     const renderMd = !config || config.render_markdown !== false;
 
     return h(ErrorBoundary, null,
-      h("div", { className: "hermes-kanban flex flex-col gap-4" },
+      h("div", { className: "w-full flex flex-col gap-4 p-4" },
         h(BoardSwitcher, {
           board: board,
           boardList: boardList,
@@ -1180,56 +1228,50 @@
       if (s === "error" && topSev !== "critical") topSev = "error";
     }
     return h("div", {
-      className: cn(
-        "hermes-kanban-attention",
-        "hermes-kanban-attention--" + topSev,
-      ),
+      className: cn("border rounded-none overflow-hidden", sevBorderBg(topSev)),
     },
-      h("div", { className: "hermes-kanban-attention-bar" },
-        h("span", { className: "hermes-kanban-attention-icon" },
+      h("div", { className: "flex items-center gap-2 px-3 py-1.5 text-[0.8125rem]" },
+        h("span", { className: cn("text-base", sevColor(topSev)) },
           topSev === "critical" ? "!!!" : topSev === "error" ? "!!" : "⚠"),
-        h("span", { className: "hermes-kanban-attention-text" },
+        h("span", { className: "flex-1" },
           diagTasks.length === 1
             ? tx(t, "taskNeedsAttention", "1 task needs attention")
             : tx(t, "tasksNeedAttention", "{n} tasks need attention",
                 { n: diagTasks.length }),
         ),
         h("button", {
-          className: "hermes-kanban-attention-toggle",
+          className: "bg-transparent border border-border/60 rounded-none px-2 py-0.5 text-xs cursor-pointer hover:bg-muted/40",
           onClick: function () { setExpanded(function (x) { return !x; }); },
           type: "button",
         }, expanded ? tx(t, "hide", "Hide") : tx(t, "show", "Show")),
         h("button", {
-          className: "hermes-kanban-attention-dismiss",
+          className: "bg-transparent border border-border/60 rounded-none px-2 py-0.5 text-xs cursor-pointer hover:bg-muted/40",
           onClick: function () { setDismissed(true); },
           title: "Hide until next page reload",
           type: "button",
         }, "\u2715"),
       ),
       expanded
-        ? h("div", { className: "hermes-kanban-attention-list" },
+        ? h("div", { className: "border-t border-border/40 py-1" },
             diagTasks.map(function (task) {
               const sev = (task.warnings && task.warnings.highest_severity) || "warning";
               const kinds = task.warnings && task.warnings.kinds ? Object.keys(task.warnings.kinds) : [];
               return h("div", {
                 key: task.id,
-                className: cn(
-                  "hermes-kanban-attention-row",
-                  "hermes-kanban-attention-row--" + sev,
-                ),
+                className: "flex items-center gap-2 px-3 py-1.5 text-[0.8125rem] hover:bg-muted/20",
               },
-                h("span", { className: "hermes-kanban-attention-row-sev" },
+                h("span", { className: cn("inline-block min-w-[1.5rem] font-semibold", sevColor(sev)) },
                   sev === "critical" ? "!!!" : sev === "error" ? "!!" : "⚠"),
-                h("span", { className: "hermes-kanban-attention-row-id" }, task.id),
-                h("span", { className: "hermes-kanban-attention-row-title" },
+                h("span", { className: "font-mono text-xs text-muted-foreground min-w-[7rem]" }, task.id),
+                h("span", { className: "flex-1 whitespace-nowrap overflow-hidden text-ellipsis" },
                   task.title || tx(t, "untitled", "(untitled)")),
-                h("span", { className: "hermes-kanban-attention-row-meta" },
+                h("span", { className: "text-xs text-muted-foreground" },
                   task.assignee ? "@" + task.assignee : tx(t, "unassigned", "unassigned"),
                   " \u00b7 ",
                   kinds.length > 0 ? kinds.join(", ") : tx(t, "diagnostic", "diagnostic"),
                 ),
                 h("button", {
-                  className: "hermes-kanban-attention-row-btn",
+                  className: "bg-transparent border border-border/60 rounded-none px-2 py-0.5 text-xs cursor-pointer hover:bg-muted/40",
                   onClick: function () { props.onOpen(task.id); },
                   type: "button",
                 }, tx(t, "open", "Open")),
@@ -1263,8 +1305,8 @@
     const { action, onExec, busy, extra } = props;
     const label = (action.suggested ? "\u2606 " : "") + action.label;
     const cls = cn(
-      "hermes-kanban-diag-action-btn",
-      action.suggested ? "hermes-kanban-diag-action-btn--suggested" : "",
+      "px-2.5 py-1 text-xs bg-foreground/[0.08] border border-border/60 cursor-pointer no-underline hover:bg-foreground/[0.12] disabled:opacity-40",
+      action.suggested ? "bg-amber-500/15 border-amber-500/40 font-semibold" : "",
     );
     if (action.kind === "reclaim" || action.kind === "reassign" ||
         action.kind === "unblock") {
@@ -1300,7 +1342,7 @@
       }, label);
     }
     // Unknown kind — render informational, non-interactive.
-    return h("span", { className: cls + " hermes-kanban-diag-action-btn--unknown" },
+    return h("span", { className: cls + " opacity-60 cursor-default" },
       label);
   }
 
@@ -1335,7 +1377,7 @@
       if (action.kind === "comment") {
         // Scroll the comment input into view; the drawer already has one
         // at the bottom. Focus it so the operator can start typing.
-        const ta = document.querySelector(".hermes-kanban-drawer-comment-row input, .hermes-kanban-drawer-comment-row textarea");
+        const ta = document.querySelector("[data-kanban-comment-row] input, [data-kanban-comment-row] textarea");
         if (ta) {
           ta.scrollIntoView({ behavior: "smooth", block: "nearest" });
           ta.focus();
@@ -1409,36 +1451,35 @@
       return a.kind === "reassign";
     });
 
-    const sevClass = "hermes-kanban-diag--" + (diag.severity || "warning");
-    return h("div", { className: cn("hermes-kanban-diag", sevClass) },
-      h("div", { className: "hermes-kanban-diag-header" },
-        h("span", { className: "hermes-kanban-diag-sev" },
+    return h("div", { className: cn("px-3 py-2.5 flex flex-col gap-1.5", diagBorderBg(diag.severity || "warning")) },
+      h("div", { className: "flex items-center gap-2" },
+        h("span", { className: cn("font-bold min-w-[1.5rem]", sevColor(diag.severity || "warning")) },
           diag.severity === "critical" ? "!!!" :
           diag.severity === "error" ? "!!" : "\u26a0"),
-        h("span", { className: "hermes-kanban-diag-title" },
+        h("span", { className: "font-semibold text-sm" },
           diag.title),
       ),
-      h("div", { className: "hermes-kanban-diag-detail" },
+      h("div", { className: "text-[0.8125rem] text-foreground leading-snug" },
         diag.detail),
       diag.data && Object.keys(diag.data).length > 0
-        ? h("div", { className: "hermes-kanban-diag-data" },
+        ? h("div", { className: "flex flex-col gap-0.5 text-xs" },
             Object.keys(diag.data).map(function (k) {
               const v = diag.data[k];
               if (Array.isArray(v) && v.length > 0 && typeof v[0] === "string" &&
                   v[0].indexOf("t_") === 0) {
                 // Task-id list — render as chips.
-                return h("div", { key: k, className: "hermes-kanban-diag-data-row" },
-                  h("span", { className: "hermes-kanban-diag-data-key" }, k + ":"),
+                return h("div", { key: k, className: "flex items-center gap-1.5 flex-wrap" },
+                  h("span", { className: "text-muted-foreground font-medium" }, k + ":"),
                   v.map(function (x) {
                     return h("code", {
-                      key: x, className: "hermes-kanban-event-phantom-chip",
+                      key: x, className: "font-mono text-xs px-1.5 py-0.5 bg-red-400/15 border border-red-400/30",
                     }, x);
                   }),
                 );
               }
-              return h("div", { key: k, className: "hermes-kanban-diag-data-row" },
-                h("span", { className: "hermes-kanban-diag-data-key" }, k + ":"),
-                h("span", { className: "hermes-kanban-diag-data-val" },
+              return h("div", { key: k, className: "flex items-center gap-1.5 flex-wrap" },
+                h("span", { className: "text-muted-foreground font-medium" }, k + ":"),
+                h("span", { className: "font-mono" },
                   Array.isArray(v) ? v.join(", ") : String(v)),
               );
             }),
@@ -1447,11 +1488,11 @@
       // Inline reassign picker — only shown when the diagnostic offers
       // a reassign action. Profile list comes from the board payload.
       reassignAction
-        ? h("div", { className: "hermes-kanban-diag-reassign-row" },
-            h("span", { className: "hermes-kanban-diag-reassign-label" },
+        ? h("div", { className: "flex items-center gap-1.5 text-xs" },
+            h("span", { className: "text-muted-foreground" },
               tx(t, "reassignTo", "Reassign to:")),
             h("select", {
-              className: "hermes-kanban-recovery-select",
+              className: "h-7 text-xs border border-border bg-card px-1.5 text-foreground",
               value: reassignProfile,
               onChange: function (e) { setReassignProfile(e.target.value); },
             },
@@ -1462,7 +1503,7 @@
             ),
           )
         : null,
-      h("div", { className: "hermes-kanban-diag-actions" },
+      h("div", { className: "flex flex-wrap gap-1.5 mt-0.5" },
         (diag.actions || []).map(function (a, i) {
           return h(DiagnosticActionButton, {
             key: a.kind + i,
@@ -1479,8 +1520,8 @@
       msg
         ? h("div", {
             className: cn(
-              "hermes-kanban-diag-msg",
-              msg.ok ? "hermes-kanban-diag-msg--ok" : "hermes-kanban-diag-msg--err",
+              "text-xs px-2 py-1.5",
+              msg.ok ? "border border-emerald-500/30 bg-emerald-500/10 text-emerald-600" : "border border-orange-500/30 bg-orange-500/10 text-orange-600",
             ),
           }, msg.text)
         : null,
@@ -1500,22 +1541,22 @@
       // an empty "Recovery" header — keeps clean tasks visually clean.
       return null;
     }
-    return h("div", { className: "hermes-kanban-section" },
-      h("div", { className: "hermes-kanban-section-head-row" },
-        h("span", { className: "hermes-kanban-section-head" },
+    return h("div", { className: "flex flex-col gap-1.5" },
+      h("div", { className: "flex items-center justify-between gap-2" },
+        h("span", { className: "text-[0.72rem] font-semibold tracking-[0.07em] uppercase text-muted-foreground" },
           hasOpenDiags
-            ? h("span", { className: "hermes-kanban-section-head-warning" },
+            ? h("span", { className: "text-amber-500" },
                 `\u26a0 ${tx(t, "diagnostics", "Diagnostics")} (${diags.length})`)
             : tx(t, "diagnostics", "Diagnostics"),
         ),
         h("button", {
-          className: "hermes-kanban-section-toggle",
+          className: "bg-transparent border border-border/60 rounded-none px-2 py-0.5 text-xs cursor-pointer hover:bg-muted/40",
           onClick: function () { setOpen(function (x) { return !x; }); },
           type: "button",
         }, open ? tx(t, "hide", "Hide") : tx(t, "show", "Show")),
       ),
       open
-        ? h("div", { className: "hermes-kanban-diag-list" },
+        ? h("div", { className: "flex flex-col gap-2.5" },
             diags.map(function (d, i) {
               return h(DiagnosticCard, {
                 key: props.task.id + ":" + d.kind + i,
@@ -1543,7 +1584,7 @@
       href: DOCS_URL,
       target: "_blank",
       rel: "noopener noreferrer",
-      className: "hermes-kanban-docs-link",
+      className: "inline-flex items-center justify-center w-6 h-6 rounded-full text-xs font-semibold leading-none text-muted-foreground bg-muted/40 border border-border no-underline cursor-help hover:text-foreground hover:bg-muted",
       title: "Open Hermes Kanban docs in a new tab",
       "aria-label": "Hermes Kanban documentation",
     }, "?");
@@ -1703,7 +1744,7 @@
           h(Button, { onClick: loadAll, size: "sm" }, "Reload"),
         ),
         msg ? h("div", {
-          className: msg.ok ? "hermes-kanban-msg-ok" : "hermes-kanban-msg-err",
+          className: msg.ok ? "mt-1.5 px-2 py-1.5 text-sm border border-emerald-500/35 bg-emerald-500/10 text-emerald-600 dark:text-emerald-400" : "mt-1.5 px-2 py-1.5 text-sm border border-destructive/40 bg-destructive/10 text-destructive",
         }, msg.text) : null,
 
         settings ? h("div", { className: "grid gap-3 sm:grid-cols-3" },
@@ -1847,7 +1888,7 @@
     const shouldShow = hasMultipleBoards || totalAcrossAllBoards > 0;
     if (!shouldShow) {
       return h("div", {
-        className: "hermes-kanban-boardswitcher-compact",
+        className: "flex justify-end px-1 gap-2 items-center",
         title: tx(t, "boardSwitcherHint", "Boards let you separate unrelated streams of work"),
       },
         h(Button, {
@@ -1866,8 +1907,8 @@
       );
     }
 
-    return h("div", { className: "hermes-kanban-boardswitcher" },
-      h("div", { className: "hermes-kanban-boardswitcher-inner" },
+    return h("div", { className: "border border-border rounded-none px-3.5 py-2.5 bg-muted/20" },
+      h("div", { className: "flex items-end gap-3 flex-wrap" },
         h("div", { className: "flex flex-col gap-0.5" },
           h("div", { className: "text-[11px] tracking-wider text-muted-foreground" },
             tx(t, "board", "Board")),
@@ -1961,14 +2002,14 @@
     }
 
     return h("div", {
-      className: "hermes-kanban-dialog-backdrop",
+      className: "fixed inset-0 z-[60] flex items-center justify-center bg-black/60 backdrop-blur-sm",
       onClick: function (e) { if (e.target === e.currentTarget) props.onCancel(); },
     },
       h("form", {
-        className: "hermes-kanban-dialog",
+        className: "border border-border bg-card rounded-none p-5 w-[28rem] max-w-[calc(100vw-2rem)] max-h-[calc(100vh-3rem)] overflow-auto shadow-2xl",
         onSubmit: onSubmit,
       },
-        h("div", { className: "hermes-kanban-dialog-title" },
+        h("div", { className: "text-base font-semibold mb-1" },
           tx(t, "newBoardTitle", "New board")),
         h("div", { className: "text-xs text-muted-foreground mb-2" },
           tx(t, "newBoardDescription",
@@ -2049,7 +2090,7 @@
           ),
         ),
         err ? h("div", { className: "text-xs text-destructive mt-2" }, err) : null,
-        h("div", { className: "hermes-kanban-dialog-actions" },
+        h("div", { className: "flex justify-end gap-2 mt-4" },
           h(Button, {
             type: "button",
             onClick: props.onCancel,
@@ -2096,15 +2137,15 @@
     }
 
     return h("div", {
-      className: "hermes-kanban-dialog-backdrop",
+      className: "fixed inset-0 z-[60] flex items-center justify-center bg-black/60 backdrop-blur-sm",
       onClick: function (e) { if (e.target === e.currentTarget) props.onCancel(); },
       onKeyDown: function (e) { if (e.key === "Escape") props.onCancel(); },
     },
       h("form", {
-        className: "hermes-kanban-dialog",
+        className: "border border-border bg-card rounded-none p-5 w-[28rem] max-w-[calc(100vw-2rem)] max-h-[calc(100vh-3rem)] overflow-auto shadow-2xl",
         onSubmit: onSubmit,
       },
-        h("div", { className: "hermes-kanban-dialog-title" },
+        h("div", { className: "text-base font-semibold mb-1" },
           tx(t, "boardSettingsTitleFor", "Board settings — {name}",
             { name: b.name || b.slug || "default" })),
         h("div", { className: "flex flex-col gap-3" },
@@ -2145,7 +2186,7 @@
           ),
         ),
         err ? h("div", { className: "text-xs text-destructive mt-2" }, err) : null,
-        h("div", { className: "hermes-kanban-dialog-actions" },
+        h("div", { className: "flex justify-end gap-2 mt-4" },
           h(Button, {
             type: "button",
             onClick: props.onCancel,
@@ -2256,8 +2297,8 @@
     const [assignee, setAssignee] = useState("");
     const [reclaimFirst, setReclaimFirst] = useState(false);
     const [priority, setPriority] = useState("");
-    return h("div", { className: "hermes-kanban-bulk" },
-      h("span", { className: "hermes-kanban-bulk-count" },
+    return h("div", { className: "flex items-center gap-2 flex-wrap px-3 py-1.5 border border-ring/40 bg-ring/10 rounded-none" },
+      h("span", { className: "font-semibold text-xs pr-1" },
         `${props.count} ${tx(t, "selected", "selected")}`),
       h(Button, {
         onClick: function () { props.onApply({ status: "todo" }); },
@@ -2305,7 +2346,7 @@
         variant: "destructive",
         title: "Permanently delete selected tasks. This cannot be undone.",
       }, tx(t, "delete", "Delete")),
-      h("div", { className: "hermes-kanban-bulk-priority",
+      h("div", { className: "flex items-center gap-1 pl-2 border-l border-border/70",
                  title: "Set priority on selected tasks. Higher = claimed first." },
         h(Input, {
           type: "number",
@@ -2324,7 +2365,7 @@
           size: "sm",
         }, tx(t, "setPriority", "Set priority")),
       ),
-      h("div", { className: "hermes-kanban-bulk-reassign",
+      h("div", { className: "flex items-center gap-1 pl-2 border-l border-border/70",
                  title: "Reassign selected tasks to a different Hermes profile. Pick a profile (or unassign) and click Apply." },
         h(Select, Object.assign({
           value: assignee,
@@ -2347,7 +2388,7 @@
           title: "Apply the selected assignee to all selected tasks.",
         }, tx(t, "apply", "Apply")),
       ),
-      h("label", { className: "hermes-kanban-bulk-reclaim-first", title: "Reclaim any active claims before reassigning" },
+      h("label", { className: "inline-flex items-center gap-1 text-[0.7rem] cursor-pointer", title: "Reclaim any active claims before reassigning" },
         h(Checkbox, {
           checked: reclaimFirst,
           onCheckedChange: function (checked) { setReclaimFirst(checked === true); },
@@ -2413,16 +2454,16 @@
       ref: zoneRef,
       "data-kanban-trash": "true",
       className: cn(
-        "hermes-kanban-trash",
-        dragOver ? "hermes-kanban-trash--drop" : "",
-        props.draggingTaskId ? "hermes-kanban-trash--active" : "",
+        "flex-none w-56 flex flex-col items-center justify-center gap-1.5 px-2 py-3 border-2 border-dashed border-border bg-card/85 text-muted-foreground text-xs min-h-[80px] select-none opacity-50 pointer-events-none transition",
+        dragOver ? "border-destructive bg-destructive/10 text-destructive" : "",
+        props.draggingTaskId ? "opacity-100 pointer-events-auto" : "",
       ),
       onDragOver: handleDragOver,
       onDragLeave: handleDragLeave,
       onDrop: handleDrop,
     },
-      h("span", { className: "hermes-kanban-trash-icon" }, "🗑️"),
-      h("span", { className: "hermes-kanban-trash-label" },
+      h("span", { className: "text-xl leading-none" }, "🗑️"),
+      h("span", { className: "font-medium" },
         tx(t, "trash.dropHint", FALLBACK_TRASH.dropHint)),
     );
   }
@@ -2457,10 +2498,8 @@
 
     const isPanBlockedTarget = useCallback(function (target) {
       if (!target) return true;
-      if (target.closest && target.closest(".hermes-kanban-card")) return true;
-      if (target.closest && target.closest(".hermes-kanban-column-add")) return true;
-      if (target.closest && target.closest(".hermes-kanban-col-check")) return true;
-      if (target.closest && target.closest("button,input,textarea,select,a,[role='button']")) return true;
+      if (target.closest && target.closest("[data-task-id]")) return true;
+      if (target.closest && target.closest("button,input,textarea,select,a,[role='button'],[role='checkbox']")) return true;
       return false;
     }, []);
 
@@ -2471,7 +2510,7 @@
       setIsPanning(false);
       if (el) {
         // Keep cursor feedback instant even before React flushes the state update.
-        el.classList.remove("hermes-kanban-columns--panning");
+        el.style.cursor = "";
         el.style.userSelect = "";
       }
       if (panRef.current.cleanup) panRef.current.cleanup();
@@ -2496,7 +2535,7 @@
       panRef.current.startX = e.clientX;
       panRef.current.scrollLeft = el.scrollLeft;
       setIsPanning(true);
-      el.classList.add("hermes-kanban-columns--panning");
+      el.style.cursor = "grabbing";
       el.style.userSelect = "none";
 
       function onMouseMove(ev) {
@@ -2520,7 +2559,7 @@
     }, [isPanBlockedTarget, stopPan]);
 
     const handleDragStart = useCallback(function (e) {
-      const card = e.target.closest && e.target.closest(".hermes-kanban-card");
+      const card = e.target.closest && e.target.closest("[data-task-id]");
       if (!card) return;
       const taskId = card.getAttribute("data-task-id");
       if (taskId && props.onDragStart) props.onDragStart(taskId);
@@ -2531,9 +2570,9 @@
     return h("div", {
       ref: columnsRef,
       className: cn(
-        "hermes-kanban-columns",
-        isScrollable ? "hermes-kanban-columns--scrollable" : "",
-        isPanning ? "hermes-kanban-columns--panning" : "",
+        "flex gap-3 overflow-x-auto items-start",
+        isScrollable ? "cursor-grab" : "",
+        isPanning ? "cursor-grabbing" : "",
       ),
       onDragStart: handleDragStart,
       onDragEnd: handleDragEnd,
@@ -2623,44 +2662,42 @@
     const colHelp = getColumnHelp(t, props.column.name);
     const colLabel = getColumnLabel(t, props.column.name);
 
-    return h("div", {
+    return h(Card, {
       ref: colRef,
       "data-kanban-column": props.column.name,
       className: cn(
-        "hermes-kanban-column",
-        dragOver ? "hermes-kanban-column--drop" : "",
+        "rounded-none flex-none w-[280px] flex flex-col max-h-[calc(100vh-220px)]",
+        dragOver ? "ring-2 ring-ring" : "",
       ),
       onDragOver: handleDragOver,
       onDragLeave: handleDragLeave,
       onDrop: handleDrop,
     },
-      h("div", { className: "hermes-kanban-column-header",
-                 title: colHelp || "" },
-        h(Checkbox, {
-          className: "hermes-kanban-col-check",
-          title: "Select all tasks in this column",
-          "aria-label": `Select all tasks in ${colLabel || props.column.name}`,
-          checked: props.column.tasks.length > 0 && props.column.tasks.every(function (t) { return props.selectedIds.has(t.id); }),
-          onCheckedChange: function () {
-            if (props.selectAllInColumn) props.selectAllInColumn(props.column.name);
-          },
-          onClick: function (e) { e.stopPropagation(); },
-        }),
-        h("span", { className: cn("hermes-kanban-dot", COLUMN_DOT[props.column.name]) }),
-        h("span", { className: "hermes-kanban-column-label" },
-          colLabel || props.column.name),
-        h("span", { className: "hermes-kanban-column-count",
-                    title: `${props.column.tasks.length} task${props.column.tasks.length === 1 ? "" : "s"} in this column` },
-          props.column.tasks.length),
-        h("button", {
-          type: "button",
-          className: "hermes-kanban-column-add",
-          title: tx(t, "createTask", "Create task in this column"),
-          onClick: function () { setShowCreate(function (v) { return !v; }); },
-        }, showCreate ? "×" : "+"),
-      ),
-      h("div", { className: "hermes-kanban-column-sub" },
-        colHelp || ""),
+      h(CardHeader, { className: "py-2 px-3 gap-1", title: colHelp || "" },
+        h("div", { className: "flex items-center gap-2" },
+          h(Checkbox, {
+            className: "shrink-0",
+            title: "Select all tasks in this column",
+            "aria-label": `Select all tasks in ${colLabel || props.column.name}`,
+            checked: props.column.tasks.length > 0 && props.column.tasks.every(function (t) { return props.selectedIds.has(t.id); }),
+            onCheckedChange: function () {
+              if (props.selectAllInColumn) props.selectAllInColumn(props.column.name);
+            },
+            onClick: function (e) { e.stopPropagation(); },
+          }),
+          h("span", { className: DOT_CLS, style: dotStyle(props.column.name) }),
+          h(CardTitle, { className: "text-sm flex-1 tracking-wide truncate" },
+            colLabel || props.column.name),
+          h(Badge, { tone: "secondary", className: "text-xs tabular-nums",
+                     title: `${props.column.tasks.length} task${props.column.tasks.length === 1 ? "" : "s"} in this column` },
+            String(props.column.tasks.length)),
+          h("button", {
+            type: "button",
+            className: "inline-flex items-center justify-center w-[22px] h-[22px] border border-border text-foreground text-base leading-none hover:bg-foreground/10",
+            title: tx(t, "createTask", "Create task in this column"),
+            onClick: function () { setShowCreate(function (v) { return !v; }); },
+          }, showCreate ? "×" : "+")),
+        colHelp ? h("p", { className: "text-[0.7rem] text-muted-foreground" }, colHelp) : null),
       showCreate ? h(InlineCreate, {
         columnName: props.column.name,
         allTasks: props.allTasks,
@@ -2671,15 +2708,15 @@
         },
         onCancel: function () { setShowCreate(false); },
       }) : null,
-      h("div", { className: "hermes-kanban-column-body" },
+      h(CardContent, { className: cn("p-2 flex flex-col gap-2 overflow-y-auto flex-1 min-h-0", dragOver ? "bg-ring/10" : "") },
         props.column.tasks.length === 0
-          ? h("div", { className: "hermes-kanban-empty" }, tx(t, "noTasks", "— no tasks —"))
+          ? h("div", { className: "py-6 px-2 text-center text-xs text-muted-foreground border border-dashed border-border/70" }, tx(t, "noTasks", "— no tasks —"))
           : lanes
             ? lanes.map(function (lane) {
-                return h("div", { key: lane.assignee, className: "hermes-kanban-lane" },
-                  h("div", { className: "hermes-kanban-lane-head" },
-                    h("span", { className: "hermes-kanban-lane-name" }, lane.assignee),
-                    h("span", { className: "hermes-kanban-lane-count" }, lane.tasks.length),
+                return h("div", { key: lane.assignee, className: "flex flex-col gap-1.5 pt-1 pb-1.5 border-t border-dashed border-border/70 first:border-t-0 first:pt-0" },
+                  h("div", { className: "flex items-center gap-1.5 text-[0.65rem] text-muted-foreground px-0.5" },
+                    h("span", { className: "font-semibold font-mono" }, lane.assignee),
+                    h("span", { className: "ml-auto tabular-nums" }, lane.tasks.length),
                   ),
                   lane.tasks.map(function (tk) {
                     return h(TaskCard, {
@@ -2731,8 +2768,8 @@
       : task.age.created_age_seconds;
     const tier = STALENESS[task.status];
     if (!tier || age == null) return "";
-    if (age >= tier.red)   return "hermes-kanban-card--stale-red";
-    if (age >= tier.amber) return "hermes-kanban-card--stale-amber";
+    if (age >= tier.red)   return "ring-1 ring-destructive";
+    if (age >= tier.amber) return "ring-1 ring-amber-500/60";
     return "";
   }
 
@@ -2748,10 +2785,10 @@
     const handleDragStart = function (e) {
       e.dataTransfer.setData(MIME_TASK, t.id);
       e.dataTransfer.effectAllowed = "move";
-      const selectedCards = document.querySelectorAll(".hermes-kanban-card--selected");
+      const selectedCards = document.querySelectorAll("[data-kanban-selected]");
       if (selectedCards.length > 1 && props.selected) {
         const ghost = document.createElement("div");
-        ghost.className = "hermes-kanban-drag-ghost";
+        ghost.style.cssText = "position:fixed;left:-9999px;padding:0.45rem 0.8rem;background:var(--color-card);border:2px solid var(--color-ring);font-size:0.85rem;font-weight:600;color:var(--color-foreground);box-shadow:0 4px 14px rgba(0,0,0,0.25);pointer-events:none;opacity:0.95;";
         ghost.textContent = selectedCards.length + " cards";
         document.body.appendChild(ghost);
         e.dataTransfer.setDragImage(ghost, 0, 0);
@@ -2794,11 +2831,12 @@
     return h("div", {
       ref: cardRef,
       "data-task-id": t.id,
+      "data-kanban-selected": props.selected ? "true" : undefined,
       className: cn(
-        "hermes-kanban-card",
-        props.selected ? "hermes-kanban-card--selected" : "",
-        props.failed ? "hermes-kanban-card--failed" : "",
-        props.draggingSource ? "hermes-kanban-card--dragging-source" : "",
+        "border border-border bg-background/40 p-2 cursor-grab transition hover:border-ring",
+        props.selected ? "ring-1 ring-ring bg-muted/40" : "",
+        props.failed ? "ring-1 ring-destructive" : "",
+        props.draggingSource ? "opacity-45 grayscale" : "",
         stalenessClass(t),
       ),
       draggable: true,
@@ -2809,30 +2847,26 @@
       onClick: handleClick,
       onKeyDown: handleKeyDown,
     },
-      h(Card, null,
-        h(CardContent, { className: "hermes-kanban-card-content" },
-          h("div", { className: "hermes-kanban-card-row" },
+      h("div", { className: "flex flex-col gap-1.5" },
+          h("div", { className: "flex items-center gap-1.5 flex-wrap" },
             h("label", {
-              className: "hermes-kanban-card-check-wrap",
+              className: "inline-flex items-center justify-center w-6 h-6 -m-1 cursor-pointer",
               title: tx(i18n, "selectForBulk", "Select for bulk actions"),
               onClick: function (e) { e.stopPropagation(); },
             },
               h(Checkbox, {
-                className: "hermes-kanban-card-check",
+                className: "h-3.5 w-3.5 shrink-0",
                 checked: props.selected,
                 onCheckedChange: handleCheckedChange,
                 onClick: function (e) { e.stopPropagation(); },
                 "aria-label": `Select task ${t.id}`,
               }),
             ),
-            h("span", { className: "hermes-kanban-card-id",
+            h("span", { className: "font-mono text-[0.65rem] text-muted-foreground tracking-wide",
                         title: `Task id: ${t.id}. Use this id with kanban_show, /kanban show, or hermes kanban show.` }, t.id),
             t.warnings && t.warnings.count > 0
               ? h("span", {
-                  className: cn(
-                    "hermes-kanban-warning-badge",
-                    "hermes-kanban-warning-badge--" + (t.warnings.highest_severity || "warning"),
-                  ),
+                  className: warnBadgeCls(t.warnings.highest_severity || "warning"),
                   title: (
                     `${t.warnings.count} active diagnostic` +
                     (t.warnings.count === 1 ? "" : "s") +
@@ -2843,18 +2877,18 @@
                    t.warnings.highest_severity === "error" ? "!!" : "⚠")
               : null,
             t.priority > 0
-              ? h(Badge, { className: "hermes-kanban-priority",
+              ? h(Badge, { className: "text-[0.6rem] px-1 py-0",
                            title: `Priority ${t.priority}. Higher-priority tasks are claimed first by the dispatcher.` }, `P${t.priority}`)
               : null,
             t.tenant
-              ? h(Badge, { variant: "outline", className: "hermes-kanban-tag",
+              ? h(Badge, { variant: "outline", className: "text-[0.6rem] px-1 py-0",
                            title: `Tenant: ${t.tenant}. Free-form tag for grouping tasks (customer, project, team).` }, t.tenant)
               : null,
             progress
               ? h("span", {
                   className: cn(
-                    "hermes-kanban-progress",
-                    progress.done === progress.total ? "hermes-kanban-progress--full" : "",
+                    "inline-flex font-mono text-[0.62rem] px-1.5 py-0 border border-border/80 bg-foreground/[0.08] text-muted-foreground tracking-wide",
+                    progress.done === progress.total ? "border-emerald-500/45 bg-emerald-500/20 text-foreground" : "",
                   ),
                   title: `${progress.done} of ${progress.total} child tasks done`,
                 }, `${progress.done}/${progress.total}`)
@@ -2862,37 +2896,36 @@
             needsAssignee
               ? h(Badge, {
                   variant: "outline",
-                  className: "hermes-kanban-needs-assignee",
+                  className: "text-[0.6rem] px-1 py-0",
                   title: tx(i18n, "needsAssigneeHint", "Dependencies are satisfied, but the dispatcher skips this task until you assign a profile."),
                 }, tx(i18n, "needsAssignee", "Needs assignee"))
               : null,
           ),
-          h("div", { className: "hermes-kanban-card-title" },
+          h("div", { className: "text-sm font-medium leading-snug break-words" },
             t.title || tx(i18n, "untitled", "(untitled)")),
-          h("div", { className: "hermes-kanban-card-row hermes-kanban-card-meta" },
+          h("div", { className: "flex items-center gap-1.5 flex-wrap text-[0.7rem] text-muted-foreground gap-2" },
             t.assignee
-              ? h("span", { className: "hermes-kanban-assignee",
+              ? h("span", { className: "font-medium text-foreground/80",
                             title: `Assigned to Hermes profile @${t.assignee}` }, "@", t.assignee)
-              : h("span", { className: "hermes-kanban-unassigned",
+              : h("span", { className: "italic",
                             title: needsAssignee
                               ? tx(i18n, "needsAssigneeHint", "Dependencies are satisfied, but the dispatcher skips this task until you assign a profile.")
                               : "No profile assigned." },
                   tx(i18n, "unassigned", "unassigned")),
             t.comment_count > 0
-              ? h("span", { className: "hermes-kanban-count",
+              ? h("span", { className: "inline-flex items-center gap-0.5",
                             title: `${t.comment_count} comment${t.comment_count === 1 ? "" : "s"} on this task` }, "💬 ", t.comment_count)
               : null,
             t.link_counts && (t.link_counts.parents + t.link_counts.children) > 0
-              ? h("span", { className: "hermes-kanban-count",
+              ? h("span", { className: "inline-flex items-center gap-0.5",
                             title: `${t.link_counts.parents} parent${t.link_counts.parents === 1 ? "" : "s"}, ${t.link_counts.children} child${t.link_counts.children === 1 ? "" : "ren"}. Children stay blocked until their parent is done.` },
                   "↔ ", t.link_counts.parents + t.link_counts.children)
               : null,
-            h("span", { className: "hermes-kanban-ago",
+            h("span", { className: "ml-auto",
                         title: t.created_at ? `Created ${t.created_at}` : "" },
               timeAgo ? timeAgo(t.created_at) : ""),
           ),
         ),
-      ),
     );
   }
 
@@ -2901,7 +2934,7 @@
   //
   // Launched from a column's [+] button. Was an inline form squeezed into
   // the ~280px column (8 fields, unlabeled, no room to breathe); now a
-  // centered modal reusing the hermes-kanban-dialog chrome so the form is
+  // centered modal reusing the border border-border bg-card rounded-none p-5 w-[28rem] max-w-[calc(100vw-2rem)] max-h-[calc(100vh-3rem)] overflow-auto shadow-2xl chrome so the form is
   // resizable-window friendly and every field has a visible label.
   // -------------------------------------------------------------------------
 
@@ -2977,15 +3010,15 @@
     };
 
     return h("div", {
-      className: "hermes-kanban-dialog-backdrop",
+      className: "fixed inset-0 z-[60] flex items-center justify-center bg-black/60 backdrop-blur-sm",
       onClick: function (e) { if (e.target === e.currentTarget) props.onCancel(); },
       onKeyDown: function (e) { if (e.key === "Escape") props.onCancel(); },
     },
       h("form", {
-        className: "hermes-kanban-dialog hermes-kanban-create-dialog",
+        className: "border border-border bg-card rounded-none p-5 w-[28rem] max-w-[calc(100vw-2rem)] max-h-[calc(100vh-3rem)] overflow-auto shadow-2xl w-[36rem]",
         onSubmit: function (e) { e.preventDefault(); submit(); },
       },
-        h("div", { className: "hermes-kanban-dialog-title" },
+        h("div", { className: "text-base font-semibold mb-1" },
           tx(t, "newTaskTitle", "New task — {column}",
             { column: getColumnLabel(t, props.columnName) || props.columnName })),
         h("div", { className: "flex flex-col gap-3" },
@@ -3118,7 +3151,7 @@
             }) : null,
           ),
         ),
-        h("div", { className: "hermes-kanban-dialog-actions" },
+        h("div", { className: "flex justify-end gap-2 mt-4" },
           h(Button, {
             type: "button",
             onClick: props.onCancel,
@@ -3367,17 +3400,17 @@
         });
     };
 
-    return h("div", { className: "hermes-kanban-drawer-shade", onClick: props.onClose },
+    return h("div", { className: "fixed inset-0 z-[60] flex justify-end bg-black/45", onClick: props.onClose },
       h("div", {
-        className: "hermes-kanban-drawer",
+        className: "w-[min(640px,92vw)] h-[100dvh] max-h-[100dvh] bg-card border-l border-border flex flex-col shadow-2xl",
         onClick: function (e) { e.stopPropagation(); },
       },
-        h("div", { className: "hermes-kanban-drawer-head" },
+        h("div", { className: "flex items-center justify-between px-3 py-2.5 border-b border-border font-mono" },
           h("span", { className: "text-xs text-muted-foreground" }, props.taskId),
           h("button", {
             type: "button",
             onClick: props.onClose,
-            className: "hermes-kanban-drawer-close",
+            className: "bg-transparent border-0 text-muted-foreground text-xl leading-none cursor-pointer px-1 hover:text-foreground",
             title: tx(t, "close", "Close (Esc)"),
           }, "×"),
         ),
@@ -3410,9 +3443,9 @@
             if (props.onOpenTask) props.onOpenTask(taskId);
           },
         }) : null,
-        data ? h("div", { className: "hermes-kanban-drawer-comment-foot" },
+        data ? h("div", { className: "border-t border-border bg-card/90" },
           h("div", {
-            className: "hermes-kanban-comment-hint text-xs text-muted-foreground",
+            className: "px-3 pt-1.5 cursor-help text-xs text-muted-foreground",
             title: tx(t, "commentHintTitle",
               "Comments are the channel for talking to a task's worker. They land on the thread immediately — no need to block the task first. A running worker picks the thread up on its next kanban_show() or respawn; blocking is only for when you want the worker to STOP and wait for your input."),
           },
@@ -3420,7 +3453,7 @@
             tx(t, "commentHint",
               "Comments reach the worker on its next run or kanban_show() — no need to block the task first."),
           ),
-          h("div", { className: "hermes-kanban-drawer-comment-row" },
+          h("div", { className: "flex gap-1.5 px-3 py-2", "data-kanban-comment-row": "true" },
             h(Input, {
               value: newComment,
               onChange: function (e) { setNewComment(e.target.value); },
@@ -3490,8 +3523,8 @@
         })
         .catch(function (e) { setDlErr(String(e.message || e)); });
     }
-    return h("div", { className: "hermes-kanban-section" },
-      h("div", { className: "hermes-kanban-section-head" },
+    return h("div", { className: "flex flex-col gap-1.5" },
+      h("div", { className: "text-[0.72rem] font-semibold tracking-[0.07em] uppercase text-muted-foreground" },
         `${tx(i18n, "attachments", "Attachments")} (${atts.length})`),
       h("input", {
         ref: fileRef,
@@ -3527,7 +3560,7 @@
             },
               h("button", {
                 type: "button",
-                className: "hermes-kanban-attachment-link truncate",
+                className: "bg-transparent border-0 p-0 m-0 text-left text-primary cursor-pointer no-underline overflow-hidden text-ellipsis whitespace-nowrap flex-1 hover:underline truncate",
                 title: a.filename,
                 onClick: function () { downloadAttachment(a); },
               }, a.filename),
@@ -3535,7 +3568,7 @@
                 _fmtBytes(a.size)),
               h("button", {
                 type: "button",
-                className: "hermes-kanban-drawer-close",
+                className: "bg-transparent border-0 text-muted-foreground text-xl leading-none cursor-pointer px-1 hover:text-foreground",
                 title: tx(i18n, "removeAttachment", "Remove attachment"),
                 onClick: function () {
                   if (window.confirm(tx(i18n, "confirmRemoveAttachment",
@@ -3558,9 +3591,9 @@
     const links = props.data.links || { parents: [], children: [] };
     const childResults = props.data.child_results || [];
 
-    return h("div", { className: "hermes-kanban-drawer-body" },
-      h("div", { className: "hermes-kanban-drawer-title" },
-        h("span", { className: cn("hermes-kanban-dot", COLUMN_DOT[t.status]) }),
+    return h("div", { className: "flex-1 overflow-y-auto p-3.5 flex flex-col gap-3.5" },
+      h("div", { className: "flex items-center gap-2 text-base font-semibold" },
+        h("span", { className: DOT_CLS, style: dotStyle(t.status) }),
         props.editing
           ? h(TitleEditor, {
               initial: t.title || "",
@@ -3570,12 +3603,12 @@
               onCancel: function () { props.setEditing(false); },
             })
           : h("span", {
-              className: "hermes-kanban-drawer-title-text",
+              className: "cursor-pointer hover:underline",
               title: tx(i18n, "clickToEdit", "Click to edit"),
               onClick: function () { props.setEditing(true); },
             }, t.title || tx(i18n, "untitled", "(untitled)")),
       ),
-      h("div", { className: "hermes-kanban-drawer-meta" },
+      h("div", { className: "flex flex-col gap-0.5 px-2.5 py-2 bg-foreground/[0.04] border border-border rounded-none" },
         h(MetaRow, { label: tx(i18n, "status", "Status"), value: t.status }),
         h(AssigneeEditor, { task: t, onPatch: props.onPatch }),
         h(PriorityEditor, { task: t, onPatch: props.onPatch }),
@@ -3635,24 +3668,24 @@
           var label = t.result
             ? tx(i18n, "result", "Result")
             : tx(i18n, "finalResult", "Final Result (run summary)");
-          return h("div", { className: "hermes-kanban-section" },
-            h("div", { className: "hermes-kanban-section-head" }, label),
+          return h("div", { className: "flex flex-col gap-1.5" },
+            h("div", { className: "text-[0.72rem] font-semibold tracking-[0.07em] uppercase text-muted-foreground" }, label),
             h(MarkdownBlock, { source: finalResult, enabled: props.renderMarkdown }),
           );
         }
         if (isDone && isParent) {
-          return h("div", { className: "hermes-kanban-section" },
-            h("div", { className: "hermes-kanban-section-head" }, tx(i18n, "result", "Result")),
-            h("div", { className: "hermes-kanban-done-no-result hermes-kanban-done-parent-note" },
+          return h("div", { className: "flex flex-col gap-1.5" },
+            h("div", { className: "text-[0.72rem] font-semibold tracking-[0.07em] uppercase text-muted-foreground" }, tx(i18n, "result", "Result")),
+            h("div", { className: "text-xs text-muted-foreground italic text-xs text-muted-foreground italic" },
               tx(i18n, "doneParentNote",
                 "This card is an orchestrator / parent task. Review the child results section for the substantive work."),
             ),
           );
         }
         if (isDone) {
-          return h("div", { className: "hermes-kanban-section" },
-            h("div", { className: "hermes-kanban-section-head" }, tx(i18n, "result", "Result")),
-            h("div", { className: "hermes-kanban-done-no-result" },
+          return h("div", { className: "flex flex-col gap-1.5" },
+            h("div", { className: "text-[0.72rem] font-semibold tracking-[0.07em] uppercase text-muted-foreground" }, tx(i18n, "result", "Result")),
+            h("div", { className: "text-xs text-muted-foreground italic" },
               tx(i18n, "doneNoResult",
                 "No final result was recorded. Check Run History, Logs, or Child Tasks for the worker output."),
             ),
@@ -3660,19 +3693,19 @@
         }
         return null;
       })(),
-      childResults.length > 0 ? h("div", { className: "hermes-kanban-section" },
-        h("div", { className: "hermes-kanban-section-head" },
+      childResults.length > 0 ? h("div", { className: "flex flex-col gap-1.5" },
+        h("div", { className: "text-[0.72rem] font-semibold tracking-[0.07em] uppercase text-muted-foreground" },
           `${tx(i18n, "childResults", "Child Results")} (${childResults.length})`),
         childResults.map(function (child) {
           var childResult = child.result || child.latest_summary || null;
-          return h("div", { key: child.id, className: "hermes-kanban-comment" },
-            h("div", { className: "hermes-kanban-comment-head" },
-              h("span", { className: "hermes-kanban-comment-author" },
+          return h("div", { key: child.id, className: "border-l-2 border-ring/35 pl-2 flex flex-col gap-0.5" },
+            h("div", { className: "flex gap-2 text-[0.7rem]" },
+              h("span", { className: "font-semibold text-foreground" },
                 `${child.id} · ${child.title || tx(i18n, "untitled", "(untitled)")}`),
               h(Badge, { variant: "outline" }, child.status),
               h("button", {
                 type: "button",
-                className: "hermes-kanban-diag-action-btn",
+                className: "px-2.5 py-1 text-xs bg-foreground/[0.08] border border-border/60 cursor-pointer no-underline hover:bg-foreground/[0.12] disabled:opacity-40",
                 onClick: function () { if (props.onOpenTask) props.onOpenTask(child.id); },
               }, tx(i18n, "open", "Open")),
             ),
@@ -3692,25 +3725,25 @@
         uploadErr: props.uploadErr,
         i18n: i18n,
       }),
-      h("div", { className: "hermes-kanban-section" },
-        h("div", { className: "hermes-kanban-section-head" },
+      h("div", { className: "flex flex-col gap-1.5" },
+        h("div", { className: "text-[0.72rem] font-semibold tracking-[0.07em] uppercase text-muted-foreground" },
           `${tx(i18n, "comments", "Comments")} (${comments.length})`),
         comments.length === 0
           ? h("div", { className: "text-xs text-muted-foreground" },
               tx(i18n, "noComments", "— no comments —"))
           : comments.map(function (c) {
-              return h("div", { key: c.id, className: "hermes-kanban-comment" },
-                h("div", { className: "hermes-kanban-comment-head" },
-                  h("span", { className: "hermes-kanban-comment-author" }, c.author || "anon"),
-                  h("span", { className: "hermes-kanban-comment-ago" },
+              return h("div", { key: c.id, className: "border-l-2 border-ring/35 pl-2 flex flex-col gap-0.5" },
+                h("div", { className: "flex gap-2 text-[0.7rem]" },
+                  h("span", { className: "font-semibold text-foreground" }, c.author || "anon"),
+                  h("span", { className: "text-muted-foreground" },
                     timeAgo ? timeAgo(c.created_at) : ""),
                 ),
                 h(MarkdownBlock, { source: c.body, enabled: props.renderMarkdown }),
               );
             }),
       ),
-      h("div", { className: "hermes-kanban-section" },
-        h("div", { className: "hermes-kanban-section-head" },
+      h("div", { className: "flex flex-col gap-1.5" },
+        h("div", { className: "text-[0.72rem] font-semibold tracking-[0.07em] uppercase text-muted-foreground" },
           `${tx(i18n, "events", "Events")} (${events.length})`),
         events.slice().reverse().slice(0, 20).map(function (e) {
           const isDiag = isDiagnosticEvent(e.kind);
@@ -3718,37 +3751,37 @@
           return h("div", {
             key: e.id,
             className: cn(
-              "hermes-kanban-event",
-              isDiag ? "hermes-kanban-event--hallucination" : "",
+              "flex gap-2 text-[0.7rem] text-muted-foreground font-mono",
+              isDiag ? "border-l-[3px] border-red-400 bg-red-400/10 px-2.5 py-2 my-1" : "",
             ),
           },
             isDiag
-              ? h("div", { className: "hermes-kanban-event-header" },
-                  h("span", { className: "hermes-kanban-event-warning-icon" }, "⚠"),
-                  h("span", { className: "hermes-kanban-event-warning-label" },
+              ? h("div", { className: "flex items-center gap-2" },
+                  h("span", { className: "text-red-400 text-base" }, "⚠"),
+                  h("span", { className: "text-red-400 font-semibold text-[0.8125rem]" },
                     getDiagnosticEventLabel(i18n, e.kind) || e.kind),
-                  h("span", { className: "hermes-kanban-event-ago" },
+                  h("span", { className: "ml-auto text-muted-foreground" },
                     timeAgo ? timeAgo(e.created_at) : ""),
                 )
-              : h("div", { className: "hermes-kanban-event-header-plain" },
-                  h("span", { className: "hermes-kanban-event-kind" }, e.kind),
-                  h("span", { className: "hermes-kanban-event-ago" },
+              : h("div", { className: "flex items-center gap-2" },
+                  h("span", { className: "text-foreground min-w-[6rem]" }, e.kind),
+                  h("span", { className: "ml-auto text-muted-foreground" },
                     timeAgo ? timeAgo(e.created_at) : ""),
                 ),
             isDiag && phantoms.length > 0
-              ? h("div", { className: "hermes-kanban-event-phantom-row" },
-                  h("span", { className: "hermes-kanban-event-phantom-label" },
+              ? h("div", { className: "flex items-center gap-1.5 flex-wrap mt-1.5 pl-5" },
+                  h("span", { className: "text-xs text-muted-foreground" },
                     tx(i18n, "phantomIds", "Phantom ids:")),
                   phantoms.map(function (pid) {
                     return h("code", {
                       key: pid,
-                      className: "hermes-kanban-event-phantom-chip",
+                      className: "font-mono text-xs px-1.5 py-0.5 bg-red-400/15 border border-red-400/30",
                     }, pid);
                   }),
                 )
               : null,
             e.payload && !isDiag
-              ? h("code", { className: "hermes-kanban-event-payload" },
+              ? h("code", { className: "text-muted-foreground overflow-hidden text-ellipsis whitespace-nowrap max-w-[280px]" },
                   JSON.stringify(e.payload))
               : null,
           );
@@ -3779,49 +3812,46 @@
       return `${(secs / 3600).toFixed(1)}h`;
     };
 
-    return h("div", { className: "hermes-kanban-section" },
-      h("div", { className: "hermes-kanban-section-head-row" },
-        h("span", { className: "hermes-kanban-section-head" },
+    return h("div", { className: "flex flex-col gap-1.5" },
+      h("div", { className: "flex items-center justify-between gap-2" },
+        h("span", { className: "text-[0.72rem] font-semibold tracking-[0.07em] uppercase text-muted-foreground" },
           `${tx(t, "runHistory", "Run history")} (${runs.length})`),
         !showAll
           ? h("button", {
               type: "button",
               onClick: function () { setExpanded(true); },
-              className: "hermes-kanban-edit-link",
+              className: "bg-transparent border-0 text-muted-foreground text-[0.7rem] tracking-wide cursor-pointer p-0 hover:text-ring",
               title: tx(t, "showAllAttempts", "Show all attempts"),
             }, `+${runs.length - 3} earlier`)
           : null,
       ),
       visible.map(function (r) {
-        const outcomeClass = r.ended_at
-          ? `hermes-kanban-run--${r.outcome || r.status || "ended"}`
-          : "hermes-kanban-run--active";
-        return h("div", { key: r.id, className: cn("hermes-kanban-run", outcomeClass) },
-          h("div", { className: "hermes-kanban-run-head" },
-            h("span", { className: "hermes-kanban-run-outcome" },
+        return h("div", { key: r.id, className: cn("pl-2 py-1.5 mb-1.5 bg-foreground/[0.03]", runBorderClass(r)) },
+          h("div", { className: "flex items-center gap-2.5 text-[0.7rem]" },
+            h("span", { className: "font-mono font-semibold tracking-wide text-foreground" },
               r.ended_at ? (r.outcome || r.status || tx(t, "ended", "ended")) : tx(t, "active", "active")),
-            h("span", { className: "hermes-kanban-run-profile" },
+            h("span", { className: "text-muted-foreground" },
               r.profile ? `@${r.profile}` : tx(t, "noProfile", "(no profile)")),
-            h("span", { className: "hermes-kanban-run-elapsed" }, fmtElapsed(r)),
-            h("span", { className: "hermes-kanban-run-ago" },
+            h("span", { className: "tabular-nums text-muted-foreground" }, fmtElapsed(r)),
+            h("span", { className: "ml-auto text-muted-foreground" },
               timeAgo ? timeAgo(r.started_at) : ""),
           ),
           r.summary
-            ? h("div", { className: "hermes-kanban-run-summary" }, r.summary)
+            ? h("div", { className: "text-[0.82rem] leading-relaxed pt-1 text-foreground" }, r.summary)
             : null,
           r.error
-            ? h("div", { className: "hermes-kanban-run-error" }, r.error)
+            ? h("div", { className: "text-[0.7rem] text-destructive pt-0.5 font-mono" }, r.error)
             : null,
           (r.metadata && Object.keys(r.metadata).length > 0)
             ? (function () {
                 var json = JSON.stringify(r.metadata, null, 2);
                 var collapsed = json.length > 300;
                 return h("details", {
-                    className: "hermes-kanban-run-meta-block",
+                    className: "mt-1.5 pl-2 border-l-2 border-border",
                     open: !collapsed,
                   },
-                  h("summary", { className: "hermes-kanban-run-meta-label" }, "Metadata"),
-                  h("code", { className: "hermes-kanban-run-meta" }, json),
+                  h("summary", { className: "text-[0.65rem] font-semibold tracking-wide text-muted-foreground cursor-pointer pb-0.5" }, "Metadata"),
+                  h("code", { className: "block max-h-[8.5rem] overflow-auto text-[0.72rem] leading-relaxed text-muted-foreground whitespace-pre-wrap break-words font-mono" }, json),
                 );
               })()
             : null,
@@ -3857,18 +3887,18 @@
         tx(t, "noWorkerLog",
           "— no worker log yet (task hasn't spawned or log was rotated away) —"));
     } else {
-      body = h("pre", { className: "hermes-kanban-pre hermes-kanban-log" },
+      body = h("pre", { className: "m-0 px-2.5 py-2 whitespace-pre-wrap break-words bg-foreground/[0.04] border border-border font-mono text-[0.8rem] leading-relaxed text-foreground max-h-[360px] overflow-auto whitespace-pre text-[0.78rem] leading-relaxed" },
         data.content || "(empty)");
     }
 
-    return h("div", { className: "hermes-kanban-section" },
-      h("div", { className: "hermes-kanban-section-head-row" },
-        h("span", { className: "hermes-kanban-section-head" },
+    return h("div", { className: "flex flex-col gap-1.5" },
+      h("div", { className: "flex items-center justify-between gap-2" },
+        h("span", { className: "text-[0.72rem] font-semibold tracking-[0.07em] uppercase text-muted-foreground" },
           tx(t, "workerLog", "Worker log") + (data && data.size_bytes ? ` (${data.size_bytes} B)` : "")),
         h("button", {
           type: "button",
           onClick: load,
-          className: "hermes-kanban-edit-link",
+          className: "bg-transparent border-0 text-muted-foreground text-[0.7rem] tracking-wide cursor-pointer p-0 hover:text-ring",
           title: "Refresh log",
         }, "refresh"),
       ),
@@ -3883,9 +3913,9 @@
   }
 
   function MetaRow(props) {
-    return h("div", { className: "hermes-kanban-meta-row" },
-      h("span", { className: "hermes-kanban-meta-label" }, props.label),
-      h("span", { className: "hermes-kanban-meta-value" }, props.value),
+    return h("div", { className: "flex gap-2 text-[0.8rem]" },
+      h("span", { className: "w-[92px] text-muted-foreground shrink-0" }, props.label),
+      h("span", { className: "text-foreground break-words" }, props.value),
     );
   }
 
@@ -3897,7 +3927,7 @@
       if (!trimmed) return;
       props.onSave(trimmed);
     };
-    return h("div", { className: "hermes-kanban-edit-row" },
+    return h("div", { className: "flex items-center gap-1.5 w-full" },
       h(Input, {
         value: v, autoFocus: true,
         onChange: function (e) { setV(e.target.value); },
@@ -3922,10 +3952,10 @@
     const [v, setV] = useState(props.task.assignee || "");
     useEffect(function () { setV(props.task.assignee || ""); }, [props.task.assignee]);
     if (!editing) {
-      return h("div", { className: "hermes-kanban-meta-row" },
-        h("span", { className: "hermes-kanban-meta-label" }, tx(t, "assignee", "Assignee")),
+      return h("div", { className: "flex gap-2 text-[0.8rem]" },
+        h("span", { className: "w-[92px] text-muted-foreground shrink-0" }, tx(t, "assignee", "Assignee")),
         h("span", {
-          className: "hermes-kanban-meta-value hermes-kanban-editable",
+          className: "text-foreground break-words cursor-pointer border-b border-dotted border-border/80 hover:border-ring",
           onClick: function () { setEditing(true); },
           title: tx(t, "clickToEditAssignee", "Click to edit assignee"),
         }, props.task.assignee || tx(t, "unassigned", "unassigned")),
@@ -3934,8 +3964,8 @@
     const save = function () {
       props.onPatch({ assignee: v.trim() || "" }).then(function () { setEditing(false); });
     };
-    return h("div", { className: "hermes-kanban-meta-row" },
-      h("span", { className: "hermes-kanban-meta-label" }, tx(t, "assignee", "Assignee")),
+    return h("div", { className: "flex gap-2 text-[0.8rem]" },
+      h("span", { className: "w-[92px] text-muted-foreground shrink-0" }, tx(t, "assignee", "Assignee")),
       h(Input, {
         value: v, autoFocus: true,
         onChange: function (e) { setV(e.target.value); },
@@ -3959,10 +3989,10 @@
     const [v, setV] = useState(String(props.task.priority || 0));
     useEffect(function () { setV(String(props.task.priority || 0)); }, [props.task.priority]);
     if (!editing) {
-      return h("div", { className: "hermes-kanban-meta-row" },
-        h("span", { className: "hermes-kanban-meta-label" }, tx(t, "priority", "Priority")),
+      return h("div", { className: "flex gap-2 text-[0.8rem]" },
+        h("span", { className: "w-[92px] text-muted-foreground shrink-0" }, tx(t, "priority", "Priority")),
         h("span", {
-          className: "hermes-kanban-meta-value hermes-kanban-editable",
+          className: "text-foreground break-words cursor-pointer border-b border-dotted border-border/80 hover:border-ring",
           onClick: function () { setEditing(true); },
           title: tx(t, "clickToEdit", "Click to edit"),
         }, String(props.task.priority)),
@@ -3971,8 +4001,8 @@
     const save = function () {
       props.onPatch({ priority: Number(v) || 0 }).then(function () { setEditing(false); });
     };
-    return h("div", { className: "hermes-kanban-meta-row" },
-      h("span", { className: "hermes-kanban-meta-label" }, tx(t, "priority", "Priority")),
+    return h("div", { className: "flex gap-2 text-[0.8rem]" },
+      h("span", { className: "w-[92px] text-muted-foreground shrink-0" }, tx(t, "priority", "Priority")),
       h(Input, {
         type: "number", value: v, autoFocus: true,
         onChange: function (e) { setV(e.target.value); },
@@ -3993,9 +4023,9 @@
     const save = function () {
       props.onPatch({ body: v }).then(function () { setEditing(false); });
     };
-    return h("div", { className: "hermes-kanban-section" },
-      h("div", { className: "hermes-kanban-section-head-row" },
-        h("span", { className: "hermes-kanban-section-head" }, tx(t, "description", "Description")),
+    return h("div", { className: "flex flex-col gap-1.5" },
+      h("div", { className: "flex items-center justify-between gap-2" },
+        h("span", { className: "text-[0.72rem] font-semibold tracking-[0.07em] uppercase text-muted-foreground" }, tx(t, "description", "Description")),
         editing
           ? h("div", { className: "flex gap-1" },
               h(Button, { onClick: save,
@@ -4008,13 +4038,13 @@
           : h("button", {
               type: "button",
               onClick: function () { setEditing(true); },
-              className: "hermes-kanban-edit-link",
+              className: "bg-transparent border-0 text-muted-foreground text-[0.7rem] tracking-wide cursor-pointer p-0 hover:text-ring",
               title: "Edit description",
             }, tx(t, "edit", "edit")),
       ),
       editing
         ? h("textarea", {
-            className: "hermes-kanban-textarea",
+            className: "w-full min-h-[8rem] bg-card text-foreground border border-border px-2.5 py-2 font-mono text-[0.8rem] leading-relaxed resize-y focus:outline-none focus:ring-2 focus:ring-ring",
             value: v,
             rows: 8,
             onChange: function (e) { setV(e.target.value); },
@@ -4040,19 +4070,19 @@
     const parentExclude = new Set([task.id, ...(links.parents || [])]);
     const childExclude  = new Set([task.id, ...(links.children || [])]);
 
-    return h("div", { className: "hermes-kanban-section" },
-      h("div", { className: "hermes-kanban-section-head" }, tx(t, "dependencies", "Dependencies")),
-      h("div", { className: "hermes-kanban-deps-row" },
-        h("span", { className: "hermes-kanban-deps-label" }, tx(t, "parents", "Parents:")),
-        h("div", { className: "hermes-kanban-deps-chips" },
+    return h("div", { className: "flex flex-col gap-1.5" },
+      h("div", { className: "text-[0.72rem] font-semibold tracking-[0.07em] uppercase text-muted-foreground" }, tx(t, "dependencies", "Dependencies")),
+      h("div", { className: "flex items-center gap-2 mb-1.5" },
+        h("span", { className: "text-[0.68rem] tracking-wide text-muted-foreground min-w-[4rem]" }, tx(t, "parents", "Parents:")),
+        h("div", { className: "flex gap-1.5 flex-wrap flex-1" },
           (links.parents || []).length === 0
-            ? h("span", { className: "hermes-kanban-deps-empty" }, tx(t, "none", "none"))
+            ? h("span", { className: "text-[0.7rem] text-muted-foreground italic" }, tx(t, "none", "none"))
             : (links.parents || []).map(function (id) {
-                return h("span", { key: id, className: "hermes-kanban-dep-chip" },
+                return h("span", { key: id, className: "inline-flex items-center gap-0.5 px-1.5 py-0.5 bg-foreground/[0.06] border border-border font-mono text-[0.68rem]" },
                   id,
                   h("button", {
                     type: "button",
-                    className: "hermes-kanban-dep-chip-x",
+                    className: "bg-transparent border-0 text-muted-foreground cursor-pointer text-[0.85rem] leading-none px-0.5 hover:text-destructive",
                     onClick: function () { props.onRemoveParent(id); },
                     title: tx(t, "removeDependency", "Remove dependency"),
                   }, "×"),
@@ -4060,7 +4090,7 @@
               }),
         ),
       ),
-      h("div", { className: "hermes-kanban-deps-row" },
+      h("div", { className: "flex items-center gap-2 mb-1.5" },
         h(Select, Object.assign({
           value: newParent,
           className: "h-7 text-xs flex-1",
@@ -4080,17 +4110,17 @@
           size: "sm",
         }, "+ parent"),
       ),
-      h("div", { className: "hermes-kanban-deps-row" },
-        h("span", { className: "hermes-kanban-deps-label" }, tx(t, "children", "Children:")),
-        h("div", { className: "hermes-kanban-deps-chips" },
+      h("div", { className: "flex items-center gap-2 mb-1.5" },
+        h("span", { className: "text-[0.68rem] tracking-wide text-muted-foreground min-w-[4rem]" }, tx(t, "children", "Children:")),
+        h("div", { className: "flex gap-1.5 flex-wrap flex-1" },
           (links.children || []).length === 0
-            ? h("span", { className: "hermes-kanban-deps-empty" }, tx(t, "none", "none"))
+            ? h("span", { className: "text-[0.7rem] text-muted-foreground italic" }, tx(t, "none", "none"))
             : (links.children || []).map(function (id) {
-                return h("span", { key: id, className: "hermes-kanban-dep-chip" },
+                return h("span", { key: id, className: "inline-flex items-center gap-0.5 px-1.5 py-0.5 bg-foreground/[0.06] border border-border font-mono text-[0.68rem]" },
                   id,
                   h("button", {
                     type: "button",
-                    className: "hermes-kanban-dep-chip-x",
+                    className: "bg-transparent border-0 text-muted-foreground cursor-pointer text-[0.85rem] leading-none px-0.5 hover:text-destructive",
                     onClick: function () { props.onRemoveChild(id); },
                     title: tx(t, "removeDependency", "Remove dependency"),
                   }, "×"),
@@ -4098,7 +4128,7 @@
               }),
         ),
       ),
-      h("div", { className: "hermes-kanban-deps-row" },
+      h("div", { className: "flex items-center gap-2 mb-1.5" },
         h(Select, Object.assign({
           value: newChild,
           className: "h-7 text-xs flex-1",
@@ -4220,7 +4250,7 @@
       : null;
 
     return h("div", null,
-      h("div", { className: "hermes-kanban-actions" },
+      h("div", { className: "flex flex-wrap gap-1.5" },
         specifyButton,
         decomposeButton,
         b("→ triage",  { status: "triage" },   task.status !== "triage"),
@@ -4241,13 +4271,13 @@
       ),
       specifyMsg ? h("div", {
         className: specifyMsg.ok
-          ? "hermes-kanban-msg-ok"
-          : "hermes-kanban-msg-err",
+          ? "mt-1.5 px-2 py-1.5 text-sm border border-emerald-500/35 bg-emerald-500/10 text-emerald-600 dark:text-emerald-400"
+          : "mt-1.5 px-2 py-1.5 text-sm border border-destructive/40 bg-destructive/10 text-destructive",
       }, specifyMsg.text) : null,
       decomposeMsg ? h("div", {
         className: decomposeMsg.ok
-          ? "hermes-kanban-msg-ok"
-          : "hermes-kanban-msg-err",
+          ? "mt-1.5 px-2 py-1.5 text-sm border border-emerald-500/35 bg-emerald-500/10 text-emerald-600 dark:text-emerald-400"
+          : "mt-1.5 px-2 py-1.5 text-sm border border-destructive/40 bg-destructive/10 text-destructive",
       }, decomposeMsg.text) : null,
     );
   }
@@ -4263,10 +4293,10 @@
     const channels = props.homeChannels || [];
     if (channels.length === 0) return null;
     const busy = props.homeBusy || {};
-    return h("div", { className: "hermes-kanban-section" },
-      h("div", { className: "hermes-kanban-section-head" },
+    return h("div", { className: "flex flex-col gap-1.5" },
+      h("div", { className: "text-[0.72rem] font-semibold tracking-[0.07em] uppercase text-muted-foreground" },
         tx(t, "notifyHomeChannels", "Notify home channels")),
-      h("div", { className: "hermes-kanban-home-subs" },
+      h("div", { className: "flex flex-wrap gap-1.5" },
         channels.map(function (hc) {
           const isBusy = !!busy[hc.platform];
           const label = hc.subscribed ? "✓ " + hc.platform : hc.platform;
@@ -4283,8 +4313,8 @@
               if (props.onToggle) props.onToggle(hc.platform, hc.subscribed);
             },
             className: hc.subscribed
-              ? "hermes-kanban-home-sub hermes-kanban-home-sub--on"
-              : "hermes-kanban-home-sub",
+              ? "font-mono lowercase ring-1 ring-ring bg-ring/30 font-semibold"
+              : "font-mono lowercase",
           }, label);
         })
       )

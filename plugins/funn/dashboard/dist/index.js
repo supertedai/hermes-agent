@@ -1,9 +1,8 @@
 /**
- * Funn — GUI-ankeret for funn-loopen (BL-2368).
- *
- * Hele sveisen på ett brett: chat (Hermes GUI + OpenWebUI) → ConversationTurn
- * → 120B-høster → ImprovementProposal (proposed) → drainer-triage → BL → agent.
- * Read-only: triage/BL skjer i drainer/gate-laget, ikke her.
+ * Funn — GUI-ankeret for funn-loopen (BL-2368). NATIVE: bygget med Nous DS-
+ * komponentene fra plugin-SDK-en (Card/CardHeader/CardTitle/CardContent/Badge)
+ * + Hermes' egne tailwind-klasser — samme komponentbibliotek som Keys/Skills/
+ * Plugins-sidene. Ingen håndrullet CSS (style.css er tom med vilje).
  */
 (function () {
   "use strict";
@@ -12,14 +11,14 @@
   if (!SDK) return;
   const { React } = SDK;
   const h = React.createElement;
-  const { Card, CardContent } = SDK.components;
+  const { Card, CardHeader, CardTitle, CardContent, Badge } = SDK.components;
   const { useState, useEffect } = SDK.hooks;
 
   const API = "/api/plugins/funn";
-  const jfetch = (path) =>
-    SDK.fetchJSON ? SDK.fetchJSON(API + path)
-      : SDK.authedFetch ? SDK.authedFetch(API + path).then((r) => r.json())
-      : fetch(API + path).then((r) => r.json());
+  const jfetch = (p) =>
+    SDK.fetchJSON ? SDK.fetchJSON(API + p)
+      : SDK.authedFetch ? SDK.authedFetch(API + p).then((r) => r.json())
+      : fetch(API + p).then((r) => r.json());
 
   function useData(path) {
     const [data, setData] = useState(null);
@@ -36,103 +35,107 @@
     return { data, err };
   }
 
-  const CAT = { bug: "fn-cat-bug", architecture_gap: "fn-cat-gap",
-                weakness: "fn-cat-weak", directive: "fn-cat-dir" };
-  const ST = (s) =>
-    s === "proposed" ? "fn-st-proposed"
-      : s === "implemented" ? "fn-st-done"
-      : String(s).startsWith("blocked") ? "fn-st-blocked" : "fn-st-other";
+  // Badge-toner — kun DS-gyldige (secondary/success/destructive/outline)
+  const catTone = (c) => c === "bug" ? "destructive"
+    : c === "architecture_gap" || c === "directive" ? "secondary" : "outline";
+  const stTone = (s) => s === "implemented" ? "success"
+    : String(s).startsWith("blocked") ? "destructive"
+    : s === "proposed" ? "secondary" : "outline";
 
-  function ChatFindings() {
-    const { data, err } = useData("/findings");
-    const [open, setOpen] = useState(null);
-    if (err) return h("div", { className: "fn-err" }, "utilgjengelig: " + err);
-    const rows = (data && data.findings) || [];
-    return h("div", { className: "fn-section" },
-      h("h3", { className: "fn-h" }, "Chat-funn ",
-        h("span", { className: "fn-dim" },
-          "høstet av 120B fra Hermes + OpenWebUI-samtaler — klikk for chat-evidens")),
-      h("table", { className: "fn-table" },
-        h("thead", null, h("tr", null,
-          ["funn", "type", "sikkerhet", "BL → agent", "status", "flate", "når"].map((c) =>
-            h("th", { key: c }, c)))),
-        h("tbody", null, rows.flatMap((f, i) => {
-          const key = f.title + i;
-          const bl = f.bl_number
-            ? h("span", { className: "fn-bl" }, "BL-" + f.bl_number + " → "
-                + (f.assigned_agent || "").replace("symbiose-", ""))
-            : h("span", { className: "fn-dim" }, "u-triagert");
-          const out = [h("tr", { key, className: "fn-row",
-                              onClick: () => setOpen(open === key ? null : key) },
-            h("td", { className: "fn-title" }, f.title),
-            h("td", null, h("span", { className: "fn-badge " + (CAT[f.category] || "") },
-              f.category)),
-            h("td", null, f.confidence != null ? Number(f.confidence).toFixed(2) : ""),
-            h("td", null, bl),
-            h("td", null, h("span", { className: "fn-badge " + ST(f.status) }, f.status)),
-            h("td", null, (f.source || "").replace("chat:", "")),
-            h("td", { className: "fn-dim" }, (f.created || "").slice(0, 16)))];
-          if (open === key) {
-            out.push(h("tr", { key: key + "-x", className: "fn-evidence" },
-              h("td", { colSpan: 7 },
-                h("div", { className: "fn-ev-block" },
-                  h("div", { className: "fn-ev-label" }, "BRUKER:"),
-                  h("div", { className: "fn-ev-text" }, f.user_msg || "—"),
-                  h("div", { className: "fn-ev-label" }, "ASSISTENT:"),
-                  h("div", { className: "fn-ev-text" }, f.assistant_msg || "—")))));
-          }
-          return out;
-        }))));
+  const GRID = { display: "grid", gap: "0.5rem", gridTemplateColumns: "repeat(auto-fill, minmax(155px, 1fr))" };
+  const TD = "py-1.5 pr-3 align-top";
+
+  // Native seksjon = DS Card + header (tittel + valgfri teller-badge) + content.
+  // Plain helper (kalles direkte, IKKE via h()) — React gir funksjonskomponenter
+  // kun props, så children må sendes som eksplisitt arg her.
+  function Section(opts, content) {
+    return h(Card, { className: "rounded-none" },
+      h(CardHeader, { className: "py-3 px-4" },
+        h("div", { className: "flex items-center justify-between gap-2" },
+          h(CardTitle, { className: "text-sm" }, opts.title),
+          opts.badge != null ? h(Badge, { tone: "secondary", className: "text-xs" }, String(opts.badge)) : null),
+        opts.sub ? h("p", { className: "text-xs text-muted-foreground mt-1" }, opts.sub) : null),
+      h(CardContent, { className: "px-4 pb-4" }, content));
+  }
+
+  function Table(cols, body) {
+    return h("div", { className: "overflow-x-auto" },
+      h("table", { className: "w-full text-sm" },
+        h("thead", null, h("tr", { className: "border-b border-border" },
+          cols.map((c) => h("th", { key: c,
+            className: "text-left font-medium text-[0.6875rem] uppercase tracking-wider text-muted-foreground py-2 pr-3" }, c)))),
+        h("tbody", null, body)));
   }
 
   function LoopStatus() {
     const { data } = useData("/summary");
-    if (!data) return null;
+    if (!data) return h("p", { className: "text-sm text-muted-foreground" }, "Laster …");
     const un = ((data.unscanned || [])[0] || {}).n;
     const wms = data.watermarks || [];
-    return h("div", null,
-      h("div", { className: "fn-stats" },
-        (data.status || []).slice(0, 5).map((s) =>
-          h(Card, { key: s.status }, h(CardContent, { className: "fn-stat" },
-            h("div", { className: "fn-stat-n" }, String(s.n)),
-            h("div", { className: "fn-stat-l" }, s.status)))),
-        h(Card, null, h(CardContent, { className: "fn-stat" },
-          h("div", { className: "fn-stat-n" }, String(un != null ? un : "?")),
-          h("div", { className: "fn-stat-l" }, "uskannede turns")))),
-      h("div", { className: "fn-section" },
-        h("h3", { className: "fn-h" }, "Sveise-status ",
-          h("span", { className: "fn-dim" }, "sync hver 6.t (cron på .13 — se /cron)")),
-        h("table", { className: "fn-table" },
-          h("thead", null, h("tr", null, ["kilde", "watermark (msg-id)", "sist synket"]
-            .map((c) => h("th", { key: c }, c)))),
-          h("tbody", null, wms.map((w) =>
-            h("tr", { key: w.id, className: "fn-row" },
-              h("td", { className: "fn-title" }, (w.id || "").replace("hermes_chat_weld::", "")),
-              h("td", null, String(w.last_msg_id)),
-              h("td", { className: "fn-dim" }, (w.updated || "").slice(0, 19))))))),
-      h("div", { className: "fn-section" },
-        h("h3", { className: "fn-h" }, "Siste proposals (alle kilder) ",
-          h("span", { className: "fn-dim" }, "hele draineren — chat-funn er én av strømmene inn")),
-        h("table", { className: "fn-table" },
-          h("thead", null, h("tr", null, ["tittel", "opphav", "status", "når"]
-            .map((c) => h("th", { key: c }, c)))),
-          h("tbody", null, (data.latest || []).map((p, i) =>
-            h("tr", { key: i, className: "fn-row" },
-              h("td", { className: "fn-title" }, p.title),
-              h("td", { className: "fn-dim" }, p.origin),
-              h("td", null, h("span", { className: "fn-badge " + ST(p.status) }, p.status)),
-              h("td", { className: "fn-dim" }, (p.created || "").slice(0, 16))))))));
+    const stats = (data.status || []).slice(0, 5)
+      .concat([{ status: "uskannede turns", n: un != null ? un : "?" }]);
+    return h("div", { className: "flex flex-col gap-4" },
+      h("div", { style: GRID },
+        stats.map((s) => h("div", { key: s.status, className: "border border-border bg-background/40 px-3 py-2" },
+          h("div", { className: "text-2xl font-semibold tabular-nums leading-none" }, String(s.n)),
+          h("div", { className: "text-[0.6875rem] uppercase tracking-wide text-muted-foreground mt-1 break-words" }, s.status)))),
+      Section({ title:"Sveise-status", sub: "sync hver 6.t (cron på .13 — se /cron)" },
+        Table(["kilde", "watermark (msg-id)", "sist synket"],
+          wms.map((w) => h("tr", { key: w.id, className: "border-t border-border/60" },
+            h("td", { className: TD + " font-medium" }, (w.id || "").replace("hermes_chat_weld::", "")),
+            h("td", { className: TD + " font-mono text-xs text-muted-foreground" }, String(w.last_msg_id)),
+            h("td", { className: TD + " text-muted-foreground" }, (w.updated || "").slice(0, 19)))))),
+      Section({ title:"Siste proposals", sub: "hele draineren — chat-funn er én av strømmene inn" },
+        Table(["tittel", "opphav", "status", "når"],
+          (data.latest || []).map((p, i) => h("tr", { key: i, className: "border-t border-border/60" },
+            h("td", { className: TD + " font-medium" }, p.title),
+            h("td", { className: TD + " text-muted-foreground" }, p.origin),
+            h("td", { className: TD }, h(Badge, { tone: stTone(p.status), className: "text-xs" }, p.status)),
+            h("td", { className: TD + " text-muted-foreground whitespace-nowrap" }, (p.created || "").slice(0, 16)))))));
+  }
+
+  function ChatFindings() {
+    const { data, err } = useData("/findings");
+    const [open, setOpen] = useState(null);
+    const rows = (data && data.findings) || [];
+    const body = [];
+    rows.forEach((f, i) => {
+      const key = f.title + i;
+      body.push(h("tr", { key, className: "border-t border-border/60 cursor-pointer hover:bg-muted/20",
+          onClick: () => setOpen(open === key ? null : key) },
+        h("td", { className: TD + " font-medium" }, f.title),
+        h("td", { className: TD }, h(Badge, { tone: catTone(f.category), className: "text-xs" }, f.category)),
+        h("td", { className: TD + " tabular-nums" }, f.confidence != null ? Number(f.confidence).toFixed(2) : ""),
+        h("td", { className: TD }, f.bl_number
+          ? h("code", { className: "text-xs font-mono border border-border bg-background/40 px-1.5 py-0.5 whitespace-nowrap" },
+              "BL-" + f.bl_number + " → " + (f.assigned_agent || "").replace("symbiose-", ""))
+          : h("span", { className: "text-xs text-muted-foreground" }, "u-triagert")),
+        h("td", { className: TD }, h(Badge, { tone: stTone(f.status), className: "text-xs" }, f.status)),
+        h("td", { className: TD + " text-muted-foreground" }, (f.source || "").replace("chat:", "")),
+        h("td", { className: TD + " text-muted-foreground whitespace-nowrap" }, (f.created || "").slice(0, 16))));
+      if (open === key) {
+        body.push(h("tr", { key: key + "-x", className: "border-t border-border/60 bg-background/40" },
+          h("td", { colSpan: 7, className: "p-3 space-y-2" },
+            h("div", null,
+              h("div", { className: "text-[0.6875rem] uppercase tracking-wide text-muted-foreground" }, "Bruker"),
+              h("div", { className: "text-sm whitespace-pre-wrap" }, f.user_msg || "—")),
+            h("div", null,
+              h("div", { className: "text-[0.6875rem] uppercase tracking-wide text-muted-foreground" }, "Assistent"),
+              h("div", { className: "text-sm whitespace-pre-wrap" }, f.assistant_msg || "—")))));
+      }
+    });
+    return Section({ title: "Chat-funn", badge: rows.length,
+        sub: "høstet av 120B fra Hermes + OpenWebUI-samtaler — klikk en rad for chat-evidens" },
+      err ? h("p", { className: "text-sm text-destructive" }, "utilgjengelig: " + err)
+        : Table(["funn", "type", "sikkerhet", "BL → agent", "status", "flate", "når"], body));
   }
 
   function FunnPage() {
-    return h("div", { className: "fn-wrap" },
-      h("div", { className: "fn-header" },
-        h("h2", null, "Funn — chat → BL-loopen"),
-        h("p", { className: "fn-sub" },
-          "Alt du og agentene sier i Hermes-chatten og OpenWebUI høstes for "
-          + "operasjonelle funn (feil, gaps, påpekninger). Funn blir proposals "
-          + "(propose-first, med chat-evidens), draineren triagerer dem til BL, "
-          + "og en agent tar arbeidet. Klinisk innhold høstes aldri (A7).")),
+    return h("div", { className: "flex flex-col gap-4 p-4" },
+      h("p", { className: "text-sm text-muted-foreground max-w-3xl" },
+        "Alt du og agentene sier i Hermes-chatten og OpenWebUI høstes for operasjonelle funn "
+        + "(feil, gaps, påpekninger) → proposals (propose-first, med chat-evidens) → drainer → BL → agent. "
+        + "Klinisk innhold høstes aldri (A7)."),
       h(LoopStatus, null),
       h(ChatFindings, null));
   }
