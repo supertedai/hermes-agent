@@ -357,7 +357,7 @@ def _science_compute(args: dict) -> str:
     tool = (args.get("tool") or "").strip()
     if not tool:
         return _get("/api/v1/compute/available?agent=" + urllib.parse.quote(agent), timeout=30)
-    payload: dict = {"agent": agent, "tool": tool, "domain": (args.get("domain") or "efc").strip() or "efc"}
+    payload: dict = {"agent": agent, "tool": tool, "domain": (args.get("domain") or "").strip()}
     if args.get("target"):
         payload["target"] = args["target"]
     iv = args.get("intervention")
@@ -368,6 +368,13 @@ def _science_compute(args: dict) -> str:
             except ValueError:
                 pass  # streng-form er gyldig — serveren koerserer
         payload["intervention"] = iv
+    # BL-2576 forecast-parametre (live tidsserie-prognose).
+    if args.get("metric"):
+        payload["metric"] = args["metric"]
+    if args.get("horizon_hours"):
+        payload["horizon_hours"] = _safe_int(args.get("horizon_hours"), 24)
+    if args.get("source"):
+        payload["source"] = args["source"]
     return _post("/api/v1/compute/run", payload, timeout=90)
 
 
@@ -382,11 +389,14 @@ registry.register(
             "kausal struktur — kall FOER de andre) | probability (ANBEFALT for «hvor sannsynlig er X»: "
             "orkestrerer strukturell identifiserbarhet + konjugat Bayesiansk posterior → P(sann) med "
             "94% kredibilitetsintervall + evidensklasse; krever target=utfall, valgfri intervention="
-            "aarsak, domain) | do_calculus (kun strukturell identifiserbarhet, ingen tall) | bayes "
-            "(ren evidens-posterior for ETT utfall) | scm (SKRIVER hypotese-kanter) | nuts | mcmc "
-            "(ikke-konjugat/hierarkisk lag, .11 — kan svare «ikke wiret»). Uten tool: vis tilgang. "
-            "Disiplin: INSUFFICIENT_EVIDENCE = tomt domene, IKKE bevis for det motsatte; oppgi ALLTID "
-            "kredibilitetsintervallet med et punktestimat; evidens-posterior ≠ live prognose; "
+            "aarsak, domain) | forecast (LIVE TEMPORAL prognose «gaar X opp/ned neste N timer»: "
+            "P(opp/ned) + prediktivt intervall fra :IoTReading-tidsserie; krever metric=f.eks. "
+            "price_total_hjem/battery_soc, valgfri horizon_hours) | do_calculus (kun strukturell "
+            "identifiserbarhet) | bayes (ren evidens-posterior) | scm (SKRIVER hypotese-kanter) | "
+            "nuts | mcmc (.11 — kan svare «ikke wiret»). Uten tool: vis tilgang. Disiplin: "
+            "INSUFFICIENT = tomt/manglende data, IKKE bevis for det motsatte; oppgi ALLTID intervallet "
+            "med punktestimatet; SKILL evidens-posterior (kausal, grafen) fra forecast (temporal, live "
+            "data); forecast reliability=LAV betyr «kan ikke skille retning», ikke «stabilt»; "
             "resultater er evidens, ikke konklusjoner — vitenskapelig tilskrivning er Mortens."
         ),
         "parameters": {"type": "object", "properties": {
@@ -396,7 +406,12 @@ registry.register(
             "target": {"type": "string", "description": "Utfallsvariabel (probability/bayes/do_calculus)"},
             "intervention": {"type": "string",
                              "description": "Intervensjon som JSON, f.eks. {\"X\": \"hoy\"}"},
-            "domain": {"type": "string", "description": "SCM-domene i grafen (default efc)"},
+            "domain": {"type": "string", "description": "SCM-domene i grafen — PÅKREVD for probability/"
+                                                        "bayes (kall tool=sources/domains for liste); "
+                                                        "ingen default"},
+            "metric": {"type": "string", "description": "forecast: ticker (EQNR.OL) ELLER IoT-metrikk "
+                                                        "(price_total_hjem, battery_soc)"},
+            "horizon_hours": {"type": "integer", "description": "forecast: horisont i timer (IoT, default 24)"},
         }, "required": []},
     },
     handler=lambda args, **kw: _science_compute(args or {}),
