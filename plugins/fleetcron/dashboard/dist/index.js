@@ -141,7 +141,7 @@
         h(React.Fragment, { key: host },
           Section({ title: HOST_LABELS[host] || host, badge: byHost[host].length,
               sub: "eies av maskinen; samlet av kollektoren hver time" },
-            Table(["jobb", "scheduler", "schedule", "kommando"],
+            Table(["jobb", "type", "schedule", "kommando"],
               byHost[host].map((j, i) =>
                 h("tr", { key: host + i, className: "border-t border-border/60" },
                   h("td", { className: TD + " font-medium" }, j.label || "—"),
