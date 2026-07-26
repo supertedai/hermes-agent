@@ -5916,7 +5916,25 @@ def _(rid, params: dict) -> dict:
 
 @method("session.list")
 def _(rid, params: dict) -> dict:
-    db = _get_db()
+    # BL-2518: profil-scoping for fler-bruker-isolasjon. Når en ``profile`` er
+    # oppgitt lister vi READ-ONLY fra DEN profilens state.db (egen per bruker),
+    # slik at en bruker kun ser sine egne sesjoner. read_only=True er PÅKREVD:
+    # dette er en cross-profil lese-poll (resume-pickeren) og må ALDRI DDL/
+    # write-locke en annen brukers live-db (jf. web_server.py:4611 + SessionDB
+    # read_only-docstring). Uten profile: launch-db (uendret).
+    profile_home = _profile_home((params.get("profile") or "").strip() or None)
+    _close_db = False
+    if profile_home is not None:
+        from hermes_state import SessionDB
+        db_path = Path(profile_home) / "state.db"
+        if not db_path.exists():
+            return _ok(rid, {"sessions": []})  # ingen db ennå → ikke opprett/DDL en annen brukers db
+        try:
+            db, _close_db = SessionDB(db_path=db_path, read_only=True), True
+        except Exception as e:
+            return _err(rid, 5006, str(e))
+    else:
+        db = _get_db()
     if db is None:
         return _db_unavailable_error(rid, code=5006)
     try:
@@ -5958,6 +5976,12 @@ def _(rid, params: dict) -> dict:
         )
     except Exception as e:
         return _err(rid, 5006, str(e))
+    finally:
+        if _close_db:
+            try:
+                db.close()
+            except Exception:
+                pass
 
 
 @method("session.most_recent")
