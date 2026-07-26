@@ -27,9 +27,11 @@ import { Button } from "@nous-research/ui/ui/components/button";
 import { Badge } from "@nous-research/ui/ui/components/badge";
 import { Card } from "@nous-research/ui/ui/components/card";
 
+import { AgentFlowChips } from "@/components/AgentFlowChips";
 import { ModelPickerDialog } from "@/components/ModelPickerDialog";
 import { ModelReloadConfirm } from "@/components/ModelReloadConfirm";
 import { ReasoningPicker } from "@/components/ReasoningPicker";
+import { applyAgentFlowEvent, type AgentFlow } from "@/lib/agentFlows";
 import { GatewayClient, type ConnectionState } from "@/lib/gatewayClient";
 import { api, buildWsUrl } from "@/lib/api";
 import { titleFromSessionInfoPayload } from "@/lib/chat-title";
@@ -133,6 +135,10 @@ export function ChatSidebar({
   // Set after the picker saves a model and the user declines the reload: config
   // is updated but the running session keeps its model until rebuilt.
   const [modelNotice, setModelNotice] = useState<string | null>(null);
+  // BL-2555: live agent-flow chips — one per delegate_task dispatch, fed by
+  // the `subagent.*` frames on /api/events. Finished chips stay as receipts
+  // for the lifetime of the chat tab; a channel/profile switch clears them.
+  const [agentFlows, setAgentFlows] = useState<AgentFlow[]>([]);
   // Short name of a just-saved model awaiting confirm to reload (a fresh chat
   // session is how the running chat adopts it; we confirm before discarding it).
   const [pendingReloadModel, setPendingReloadModel] = useState<string | null>(
@@ -242,6 +248,12 @@ export function ChatSidebar({
     // binding the cleanup reads via ``wsRef``.
     let unmounting = false;
     let ws: WebSocket | null = null;
+    // New PTY channel or reconnect = new chat context: drop the previous
+    // channel's agent-flow chips (same microtask pattern as the info reset
+    // above — React 19 forbids sync setState inside the effect body).
+    queueMicrotask(() => {
+      if (!unmounting) setAgentFlows([]);
+    });
     void (async () => {
       const url = await buildWsUrl("/api/events", { channel });
       if (unmounting) {
@@ -287,6 +299,15 @@ export function ChatSidebar({
           }
         } else if (type === "dashboard.new_session_requested") {
           onDashboardNewSessionRequest?.();
+        } else if (typeof type === "string" && type.startsWith("subagent.")) {
+          // BL-2555: delegate_task dispatches → live agent-flow chips. The
+          // reducer returns the same reference for frames it ignores, so
+          // this is a no-op render-wise outside delegation runs.
+          const p =
+            payload && typeof payload === "object"
+              ? (payload as Record<string, unknown>)
+              : undefined;
+          setAgentFlows((prev) => applyAgentFlowEvent(prev, type, p, Date.now()));
         }
       });
     })();
@@ -377,6 +398,8 @@ export function ChatSidebar({
           </div>
         </Card>
       )}
+
+      <AgentFlowChips flows={agentFlows} />
 
       {banner && (
         <Card className="flex items-start gap-2 border-destructive/40 bg-destructive/5 px-3 py-2 text-xs">
