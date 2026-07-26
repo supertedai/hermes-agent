@@ -377,20 +377,23 @@ registry.register(
     schema={
         "name": "science_compute",
         "description": (
-            "Kjoer Symbioses EGNE vitenskapelige motorer, aktuator-gatet fail-closed: "
-            "tool=domains (VIS hvilke domener som har kausal struktur — kall denne FOER do_calculus) | "
-            "do_calculus (kausal identifiserbarhet + strukturell do(X)-dom mot grafens SCM, read-only, "
-            "autonomt; krever target + intervention + domain fra domains-lista) | scm | nuts | mcmc | "
-            "bayes (registrert men gatet/shadow — en NEKTELSE er et GYLDIG svar med begrunnelse: ikke "
-            "retry, rapporter heller hva som mangler). Uten tool: vis hva du har lov til. Disiplin: "
-            "metode over resultat; scm_nodes:0 = tomt domene, IKKE negativt funn; strukturveien gir "
-            "ALDRI tallestimat (effect_magnitude=null er korrekt, ikke en feil); resultater er evidens, "
-            "ikke konklusjoner — vitenskapelig tilskrivning er Mortens."
+            "Kjoer Symbioses EGNE vitenskapelige motorer, aktuator-gatet fail-closed, ALLTID domene-"
+            "isolert (aldri EFC/kosmos i et oekonomi-spm). tool=domains (VIS hvilke domener som har "
+            "kausal struktur — kall FOER de andre) | probability (ANBEFALT for «hvor sannsynlig er X»: "
+            "orkestrerer strukturell identifiserbarhet + konjugat Bayesiansk posterior → P(sann) med "
+            "94% kredibilitetsintervall + evidensklasse; krever target=utfall, valgfri intervention="
+            "aarsak, domain) | do_calculus (kun strukturell identifiserbarhet, ingen tall) | bayes "
+            "(ren evidens-posterior for ETT utfall) | scm (SKRIVER hypotese-kanter) | nuts | mcmc "
+            "(ikke-konjugat/hierarkisk lag, .11 — kan svare «ikke wiret»). Uten tool: vis tilgang. "
+            "Disiplin: INSUFFICIENT_EVIDENCE = tomt domene, IKKE bevis for det motsatte; oppgi ALLTID "
+            "kredibilitetsintervallet med et punktestimat; evidens-posterior ≠ live prognose; "
+            "resultater er evidens, ikke konklusjoner — vitenskapelig tilskrivning er Mortens."
         ),
         "parameters": {"type": "object", "properties": {
             "tool": {"type": "string",
-                     "description": "do_calculus | scm | nuts | mcmc | bayes (utelat for tilgangsliste)"},
-            "target": {"type": "string", "description": "Utfallsvariabel (do_calculus)"},
+                     "description": "domains | probability | do_calculus | bayes | scm | nuts | mcmc "
+                                    "(utelat for tilgangsliste)"},
+            "target": {"type": "string", "description": "Utfallsvariabel (probability/bayes/do_calculus)"},
             "intervention": {"type": "string",
                              "description": "Intervensjon som JSON, f.eks. {\"X\": \"hoy\"}"},
             "domain": {"type": "string", "description": "SCM-domene i grafen (default efc)"},
