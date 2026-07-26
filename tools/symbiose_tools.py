@@ -348,3 +348,55 @@ registry.register(
     emoji="\U0001F9EA",
     max_result_size_chars=7000,
 )
+
+
+def _science_compute(args: dict) -> str:
+    """BL-2560: bro til systemets vitenskapelige motorer — aktuator-gatet SERVER-SIDE (.12:8010),
+    aldri lokalt: .15 har bevisst ingen graf-creds, saa gate-oppslag og motorer kjoerer der creds bor."""
+    agent = "hermes-pilot-001"  # GUI-pilotens :FleetAgent-id — grants/nektelser scopes hit
+    tool = (args.get("tool") or "").strip()
+    if not tool:
+        return _get("/api/v1/compute/available?agent=" + urllib.parse.quote(agent), timeout=30)
+    payload: dict = {"agent": agent, "tool": tool, "domain": (args.get("domain") or "efc").strip() or "efc"}
+    if args.get("target"):
+        payload["target"] = args["target"]
+    iv = args.get("intervention")
+    if iv:
+        if isinstance(iv, str):
+            try:
+                iv = json.loads(iv)
+            except ValueError:
+                pass  # streng-form er gyldig — serveren koerserer
+        payload["intervention"] = iv
+    return _post("/api/v1/compute/run", payload, timeout=90)
+
+
+registry.register(
+    name="science_compute",
+    toolset="symbiose",
+    schema={
+        "name": "science_compute",
+        "description": (
+            "Kjoer Symbioses EGNE vitenskapelige motorer, aktuator-gatet fail-closed: "
+            "tool=domains (VIS hvilke domener som har kausal struktur — kall denne FOER do_calculus) | "
+            "do_calculus (kausal identifiserbarhet + strukturell do(X)-dom mot grafens SCM, read-only, "
+            "autonomt; krever target + intervention + domain fra domains-lista) | scm | nuts | mcmc | "
+            "bayes (registrert men gatet/shadow — en NEKTELSE er et GYLDIG svar med begrunnelse: ikke "
+            "retry, rapporter heller hva som mangler). Uten tool: vis hva du har lov til. Disiplin: "
+            "metode over resultat; scm_nodes:0 = tomt domene, IKKE negativt funn; strukturveien gir "
+            "ALDRI tallestimat (effect_magnitude=null er korrekt, ikke en feil); resultater er evidens, "
+            "ikke konklusjoner — vitenskapelig tilskrivning er Mortens."
+        ),
+        "parameters": {"type": "object", "properties": {
+            "tool": {"type": "string",
+                     "description": "do_calculus | scm | nuts | mcmc | bayes (utelat for tilgangsliste)"},
+            "target": {"type": "string", "description": "Utfallsvariabel (do_calculus)"},
+            "intervention": {"type": "string",
+                             "description": "Intervensjon som JSON, f.eks. {\"X\": \"hoy\"}"},
+            "domain": {"type": "string", "description": "SCM-domene i grafen (default efc)"},
+        }, "required": []},
+    },
+    handler=lambda args, **kw: _science_compute(args or {}),
+    emoji="\U0001F52C",
+    max_result_size_chars=10000,
+)
