@@ -82,6 +82,7 @@ class UserIn(BaseModel):
     email: str = ""
     role: str = "user"
     password: Optional[str] = None  # None => generer og returner én gang
+    totp: bool = False  # True => generer 2FA-secret (returneres ÉN gang)
 
 
 class UserPatch(BaseModel):
@@ -114,12 +115,20 @@ def create_user(body: UserIn, request: Request):
             email=body.email,
             role=body.role,
             created_by=created_by,
+            totp=body.totp,
         )
     except ValueError as exc:
         raise HTTPException(status_code=422, detail=str(exc))
+    # totp_secret/otpauth_uri ligger i user-dicten KUN ved opprettelse —
+    # løft dem ut som engangsfelter så user-objektet forblir hash-/secret-fritt.
+    totp_secret = user.pop("totp_secret", None)
+    otpauth = user.pop("otpauth_uri", None)
     out = {"user": user}
     if generated:
         out["generated_password"] = generated  # vises ÉN gang, lagres aldri
+    if totp_secret:
+        out["totp_secret"] = totp_secret  # vises ÉN gang (til authenticator)
+        out["otpauth_uri"] = otpauth
     return out
 
 
@@ -159,3 +168,111 @@ def reset_password(username: str, body: PasswordIn, request: Request):
     if generated:
         out["generated_password"] = generated
     return out
+
+
+class TotpIn(BaseModel):
+    enable: bool
+
+
+@router.post("/users/{username}/totp")
+def toggle_totp(username: str, body: TotpIn, request: Request):
+    """Slå på (ny secret, returneres ÉN gang) eller av 2FA for en bruker."""
+    _require_admin(request)
+    try:
+        if body.enable:
+            secret = user_store.generate_totp_secret()
+            user_store.set_totp(username, secret)
+            return {
+                "ok": True,
+                "totp_secret": secret,  # vises ÉN gang (til authenticator)
+                "otpauth_uri": user_store.otpauth_uri(username, secret),
+            }
+        user_store.set_totp(username, None)
+        return {"ok": True}
+    except KeyError as exc:
+        raise HTTPException(status_code=404, detail=str(exc))
+
+
+class LoginCheckIn(BaseModel):
+    username: str
+    password: str
+    code: str = ""
+    client_ts: Optional[float] = None  # gatens NTP-riktige klokke (skew-komp.)
+
+
+@router.post("/login-check")
+def login_check(body: LoginCheckIn, request: Request):
+    """Innloggingsverifisering for frontend-gaten (ws-proxyen på .14, over
+    ssh-tunnelen — samme tillitskanal som /api/ws-broen).
+
+    Passord + (om brukeren har 2FA) obligatorisk TOTP-kode. Generisk svar:
+    aldri hvilken faktor som feilet. Ligger bak dashboardets auth-middleware
+    (loopback-token / admin-session) som alle andre plugin-ruter.
+
+    ``client_ts``: .15s klokke driver usynkronisert (chrony når ikke kildene
+    gjennom brannmuren), så gaten — som HAR riktig klokke — oppgir sitt
+    tidspunkt for TOTP-vinduet. Aksepteres kun innen ±15 min av server-tid
+    (calleren er allerede token-autentisert; bindingen begrenser skaden om
+    noe skulle gå galt oppstrøms).
+    """
+    _require_admin(request)
+    import time as _time
+
+    # ±300 s: rommer dagens ~2 min skew med margin, men krymper vinduet en
+    # kompromittert oppstrøms-caller kunne utnytte (reviewer-funn b1).
+    at_time = None
+    if body.client_ts is not None and abs(body.client_ts - _time.time()) < 300:
+        at_time = float(body.client_ts)
+    user = user_store.verify_login(
+        body.username, body.password, body.code, at_time=at_time
+    )
+    if user is None:
+        return {"ok": False}
+    return {"ok": True, "user": user}
+
+
+@router.get("/user-active/{username}")
+def user_active(username: str, request: Request):
+    """Lettvekts aktiv-sjekk for frontend-gatens cookie-verifisering:
+    deaktivering på .15 skal drepe frontend-tilgang innen cache-vinduet."""
+    _require_admin(request)
+    user = user_store.get_user(username)
+    if not user or user.get("disabled"):
+        return {"active": False}
+    return {"active": True, "role": user.get("role", "user"),
+            "display_name": user.get("display_name") or username}
+
+
+class BootstrapMigrateIn(BaseModel):
+    username: str
+    password: str
+    display_name: str = ""
+    email: str = ""
+    totp_secret: str = ""
+
+
+@router.post("/bootstrap-migrate")
+def bootstrap_migrate(body: BootstrapMigrateIn, request: Request):
+    """Engangs-migrering av frontend-gatens eksisterende enbruker-innlogging
+    (.auth.json på .14: passphrase + TOTP-secret) inn som FØRSTE bruker
+    (admin). VIRKER KUN NÅR BUTIKKEN ER TOM — etterpå er ruta død. Kalles
+    maskin-til-maskin over tunnelen; hemmelighetene passerer aldri en chat.
+    """
+    _require_admin(request)
+    if any(not u["disabled"] for u in user_store.list_users()):
+        raise HTTPException(status_code=409, detail="butikken er ikke tom")
+    try:
+        user = user_store.create_user(
+            username=body.username,
+            password=body.password,
+            display_name=body.display_name,
+            email=body.email,
+            role="admin",
+            created_by="bootstrap-migrate(.auth.json)",
+            totp_secret=body.totp_secret,
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc))
+    user.pop("totp_secret", None)
+    user.pop("otpauth_uri", None)
+    return {"ok": True, "user": user}

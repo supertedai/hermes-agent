@@ -172,6 +172,7 @@ def _public(u: dict) -> dict:
         "created_at": u.get("created_at", ""),
         "created_by": u.get("created_by", ""),
         "last_login": u.get("last_login", ""),
+        "has_totp": bool(u.get("totp_secret")),
     }
 
 
@@ -198,11 +199,15 @@ def create_user(
     email: str = "",
     role: str = "user",
     created_by: str = "",
+    totp: bool = False,
+    totp_secret: str = "",
     path: Optional[Path] = None,
 ) -> dict:
     """Opprett bruker. Første bruker i en tom butikk MÅ være admin
     (bootstrap — «jeg som første og eneste bruker»), og genererer
-    samtidig signeringssecreten."""
+    samtidig signeringssecreten. ``totp=True`` genererer 2FA-secret
+    (``totp_secret`` kan overstyre — migreringsveien fra .auth.json);
+    secreten returneres da ÉN gang i feltet ``totp_secret``."""
     username = (username or "").strip().lower()
     if not USERNAME_RE.match(username):
         raise ValueError(
@@ -212,6 +217,9 @@ def create_user(
         raise ValueError(f"ugyldig rolle {role!r} (tillatt: {ROLES})")
     if not password or len(password) < 8:
         raise ValueError("passord må være minst 8 tegn")
+    secret_b32 = (totp_secret or "").strip() or (
+        generate_totp_secret() if totp else ""
+    )
     with _LOCK:
         store = load_store(path)
         if any(u.get("username") == username for u in store["users"]):
@@ -231,9 +239,15 @@ def create_user(
             "created_by": created_by,
             "last_login": "",
         }
+        if secret_b32:
+            user["totp_secret"] = secret_b32
         store["users"].append(user)
         save_store(store, path)
-    return _public(user)
+    out = _public(user)
+    if secret_b32:
+        out["totp_secret"] = secret_b32  # vises ÉN gang ved opprettelse
+        out["otpauth_uri"] = otpauth_uri(username, secret_b32)
+    return out
 
 
 def update_user(
@@ -327,6 +341,99 @@ def check_login(username: str, password: str, path: Optional[Path] = None) -> Op
         target["last_login"] = _now()
         save_store(store, path)
         return _public(target)
+
+
+def _totp_at(secret_b32: str, t: float, step: int = 30, digits: int = 6) -> str:
+    """RFC 6238-kode for tidspunkt ``t`` — ren stdlib, samme algoritme som
+    frontend-gatens setup_2fa (ai.byopus.com)."""
+    import struct
+
+    pad = "=" * ((8 - len(secret_b32) % 8) % 8)
+    key = base64.b32decode(secret_b32.upper().replace(" ", "") + pad)
+    h = hmac.new(key, struct.pack(">Q", int(t // step)), hashlib.sha1).digest()
+    o = h[-1] & 0x0F
+    return str(
+        (int.from_bytes(h[o:o + 4], "big") & 0x7FFFFFFF) % (10 ** digits)
+    ).zfill(digits)
+
+
+def check_totp(
+    secret_b32: str, code: str, window: int = 1,
+    at_time: Optional[float] = None,
+) -> bool:
+    """Konstant-tid TOTP-verify, ±``window`` steg (30 s) toleranse.
+
+    ``at_time`` lar en PÅLITELIG caller (frontend-gaten på .14, som har
+    NTP-riktig klokke) oppgi verifiseringstidspunktet — .15s egen klokke
+    driver usynkronisert (chrony når ikke kildene gjennom brannmuren).
+    Bindes av calleren til et smalt vindu rundt server-tid."""
+    code = str(code or "").strip().replace(" ", "")
+    if not (secret_b32 and code):
+        return False
+    now = at_time if at_time is not None else time.time()
+    return any(
+        hmac.compare_digest(_totp_at(secret_b32, now + w * 30), code)
+        for w in range(-window, window + 1)
+    )
+
+
+def generate_totp_secret() -> str:
+    return base64.b32encode(secrets.token_bytes(20)).decode()
+
+
+def otpauth_uri(username: str, secret_b32: str) -> str:
+    import urllib.parse
+
+    return (
+        "otpauth://totp/Opus:%s?secret=%s&issuer=Opus&digits=6&period=30"
+        % (urllib.parse.quote(username), secret_b32)
+    )
+
+
+def get_totp_secret(username: str, path: Optional[Path] = None) -> str:
+    """KUN for verifisering server-side — aldri ut gjennom API-et."""
+    u = get_user(username, path)
+    return str((u or {}).get("totp_secret") or "")
+
+
+def set_totp(
+    username: str, secret_b32: Optional[str], path: Optional[Path] = None
+) -> None:
+    """Sett (eller fjern med ``None``) TOTP-secret for en bruker."""
+    with _LOCK:
+        store = load_store(path)
+        for u in store["users"]:
+            if u.get("username") == username:
+                if secret_b32:
+                    u["totp_secret"] = secret_b32
+                else:
+                    u.pop("totp_secret", None)
+                save_store(store, path)
+                return
+    raise KeyError(f"ukjent bruker: {username}")
+
+
+def verify_login(
+    username: str, password: str, code: str = "",
+    at_time: Optional[float] = None, path: Optional[Path] = None,
+) -> Optional[dict]:
+    """Full innloggingssjekk for frontend-gaten: passord + (om satt) TOTP.
+
+    Generisk feil — skiller aldri ukjent bruker / feil passord / feil kode.
+    Har brukeren ``totp_secret`` er koden OBLIGATORISK. ``at_time`` — se
+    :func:`check_totp` (klokke-skew-kompensasjon fra pålitelig gate).
+    """
+    user = check_login(username, password, path)
+    if user is None:
+        return None
+    secret = get_totp_secret(user["username"], path)
+    if secret and not check_totp(secret, code, at_time=at_time):
+        return None
+    return user
+
+
+def has_totp(username: str, path: Optional[Path] = None) -> bool:
+    return bool(get_totp_secret(username, path))
 
 
 def generate_password(length: int = 16) -> str:

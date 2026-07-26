@@ -75,6 +75,7 @@
     const [role, setRole] = useState(bootstrap ? "admin" : "user");
     const [password, setPassword] = useState("");
     const [generate, setGenerate] = useState(!bootstrap);
+    const [totp, setTotp] = useState(!bootstrap);
     const [busy, setBusy] = useState(false);
     const [msg, setMsg] = useState(null);
 
@@ -88,12 +89,13 @@
         username: username, display_name: displayName, email: email,
         role: bootstrap ? "admin" : role,
         password: generate ? null : password,
+        totp: bootstrap ? false : totp,
       })).then((r) => {
         if (r && r.detail) { setMsg({ tone: "err", text: String(r.detail) }); return; }
-        const gp = r && r.generated_password;
-        setMsg({ tone: "ok", text: gp
-          ? "opprettet: " + username + " — engangspassord (vises KUN nå): " + gp
-          : "opprettet: " + username });
+        const bits = ["opprettet: " + username];
+        if (r && r.generated_password) bits.push("engangspassord (vises KUN nå): " + r.generated_password);
+        if (r && r.totp_secret) bits.push("2FA-secret til authenticator (vises KUN nå): " + r.totp_secret + " — otpauth-URI: " + r.otpauth_uri);
+        setMsg({ tone: "ok", text: bits.join(" · ") });
         setUsername(""); setDisplayName(""); setEmail(""); setPassword("");
         if (props.onDone) props.onDone();
       }).catch((e) => setMsg({ tone: "err", text: String(e) }))
@@ -118,6 +120,10 @@
           h("input", { type: "checkbox", checked: generate,
             onChange: (e) => setGenerate(e.target.checked) }),
           "generer engangspassord"),
+        bootstrap ? null : h("label", { className: "inline-flex items-center gap-2 text-sm text-muted-foreground" },
+          h("input", { type: "checkbox", checked: totp,
+            onChange: (e) => setTotp(e.target.checked) }),
+          "2FA (authenticator) — anbefalt for internett-flaten"),
         generate ? null : h("div", { className: "grow max-w-xs" },
           Field("passord (minst 8 tegn)", h("input", { className: INPUT, type: "password",
             value: password, autoComplete: "new-password",
@@ -153,6 +159,18 @@
         .catch((e) => setPwMsg(String(e)))
         .finally(() => setBusy(false));
     };
+    const toggleTotp = () => {
+      setBusy(true);
+      jfetch("/users/" + encodeURIComponent(u.username) + "/totp", jsonOpts("POST", { enable: !u.has_totp }))
+        .then((r) => {
+          if (r && r.totp_secret) setPwMsg("2FA PÅ — secret til authenticator (vises KUN nå): " + r.totp_secret + " — otpauth-URI: " + r.otpauth_uri);
+          else if (r && r.detail) setPwMsg(String(r.detail));
+          else setPwMsg("2FA av");
+          props.onChanged();
+        })
+        .catch((e) => setPwMsg(String(e)))
+        .finally(() => setBusy(false));
+    };
     const btn = "px-2 py-1 text-xs";
     return h(React.Fragment, null,
       h("tr", { className: "border-t border-border/60" },
@@ -164,6 +182,9 @@
         h("td", { className: TD }, h(Badge, {
           tone: u.disabled ? "destructive" : "success", className: "text-xs" },
           u.disabled ? "deaktivert" : "aktiv")),
+        h("td", { className: TD }, h(Badge, {
+          tone: u.has_totp ? "success" : "outline", className: "text-xs" },
+          u.has_totp ? "2FA på" : "2FA av")),
         h("td", { className: TD + " text-muted-foreground whitespace-nowrap text-xs" },
           u.last_login || "aldri"),
         h("td", { className: TD },
@@ -175,8 +196,10 @@
               onClick: () => patch({ role: u.role === "admin" ? "user" : "admin" }) },
               u.role === "admin" ? "gjør til bruker" : "gjør til admin"),
             h(Button, { ghost: true, className: btn, disabled: busy, onClick: resetPw },
-              "nytt passord")))),
-      pwMsg ? h("tr", null, h("td", { colSpan: 7,
+              "nytt passord"),
+            h(Button, { ghost: true, className: btn, disabled: busy, onClick: toggleTotp },
+              u.has_totp ? "2FA av" : "2FA på")))),
+      pwMsg ? h("tr", null, h("td", { colSpan: 8,
         className: "py-1 pr-3 text-xs " + (pwMsg.indexOf("passord") >= 0 ? "text-emerald-500" : "text-destructive") },
         pwMsg)) : null);
   }
@@ -232,7 +255,7 @@
       sections.push(Section({ title: "Brukere", badge: (users || []).length },
         users === null
           ? h("p", { className: "text-sm text-muted-foreground" }, "laster …")
-          : Table(["bruker", "navn", "e-post", "rolle", "status", "sist innlogget", ""],
+          : Table(["bruker", "navn", "e-post", "rolle", "status", "2fa", "sist innlogget", ""],
               (users || []).map((u) => h(UserRow, { key: u.username, user: u, onChanged: reload })))));
       sections.push(Section({ title: "Legg til bruker",
         sub: "Nye brukere får tilgang til chat-flaten når end-user-skinnet (BL-2464) kobles på; deaktivering dreper levende sesjoner umiddelbart." },
