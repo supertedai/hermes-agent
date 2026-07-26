@@ -1,0 +1,5 @@
+name: local_users
+version: 0.1.0
+description: "Dashboard auth-provider — flerbruker brukernavn/passord mot den lokale bruker-butikken users.json i HERMES_HOME (BL-2653, multiuser-planen). Registrerer seg når butikken har minst én aktiv bruker; administreres i «Brukere»-fanen (plugins/brukere). Sesjoner er statsløse HMAC-tokens signert med butikkens secret; passord hashes med stdlib scrypt i samme format som basic-provideren."
+author: Symbiose
+kind: backend

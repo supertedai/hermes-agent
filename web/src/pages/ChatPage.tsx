@@ -181,6 +181,10 @@ export default function ChatPage({ isActive = true }: { isActive?: boolean }) {
   );
   const [copyState, setCopyState] = useState<"idle" | "copied">("idle");
   const copyResetRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const [threadCopyState, setThreadCopyState] = useState<
+    "idle" | "busy" | "copied" | "failed"
+  >("idle");
+  const threadCopyResetRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const reconnectTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const reconnectAttemptRef = useRef(0);
   const forceFreshPtyRef = useRef(false);
@@ -452,6 +456,50 @@ export default function ChatPage({ isActive = true }: { isActive?: boolean }) {
     setCopyState("copied");
     if (copyResetRef.current) clearTimeout(copyResetRef.current);
     copyResetRef.current = setTimeout(() => setCopyState("idle"), 1500);
+    termRef.current?.focus();
+  };
+
+  const handleCopyThread = async () => {
+    if (threadCopyState === "busy") return;
+    setThreadCopyState("busy");
+    const settle = (state: "copied" | "failed") => {
+      setThreadCopyState(state);
+      if (threadCopyResetRef.current) clearTimeout(threadCopyResetRef.current);
+      threadCopyResetRef.current = setTimeout(
+        () => setThreadCopyState("idle"),
+        2000,
+      );
+    };
+    try {
+      // Resolve the thread: an explicit ?resume= id wins; otherwise the most
+      // recently active top-level session (skip delegation children — they
+      // are their own sessions in the same DB).
+      let sid = resumeParam;
+      if (!sid) {
+        const page = await api.getSessions(5, 0, scopedProfile, "recent");
+        const candidates = (page.sessions ?? []).filter(
+          (s) =>
+            !s.parent_session_id &&
+            !(s.source ?? "").toLowerCase().includes("deleg"),
+        );
+        sid = (candidates[0] ?? page.sessions?.[0])?.id ?? null;
+      }
+      if (!sid) throw new Error("no session to copy");
+      const data = await api.getSessionMessages(sid, scopedProfile);
+      const lines: string[] = [];
+      for (const m of data.messages ?? []) {
+        if (m.role !== "user" && m.role !== "assistant") continue;
+        const text = (m.content ?? "").trim();
+        if (!text) continue;
+        lines.push(`**${m.role === "user" ? "Morten" : "Opus"}:**\n\n${text}`);
+      }
+      if (!lines.length) throw new Error("session has no visible messages");
+      await navigator.clipboard.writeText(lines.join("\n\n---\n\n"));
+      settle("copied");
+    } catch (err) {
+      console.warn("[chat] copy thread failed:", err);
+      settle("failed");
+    }
     termRef.current?.focus();
   };
 
@@ -1483,30 +1531,63 @@ export default function ChatPage({ isActive = true }: { isActive?: boolean }) {
             </div>
           )}
 
-          <Button
-            ghost
-            onClick={handleCopyLast}
-            title="Copy last assistant response as raw markdown"
-            aria-label="Copy last assistant response"
+          <div
             className={cn(
-              "absolute z-10",
-              "normal-case tracking-normal font-normal",
-              "rounded border border-current/30",
-              "bg-black/20",
-              "opacity-70 hover:opacity-100 hover:border-current/60",
-              "transition-opacity duration-150",
-              "bottom-2 right-2 px-2 py-1 text-xs sm:bottom-3 sm:right-3 sm:px-2.5 sm:py-1.5",
-              "lg:bottom-4 lg:right-4",
+              "absolute z-10 flex flex-col items-end gap-1",
+              "bottom-2 right-2 sm:bottom-3 sm:right-3 lg:bottom-4 lg:right-4",
             )}
-            style={{ color: terminalFg }}
           >
-            <span className="inline-flex items-center gap-1.5">
-              <Copy className="h-3 w-3 shrink-0" />
-              <span className="hidden min-[400px]:inline tracking-wide">
-                {copyState === "copied" ? "copied" : "copy last response"}
+            <Button
+              ghost
+              onClick={handleCopyThread}
+              title="Copy the whole thread as markdown (Morten/Opus turns)"
+              aria-label="Copy whole thread"
+              className={cn(
+                "normal-case tracking-normal font-normal",
+                "rounded border border-current/30",
+                "bg-black/20",
+                "opacity-70 hover:opacity-100 hover:border-current/60",
+                "transition-opacity duration-150",
+                "px-2 py-1 text-xs sm:px-2.5 sm:py-1.5",
+              )}
+              style={{ color: terminalFg }}
+            >
+              <span className="inline-flex items-center gap-1.5">
+                <Copy className="h-3 w-3 shrink-0" />
+                <span className="hidden min-[400px]:inline tracking-wide">
+                  {threadCopyState === "busy"
+                    ? "copying…"
+                    : threadCopyState === "copied"
+                      ? "copied"
+                      : threadCopyState === "failed"
+                        ? "copy failed"
+                        : "copy thread"}
+                </span>
               </span>
-            </span>
-          </Button>
+            </Button>
+            <Button
+              ghost
+              onClick={handleCopyLast}
+              title="Copy last assistant response as raw markdown"
+              aria-label="Copy last assistant response"
+              className={cn(
+                "normal-case tracking-normal font-normal",
+                "rounded border border-current/30",
+                "bg-black/20",
+                "opacity-70 hover:opacity-100 hover:border-current/60",
+                "transition-opacity duration-150",
+                "px-2 py-1 text-xs sm:px-2.5 sm:py-1.5",
+              )}
+              style={{ color: terminalFg }}
+            >
+              <span className="inline-flex items-center gap-1.5">
+                <Copy className="h-3 w-3 shrink-0" />
+                <span className="hidden min-[400px]:inline tracking-wide">
+                  {copyState === "copied" ? "copied" : "copy last response"}
+                </span>
+              </span>
+            </Button>
+          </div>
         </div>
 
         {!narrow && (

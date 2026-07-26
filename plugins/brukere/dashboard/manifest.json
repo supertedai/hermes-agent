@@ -1,0 +1,11 @@
+{
+  "name": "brukere",
+  "label": "Brukere",
+  "description": "Chat-plattformens brukere: Morten (admin) oppretter, deaktiverer og resetter — fundamentet for multiuser-planen (BL-2653, charter plan:symbiose_multiuser_chat_platform). Innloggingsvei: dashboard_auth/local_users.",
+  "icon": "Users",
+  "version": "0.1.0",
+  "tab": { "path": "/brukere", "position": "after:kanban" },
+  "entry": "dist/index.js",
+  "css": "dist/style.css",
+  "api": "plugin_api.py"
+}
