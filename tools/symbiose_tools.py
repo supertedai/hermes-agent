@@ -85,13 +85,17 @@ registry.register(
     toolset="symbiose",
     schema={
         "name": "symbiose_ask",
-        "description": ("Dypt svar fra hele Symbiose (graf + RAG + minne + sensorer). GRUNDIG men "
-                        "TREGT (kognitiv pipeline, kan ta minutter) — bruk graph_query/iot_status for raske oppslag."),
+        "description": ("Dyp fakta-retrieval fra Symbiose (RAG + graf-noder) for et spørsmål. "
+                        "Returnerer RÅ fakta/kilder — DU syntetiserer svaret selv (ingen server-side "
+                        "LLM-syntese: raskere+billigere, chatten er bedre på syntese). graph_query for presis Cypher."),
         "parameters": {"type": "object", "properties": {
             "question": {"type": "string", "description": "Spørsmålet, på norsk eller engelsk"},
         }, "required": ["question"]},
     },
-    handler=lambda args, **kw: _post("/query", {"query": args.get("question", ""), "user_id": "morten"}, timeout=170),
+    # BL (2026-07-26, Morten «ta bort syntesen — chatten er bedre + fordyrende ledd»): symbiose_ask
+    # traff før syntetiserende /query (2-3 LLM-kall server-side, 170s timeout/hang). Nå fakta-only
+    # /rag/search (rask ~0.1s, RAG+graf-noder); chatten (120B+MoA) syntetiserer. Ingen dobbel-LLM.
+    handler=lambda args, **kw: _post("/rag/search", {"query": args.get("question", ""), "limit": 12}, timeout=25),
     emoji="🔮",
     max_result_size_chars=12000,
 )
