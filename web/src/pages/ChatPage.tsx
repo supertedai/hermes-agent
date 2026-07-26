@@ -56,6 +56,7 @@ import {
   uploadChatImage,
 } from "@/lib/chatImagePaste";
 import { PluginSlot } from "@/plugins";
+import { stablePtyChannelId } from "@/lib/ptyChannel";
 import { useTheme } from "@/themes";
 import { useProfileScope } from "@/contexts/useProfileScope";
 
@@ -88,18 +89,11 @@ function ptyAttachToken(rotate = false): string {
 }
 
 // Channel id ties this chat tab's PTY child (publisher) to its sidebar
-// (subscriber).  Generated once per mount so a tab refresh starts a fresh
-// channel — the previous PTY child terminates with the old WS, and its
-// channel auto-evicts when no subscribers remain.
-function generateChannelId(scope?: string): string {
-  const prefix = scope ? "chat" : "chat-fresh";
-  if (typeof crypto !== "undefined" && "randomUUID" in crypto) {
-    return `${prefix}-${crypto.randomUUID()}`;
-  }
-  return `${prefix}-${Math.random().toString(36).slice(2)}-${Date.now().toString(
-    36,
-  )}`;
-}
+// (subscriber). It is derived from the SAME inputs that select the keep-alive
+// PTY (attach token + resume + profile) — see stablePtyChannelId — because the
+// PTY child gets the channel baked into its sidecar URL at spawn: a refreshed
+// tab reattaches to that living PTY, so its sidebar must resubscribe to the
+// channel the PTY already publishes on, not a fresh per-mount id (BL-2563).
 
 // Colors for the terminal body.  Matches the dashboard's dark teal canvas
 // with cream foreground — we intentionally don't pick monokai or a loud
@@ -309,9 +303,12 @@ export default function ChatPage({ isActive = true }: { isActive?: boolean }) {
   // management profile. Changing it remounts the terminal (key below /
   // effect dep) so the user explicitly starts a fresh scoped session.
   const { profile: scopedProfile } = useProfileScope();
-  const channel = useMemo(
-    () => generateChannelId(`${resumeParam ?? ""}\0${scopedProfile}`),
-    [resumeParam, scopedProfile],
+  // State, not useMemo: the connect effect recomputes it from the attach
+  // token it actually sends (a fresh start rotates the token, and with it the
+  // channel), and React bails out when the derived value is unchanged, so
+  // transient reconnects don't churn the sidebar subscription.
+  const [channel, setChannel] = useState<string>(() =>
+    stablePtyChannelId(ptyAttachToken(), resumeParam ?? "", scopedProfile ?? ""),
   );
   const titleScope = `${channel}\0${reconnectNonce}`;
   const sessionTitle =
@@ -919,13 +916,25 @@ export default function ChatPage({ isActive = true }: { isActive?: boolean }) {
     };
     void (async () => {
       if (unmounting) return;
-      const params: Record<string, string> = { channel };
-      if (resumeParam) params.resume = resumeParam;
-      if (forceFresh) params.fresh = "1";
       // Keep-alive identity: reattach to this tab's living PTY across
       // refresh/transient drops. A forced-fresh start rotates the token so
       // the previous keep-alive PTY is not reattached (registry reaps it).
-      params.attach = ptyAttachToken(forceFresh);
+      const attach = ptyAttachToken(forceFresh);
+      // The event channel is a pure function of the PTY identity, so a
+      // reattaching mount subscribes to the channel the living PTY already
+      // publishes on (BL-2563). Same identity → setChannel is a React
+      // no-op; a rotated token (fresh start) moves chip state to a clean
+      // channel alongside the fresh PTY.
+      const nextChannel = stablePtyChannelId(
+        attach,
+        resumeParam ?? "",
+        scopedProfile ?? "",
+      );
+      setChannel(nextChannel);
+      const params: Record<string, string> = { channel: nextChannel };
+      if (resumeParam) params.resume = resumeParam;
+      if (forceFresh) params.fresh = "1";
+      params.attach = attach;
       // Profile-scoped chat: the PTY child gets HERMES_HOME pointed at the
       // selected profile, so the conversation runs with that profile's model,
       // skills, memory, and sessions (see web_server._resolve_chat_argv).
@@ -1184,8 +1193,11 @@ export default function ChatPage({ isActive = true }: { isActive?: boolean }) {
       }
     };
   }, [
+    // `channel` is deliberately NOT a dependency: the effect derives it from
+    // the attach token it sends and publishes it via setChannel — depending
+    // on it would re-run the whole PTY connect for its own by-product.
+    // Identity changes re-run via resumeParam/scopedProfile instead.
     hasActivated,
-    channel,
     clearReconnectTimer,
     resumeParam,
     scopedProfile,
