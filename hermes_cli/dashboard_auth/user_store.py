@@ -49,6 +49,12 @@ _SCRYPT_SALT_BYTES = 16
 USERNAME_RE = re.compile(r"^[a-z][a-z0-9_.-]{2,31}$")
 ROLES = ("admin", "user")
 
+# BL-2790 (Reviewer-mandat BL-2789, A7-dimensjon): identitets-sentineler og
+# aliaser som server-siden (.12) klassifiserer som EIER-trafikk. En bruker med
+# et slikt navn ville fått Mortens recall — derfor kan de ALDRI opprettes.
+# ("morten" selv er vernet av unikhets-sjekken; migreringsveien skapte ham.)
+RESERVED_USERNAMES = frozenset({"system", "anonymous", "default-user", "morpheus"})
+
 _LOCK = threading.Lock()
 
 
@@ -212,6 +218,11 @@ def create_user(
     if not USERNAME_RE.match(username):
         raise ValueError(
             f"ugyldig brukernavn {username!r} (krav: {USERNAME_RE.pattern})"
+        )
+    if username in RESERVED_USERNAMES:
+        raise ValueError(
+            f"reservert brukernavn: {username!r} (identitets-sentinel/alias — "
+            "ville gitt eier-tilgang på Symbiose-siden, BL-2790)"
         )
     if role not in ROLES:
         raise ValueError(f"ugyldig rolle {role!r} (tillatt: {ROLES})")

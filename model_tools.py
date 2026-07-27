@@ -1052,6 +1052,53 @@ def _emit_post_tool_call_hook(
         logger.debug("post_tool_call hook error: %s", _hook_err)
 
 
+def _symbiose_role_gate(function_name: str, session_id: Optional[str]) -> Optional[str]:
+    """BL-2790 (BL-2466/WP2): per-rolle tool-gate for identifiserte sesjoner.
+
+    Gatewayen registrerer sid→bruker ved prompt.submit (session_identity, fil
+    i HERMES_HOME — krysser compute-host-grensen). Kontrakt:
+    - REN miss (ingen oppføring) = legacy/admin-æra (Morten konsoll/PTY/
+      dashboard-token) → None (urørt full verktøyflate).
+    - Identifisert bruker: rolle slås opp SERVER-SIDE i users-butikken (aldri
+      klient-assertert). Ikke-admin får DEFAULT-DENY: kun verktøyene i
+      NONADMIN_TOOL_ALLOWLIST (env, default "symbiose_ask,qdrant_search" —
+      recall-verktøyene som er owner-scopet server-side BL-2783/2786/2789).
+    - KORRUPT identitets-infra (les-/parse-feil) = fail-LUKKET: behandles som
+      identifisert ikke-admin (vi kan ikke vite at sesjonen IKKE var
+      identifisert). Selvhelbredende: neste set_identity reparerer fila.
+    Returnerer feil-JSON ved nekt, ellers None.
+    """
+    ident_error = False
+    caller = None
+    try:
+        from hermes_cli.dashboard_auth.session_identity import get_identity
+        caller = get_identity(session_id or "")
+    except Exception as exc:
+        ident_error = True
+        logging.getLogger(__name__).warning(
+            "BL-2790: session_identity utilgjengelig (%s) — fail-lukket tool-gate", exc)
+    if caller is None and not ident_error:
+        return None
+    role = "user"
+    if caller and not ident_error:
+        try:
+            from hermes_cli.dashboard_auth.session_identity import resolve_role
+            role = resolve_role(caller)
+        except Exception:
+            role = "user"
+    if role == "admin":
+        return None
+    _allow = {t.strip() for t in os.environ.get(
+        "NONADMIN_TOOL_ALLOWLIST", "symbiose_ask,qdrant_search").split(",") if t.strip()}
+    if function_name in _allow:
+        return None
+    return json.dumps({
+        "error": f"verktøyet '{function_name}' er ikke tilgjengelig for rollen din",
+        "error_type": "identity_infra_error" if ident_error else "tool_denied_role",
+        "tool": function_name,
+    }, ensure_ascii=False)
+
+
 def handle_function_call(
     function_name: str,
     function_args: Dict[str, Any],
@@ -1273,6 +1320,12 @@ def handle_function_call(
         # dashboards, budget alerts, and regression canaries without having
         # to wrap every tool manually.  We use monotonic() so the value is
         # unaffected by wall-clock adjustments during the call.
+        # BL-2790: rolle-gate FØR dispatch — identifisert ikke-admin får kun
+        # allowlisten; legacy (ren miss) urørt. Se _symbiose_role_gate.
+        _role_denial = _symbiose_role_gate(function_name, session_id)
+        if _role_denial is not None:
+            return _role_denial
+
         _dispatch_start = time.monotonic()
         _approval_tokens = None
         try:

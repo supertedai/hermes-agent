@@ -44,9 +44,14 @@ def _safe_int(v, default: int) -> int:
         return default
 
 
-def _get(path: str, timeout: int = 15) -> str:
+def _get(path: str, timeout: int = 15, user_id: str = "") -> str:
+    # BL-2790: X-User-ID = innsenderens identitet; server-siden owner-scoper
+    # recall på den (BL-2783/2786/2789). Tom = legacy → eier-default server-side.
+    req = urllib.request.Request(
+        API_BASE + path,
+        headers=({"X-User-ID": user_id} if user_id else {}))
     try:
-        with urllib.request.urlopen(API_BASE + path, timeout=timeout) as r:
+        with urllib.request.urlopen(req, timeout=timeout) as r:
             return r.read().decode("utf-8", "replace")
     except urllib.error.HTTPError as e:
         return json.dumps({"error": f"HTTP {e.code} fra {path}", "detail": e.read()[:300].decode("utf-8", "replace")})
@@ -54,10 +59,24 @@ def _get(path: str, timeout: int = 15) -> str:
         return json.dumps({"error": f"{type(e).__name__} mot {API_BASE}{path}: {e}"})
 
 
-def _post(path: str, payload: dict, timeout: int = 30) -> str:
+def _caller_uid(kw: dict) -> str:
+    """BL-2790: identiteten til turn-innsenderen (sid→bruker-registeret på .15).
+
+    Tom streng = legacy/admin-æra → serverne bruker eier-default (morten).
+    Korrupt identitets-infra PROPAGERER (registry.dispatch fanger og returnerer
+    error-JSON) — recall skal feile høyt, aldri falle tilbake til eier-data.
+    """
+    from hermes_cli.dashboard_auth.session_identity import get_identity
+    return get_identity(str(kw.get("session_id") or "")) or ""
+
+
+def _post(path: str, payload: dict, timeout: int = 30, user_id: str = "") -> str:
+    _hdrs = {"Content-Type": "application/json"}
+    if user_id:
+        _hdrs["X-User-ID"] = user_id  # BL-2790, se _get
     req = urllib.request.Request(
         API_BASE + path, data=json.dumps(payload).encode(),
-        headers={"Content-Type": "application/json"}, method="POST")
+        headers=_hdrs, method="POST")
     try:
         with urllib.request.urlopen(req, timeout=timeout) as r:
             return r.read().decode("utf-8", "replace")
@@ -95,7 +114,7 @@ registry.register(
     # BL (2026-07-26, Morten «ta bort syntesen — chatten er bedre + fordyrende ledd»): symbiose_ask
     # traff før syntetiserende /query (2-3 LLM-kall server-side, 170s timeout/hang). Nå fakta-only
     # /rag/search (rask ~0.1s, RAG+graf-noder); chatten (120B+MoA) syntetiserer. Ingen dobbel-LLM.
-    handler=lambda args, **kw: _post("/rag/search", {"query": args.get("question", ""), "limit": 12}, timeout=25),
+    handler=lambda args, **kw: _post("/rag/search", {"query": args.get("question", ""), "limit": 12}, timeout=25, user_id=_caller_uid(kw)),
     emoji="🔮",
     max_result_size_chars=12000,
 )
@@ -176,7 +195,7 @@ registry.register(
         "description": "Symbiose-flåtens helse: containere, oppetid, ressurser (meta-introspeksjon).",
         "parameters": {"type": "object", "properties": {}, "required": []},
     },
-    handler=lambda args, **kw: _post("/api/v1/meta_introspection", {"operation": "introspect", "user_id": "morten"}, timeout=25),
+    handler=lambda args, **kw: _post("/api/v1/meta_introspection", {"operation": "introspect", "user_id": _caller_uid(kw) or "morten"}, timeout=25),
     emoji="💓",
     max_result_size_chars=8000,
 )
@@ -281,7 +300,7 @@ registry.register(
     },
     handler=lambda args, **kw: _post("/api/v1/qdrant/search", {
         "query": args.get("query",""), "collection": args.get("collection") or "efc",
-        "limit": _safe_int(args.get("limit"), 5)}, timeout=100),
+        "limit": _safe_int(args.get("limit"), 5)}, timeout=100, user_id=_caller_uid(kw)),
     emoji="\U0001F50D",
     max_result_size_chars=9000,
 )
@@ -330,7 +349,7 @@ registry.register(
                         "forbedres eller degraderer. For a se om systemet faktisk laerer bedre."),
         "parameters": {"type": "object", "properties": {}, "required": []},
     },
-    handler=lambda args, **kw: _get("/api/v1/learning/trends/morten", timeout=20),
+    handler=lambda args, **kw: _get("/api/v1/learning/trends/" + urllib.parse.quote(_caller_uid(kw) or "morten"), timeout=20),
     emoji="\U0001F4C8",
     max_result_size_chars=7000,
 )
