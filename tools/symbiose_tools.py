@@ -134,7 +134,8 @@ registry.register(
         "/graph/query?" + urllib.parse.urlencode(
             # defensiv koersjon (reviewer BL-2298): modell-emittert limit kan være "all" e.l.
             # — feilveier skal returnere JSON, aldri kaste ValueError ut av handleren.
-            {"query": args.get("cypher", ""), "limit": _safe_int(args.get("limit"), 25)})),
+            {"query": args.get("cypher", ""), "limit": _safe_int(args.get("limit"), 25)}),
+        user_id=_caller_uid(kw)),
     emoji="🕸️",
     max_result_size_chars=10000,
 )
@@ -439,4 +440,28 @@ registry.register(
     handler=lambda args, **kw: _science_compute(args or {}),
     emoji="\U0001F52C",
     max_result_size_chars=10000,
+)
+
+
+# WP7 (BL-2814): consent-bevisst personlig-fakta-verktoy. Kaller det consent-gatede
+# .12-endepunktet (apply_consent=true) -> domener brukeren har merket «privat»
+# utelates automatisk fra recall. Per bruker via _caller_uid (BL-2790-identitet).
+registry.register(
+    name="mine_fakta",
+    toolset="symbiose",
+    schema={
+        "name": "mine_fakta",
+        "description": (
+            "Brukerens egne Life Contract-fakta (identitet, arbeid, helse, familie, "
+            "prosjekter osv.), gruppert per domene. Respekterer personvern: domener "
+            "brukeren selv har merket «privat» utelates automatisk. Bruk nar brukeren "
+            "spor om hva du vet om dem, eller trenger deres egne kanoniske fakta."),
+        "parameters": {"type": "object", "properties": {}, "required": []},
+    },
+    handler=lambda args, **kw: _get(
+        "/life-contract/facts?" + urllib.parse.urlencode(
+            {"user_id": _caller_uid(kw) or "morten", "apply_consent": "true"}),
+        user_id=_caller_uid(kw)),
+    emoji="\U0001F4CB",
+    max_result_size_chars=8000,
 )
