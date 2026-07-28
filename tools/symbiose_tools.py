@@ -94,7 +94,7 @@ registry.register(
         "description": "Sesjonsbrief fra Symbiose: systemtilstand, grafen, mål og fokus. Kall ved sesjonstart.",
         "parameters": {"type": "object", "properties": {}, "required": []},
     },
-    handler=lambda args, **kw: _get("/api/v1/bootstrap"),
+    handler=lambda args, **kw: _get("/api/v1/bootstrap?refresh=true", timeout=20),
     emoji="🧠",
     max_result_size_chars=8000,
 )
@@ -446,6 +446,19 @@ registry.register(
 # WP7 (BL-2814): consent-bevisst personlig-fakta-verktoy. Kaller det consent-gatede
 # .12-endepunktet (apply_consent=true) -> domener brukeren har merket «privat»
 # utelates automatisk fra recall. Per bruker via _caller_uid (BL-2790-identitet).
+def _mine_fakta(args, **kw):
+    # WP7 (BL-2814): FAIL-CLOSED — personlige fakta krever en identifisert sesjon.
+    # Uten identitet returneres feil (ikke eier-default), sa en uregistrert ikke-eier-
+    # sesjon aldri kan fa eierens fakta. Eier-sesjoner ER registrert (session_identity),
+    # sa dette braker ikke eier-tilgang.
+    uid = _caller_uid(kw)
+    if not uid:
+        return json.dumps({"error": "no_identity",
+                           "detail": "Personlige Life Contract-fakta krever en identifisert sesjon."})
+    return _get("/life-contract/facts?" + urllib.parse.urlencode(
+        {"user_id": uid, "apply_consent": "true"}), user_id=uid)
+
+
 registry.register(
     name="mine_fakta",
     toolset="symbiose",
@@ -458,10 +471,7 @@ registry.register(
             "spor om hva du vet om dem, eller trenger deres egne kanoniske fakta."),
         "parameters": {"type": "object", "properties": {}, "required": []},
     },
-    handler=lambda args, **kw: _get(
-        "/life-contract/facts?" + urllib.parse.urlencode(
-            {"user_id": _caller_uid(kw) or "morten", "apply_consent": "true"}),
-        user_id=_caller_uid(kw)),
+    handler=_mine_fakta,
     emoji="\U0001F4CB",
     max_result_size_chars=8000,
 )
