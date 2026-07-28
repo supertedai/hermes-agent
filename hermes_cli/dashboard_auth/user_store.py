@@ -53,7 +53,13 @@ ROLES = ("admin", "user")
 # aliaser som server-siden (.12) klassifiserer som EIER-trafikk. En bruker med
 # et slikt navn ville fått Mortens recall — derfor kan de ALDRI opprettes.
 # ("morten" selv er vernet av unikhets-sjekken; migreringsveien skapte ham.)
-RESERVED_USERNAMES = frozenset({"system", "anonymous", "default-user", "morpheus"})
+# Kilde-speil av .12 apis/unified_api/peruser_access.py RESERVED_USERNAMES_CONTRACT
+# (drift-vakt: AGI tests/test_owner_alias_reserved_sync.py). ALT som en .12-sti
+# kollapser til eier-prinsipalen MAA bannes her, ellers faar navnet Mortens recall.
+RESERVED_USERNAMES = frozenset({
+    "system", "anonymous", "default-user", "morpheus",       # dispatcher-sentineler + morpheus-alias
+    "claude", "assistant", "chatgpt", "session", "default",  # gateway reserved_session_ids (-> DEFAULT_CANONICAL_USER_ID)
+})
 
 _LOCK = threading.Lock()
 
