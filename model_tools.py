@@ -1052,6 +1052,25 @@ def _emit_post_tool_call_hook(
         logger.debug("post_tool_call hook error: %s", _hook_err)
 
 
+def _nonadmin_tool_allowlist() -> set:
+    """WP5 inc2 (ADR-022): ikke-admin verktoy-allowlist fra den FORENTE policy-artefakten
+    (synket fra .12: tool_rules.nonadmin_allow). Fail-safe: fil mangler/korrupt/tom -> env
+    NONADMIN_TOOL_ALLOWLIST (dagens default). Ren tilleggs-foderasjon; ra-miss/legacy + admin-
+    kortslutningene i _symbiose_role_gate ligger FOER dette (uendret, per reviewer-kontrakt)."""
+    env_default = os.environ.get("NONADMIN_TOOL_ALLOWLIST", "symbiose_ask,qdrant_search")
+    try:
+        import json as _json
+        p = os.environ.get("SYMBIOSE_POLICY_RULES_PATH", "/home/agent/policy_rules.json")
+        with open(p, encoding="utf-8") as _f:
+            _tr = (_json.load(_f).get("tool_rules") or {})
+        _allow = _tr.get("nonadmin_allow")
+        if isinstance(_allow, list) and _allow:
+            return {str(t).strip() for t in _allow if str(t).strip()}
+    except Exception:
+        pass
+    return {t.strip() for t in env_default.split(",") if t.strip()}
+
+
 def _symbiose_role_gate(function_name: str, session_id: Optional[str]) -> Optional[str]:
     """BL-2790 (BL-2466/WP2): per-rolle tool-gate for identifiserte sesjoner.
 
@@ -1088,8 +1107,7 @@ def _symbiose_role_gate(function_name: str, session_id: Optional[str]) -> Option
             role = "user"
     if role == "admin":
         return None
-    _allow = {t.strip() for t in os.environ.get(
-        "NONADMIN_TOOL_ALLOWLIST", "symbiose_ask,qdrant_search").split(",") if t.strip()}
+    _allow = _nonadmin_tool_allowlist()  # WP5 inc2: forent artefakt (fail-safe til env)
     if function_name in _allow:
         return None
     return json.dumps({
