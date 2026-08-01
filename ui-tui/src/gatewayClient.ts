@@ -136,8 +136,6 @@ export class GatewayClient extends EventEmitter {
   private ws: WebSocket | null = null
   private wsConnectPromise: Promise<void> | null = null
   private sidecarWs: WebSocket | null = null
-  private sidecarRetryTimer: ReturnType<typeof setTimeout> | null = null
-  private sidecarRetryAttempt = 0
   private attachUrl: null | string = null
   private sidecarUrl: null | string = null
   private reqId = 0
@@ -184,46 +182,13 @@ export class GatewayClient extends EventEmitter {
   }
 
   private closeSidecarSocket() {
-    // Deliberate teardown: cancel any pending retry and null the reference
-    // BEFORE close() — the async close event then fails the identity guard
-    // in connectSidecarMirror's handler, so intentional closes never
-    // schedule a reconnect (same stale-socket pattern as closeGatewaySocket).
-    if (this.sidecarRetryTimer) {
-      clearTimeout(this.sidecarRetryTimer)
-      this.sidecarRetryTimer = null
-    }
-    const ws = this.sidecarWs
-    this.sidecarWs = null
-
     try {
-      ws?.close()
+      this.sidecarWs?.close()
     } catch {
       // best effort
+    } finally {
+      this.sidecarWs = null
     }
-  }
-
-  // The sidecar feeds the dashboard sidebar's whole event feed (tool rows,
-  // agent-flow chips). It used to be connect-once: any drop — a dashboard
-  // blip, a proxy timeout — silently killed the feed for the rest of the
-  // PTY's (keep-alive, so potentially long) life while the terminal kept
-  // working. Reconnect with capped backoff instead; an unchanged live
-  // socket is never touched (BL-2563).
-  private scheduleSidecarReconnect() {
-    if (this.sidecarRetryTimer || !this.sidecarUrl) {
-      return
-    }
-
-    this.sidecarRetryAttempt = Math.min(this.sidecarRetryAttempt + 1, 6)
-    const delayMs = Math.min(1000 * 2 ** (this.sidecarRetryAttempt - 1), 15000)
-
-    this.pushLog(`[sidecar] mirror lost; reconnecting in ${Math.round(delayMs / 1000)}s (attempt ${this.sidecarRetryAttempt})`)
-    this.sidecarRetryTimer = setTimeout(() => {
-      this.sidecarRetryTimer = null
-      this.connectSidecarMirror()
-    }, delayMs)
-    // A pending retry must never pin the Node process open after the TUI
-    // exits — unref() where the runtime provides it (real Node timers do).
-    ;(this.sidecarRetryTimer as { unref?: () => void }).unref?.()
   }
 
   private closeGatewaySocket() {
@@ -319,18 +284,9 @@ export class GatewayClient extends EventEmitter {
       const ws = new WebSocketCtor(this.sidecarUrl)
 
       this.sidecarWs = ws
-      ws.addEventListener('open', () => {
-        if (this.sidecarWs === ws) {
-          this.sidecarRetryAttempt = 0
-        }
-      })
       ws.addEventListener('close', () => {
-        // Identity guard: closeSidecarSocket() nulls the reference before
-        // closing, so only an UNEXPECTED drop of the live socket passes
-        // this check and earns a reconnect.
         if (this.sidecarWs === ws) {
           this.sidecarWs = null
-          this.scheduleSidecarReconnect()
         }
       })
       ws.addEventListener('error', () => {
