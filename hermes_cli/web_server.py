@@ -4540,6 +4540,44 @@ def get_sessions(
         raise HTTPException(status_code=500, detail="Internal server error")
 
 
+# ── SYMBIOSE (BL-2290) ──────────────────────────────────────────────────────────────────────
+# Agent-flaaten inn i Opus-GUI-en. Leser et SNAPSHOT som .13 speiler hit — IKKE grafen direkte:
+# .15 har bevisst ingen graf-creds («ingen graf-creds spres til .15»), og en API-rute som spurte
+# Neo4j ville krevd at nokkelen laa paa boksen som kjorer vilkaarlige agent-jobber.
+# Snapshotet genereres av tools/agent_layer/opus_agents_snapshot.py paa .13.
+@app.get("/api/symbiose/{name}")
+def get_symbiose_snapshot(name: str, request: Request):
+    """Symbiose-data inn i Opus-GUI-en (BL-2290).
+
+    Serverer et SNAPSHOT som .13 speiler hit — IKKE grafen direkte. .15 har bevisst ingen
+    graf-creds («ingen graf-creds spres til .15»), og en rute som spurte Neo4j ville krevd at
+    nokkelen laa paa boksen som kjorer vilkaarlige agent-jobber.
+
+    Generisk paa navn, saa hver nye fane trenger et snapshot — ikke ny endepunkt-kode.
+    Snapshots genereres av tools/agent_layer/opus_*_snapshot.py paa .13.
+    """
+    _require_token(request)
+    import json as _json
+    import re as _re
+    from hermes_constants import get_hermes_home
+
+    # sti-traversering: kun enkle navn, aldri katalogseparatorer
+    if not _re.fullmatch(r"[a-z][a-z0-9_-]{0,31}", name or ""):
+        return {"available": False, "reason": "ugyldig snapshot-navn"}
+
+    f = get_hermes_home() / "symbiose" / f"{name}.json"
+    if not f.is_file():
+        # ÆRLIG: skiller «ikke speilet enda» fra «ingen data». Aldri tom liste som fakta.
+        return {"available": False,
+                "reason": f"snapshot '{name}' ikke speilet enna — kjor opus_{name}_snapshot.py --emit paa .13"}
+    try:
+        data = _json.loads(f.read_text())
+        data["available"] = True
+        return data
+    except Exception as exc:
+        return {"available": False, "reason": f"snapshot uleselig: {type(exc).__name__}"}
+
+
 @app.get("/api/profiles/sessions")
 def get_profiles_sessions(
     limit: int = 20,

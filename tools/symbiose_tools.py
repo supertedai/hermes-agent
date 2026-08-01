@@ -475,3 +475,72 @@ registry.register(
     emoji="\U0001F4CB",
     max_result_size_chars=8000,
 )
+
+
+registry.register(
+    name="recall_enrich",
+    toolset="symbiose",
+    schema={
+        "name": "recall_enrich",
+        "description": (
+            "GLOBAL recall->inferens (BL-2862): kjor KAUSAL (bayes-posterior) + TEMPORAL (forecast) for "
+            "hver oppgitt entitet, pa tvers av ALLE domener inkl EFC/cosmos (kandidat-flagg, ingen DOI), "
+            "A7-gatet. Bruk nar et svar bor baere kausal/temporal resonnering, ikke bare semantisk recall "
+            "- f.eks. mal/variabler nevnt i sporsmalet (priser, drivere, makro, EFC-storrelser). "
+            "Returnerer per entitet: causal (p_true + n_edges + evidensklasse per domene) og temporal "
+            "(retning + driver + neste-periode-intervall)."),
+        "parameters": {"type": "object", "properties": {
+            "entities": {"type": "array", "items": {"type": "string"},
+                         "description": "entiteter a inferere, f.eks. [\"NO2 spot price\", \"Energy Flow\"]"},
+        }, "required": ["entities"]},
+    },
+    handler=lambda args, **kw: _post(
+        "/api/v1/compute/recall_enrich",
+        {"entities": args.get("entities", [])}, user_id=_caller_uid(kw)),
+    emoji="\U0001F9E0",
+    max_result_size_chars=8000,
+)
+
+
+# WP6.2 (BL-2921): bind en livsdomene-query til dens ansvarlige domene-steward +
+# kontrakt i chat-oyeblikket. Read-only mot .12 /life-contract/steward-context.
+def _steward_context(args, **kw):
+    domain = (args.get("domain") or "").strip()
+    if not domain:
+        return json.dumps({"error": "domain_required",
+                           "detail": "Oppgi livsdomene: HEALTH|FINANCE|IDENTITY|WORK|PROJECTS|FAMILY|OWNERSHIP|ENVIRONMENT|LOCATION"})
+    uid = _caller_uid(kw)
+    params = {"domain": domain}
+    if uid:
+        params["user_id"] = uid
+    action = (args.get("action") or "").strip()
+    if action:
+        params["action"] = action
+    return _get("/life-contract/steward-context?" + urllib.parse.urlencode(params), user_id=uid)
+
+
+registry.register(
+    name="steward_context",
+    toolset="symbiose",
+    schema={
+        "name": "steward_context",
+        "description": (
+            "Bind et livsdomene-spm til dets ansvarlige domene-steward + kontrakt FOER du "
+            "handler pa domenedata. Returnerer steward (Asklepios/HELSE, Plutus/OKONOMI, "
+            "Janus/IDENTITET, Hephaistos/ARBEID, Daedalus/PROSJEKTER, Hestia/FAMILIE, "
+            "Gaia/EIENDOM, Helios/MILJO, Terminus/STED), hva den kan overflate, og output-regel "
+            "(HELSE=never_auto_shared: ALDRI raa helsedata). VIKTIG handlingsklasse: "
+            "morten_hand = FORBUDT for deg (betaling/overforing/handel/signering/BankID) - Morten "
+            "gjor det selv, et 'ja' autoriserer deg IKKE; approval_required = utfor kun etter "
+            "Mortens ja; allowed = fritt. Bruk action= for a klassifisere en konkret handling."),
+        "parameters": {"type": "object", "properties": {
+            "domain": {"type": "string",
+                       "description": "HEALTH|FINANCE|IDENTITY|WORK|PROJECTS|FAMILY|OWNERSHIP|ENVIRONMENT|LOCATION"},
+            "action": {"type": "string",
+                       "description": "valgfri handling a klassifisere (transfer_money, send_email, book_appointment ...)"},
+        }, "required": ["domain"]},
+    },
+    handler=_steward_context,
+    emoji="\U0001F9ED",
+    max_result_size_chars=8000,
+)

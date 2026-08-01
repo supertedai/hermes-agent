@@ -53,6 +53,7 @@ import {
   Wrench,
   X,
   Zap,
+  Network,
 } from "lucide-react";
 import { Button } from "@nous-research/ui/ui/components/button";
 import { SelectionSwitcher } from "@nous-research/ui/ui/components/selection-switcher";
@@ -61,6 +62,7 @@ import { Typography } from "@nous-research/ui/ui/components/typography/index";
 import { ConfirmDialog } from "@nous-research/ui/ui/components/confirm-dialog";
 import { cn } from "@/lib/utils";
 import { SidebarFooter } from "@/components/SidebarFooter";
+import opusFace from "@/assets/opus-face.jpg";
 import { SidebarStatusStrip, gatewayLine } from "@/components/SidebarStatusStrip";
 import { useBelowBreakpoint } from "@nous-research/ui/hooks/use-below-breakpoint";
 import { useSidebarStatus } from "@/hooks/useSidebarStatus";
@@ -84,6 +86,8 @@ import CronPage from "@/pages/CronPage";
 import ProfilesPage from "@/pages/ProfilesPage";
 import ProfileBuilderPage from "@/pages/ProfileBuilderPage";
 import SkillsPage from "@/pages/SkillsPage";
+import SymbioseHub from "@/pages/SymbioseHub";
+import BlPage from "@/pages/BlPage";
 import PluginsPage from "@/pages/PluginsPage";
 import McpPage from "@/pages/McpPage";
 import PairingPage from "@/pages/PairingPage";
@@ -139,6 +143,8 @@ const BUILTIN_ROUTES_CORE: Record<string, ComponentType> = {
   "/logs": LogsPage,
   "/cron": CronPage,
   "/skills": SkillsPage,
+  "/symbiose": SymbioseHub,
+  "/bl": BlPage,
   "/plugins": PluginsPage,
   "/mcp": McpPage,
   "/pairing": PairingPage,
@@ -167,6 +173,7 @@ const BUILTIN_NAV_REST: NavItem[] = [
     label: "Sessions",
     icon: MessageSquare,
   },
+  { path: "/symbiose", label: "Symbiose", icon: Network },
   { path: "/files", label: "Files", icon: FolderOpen },
   {
     path: "/analytics",
@@ -519,6 +526,11 @@ export default function App() {
           <Menu />
         </Button>
 
+        <img
+          src={opusFace}
+          alt="Opus"
+          className="h-8 w-8 rounded-full object-cover shrink-0 ring-1 ring-current/30"
+        />
         <Typography className="font-bold text-[0.95rem] leading-[0.95] tracking-[0.05em] text-midground">
           {t.app.brand}
         </Typography>
@@ -573,6 +585,11 @@ export default function App() {
                   collapsed && "lg:hidden",
                 )}
               >
+                <img
+                  src={opusFace}
+                  alt="Opus"
+                  className="h-9 w-9 rounded-full object-cover shrink-0 ring-1 ring-current/30"
+                />
                 <PluginSlot name="header-left" />
 
                 <Typography className="font-bold text-[1.125rem] leading-[0.95] tracking-[0.0525rem] text-midground uppercase">

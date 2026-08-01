@@ -703,6 +703,14 @@ def _build_child_system_prompt(
         "response is returned to the parent agent as a summary, and overlong "
         "summaries crowd out the parent's context window."
     )
+    parts.append(
+        "\nRETURN FORMAT (critical): your FINAL message back to the parent MUST be a short, "
+        "plain-language summary (2-4 sentences or a few bullets) of what you found or did and the "
+        "outcome. Do NOT return raw code, YAML, JSON, file contents, diffs/patches, or data dumps "
+        "as your summary. If you produced an artifact, save it to a file (or say where it lives) and "
+        "describe it in one line instead of pasting it. The parent shows your summary to the user, "
+        "so it must read as clear human prose."
+    )
     if role == "orchestrator":
         child_note = (
             "Your own children MUST be leaves (cannot delegate further) "
