@@ -451,8 +451,106 @@ def get_disabled_skill_names(platform: str | None = None) -> Set[str]:
             resolved_platform
         )
         if platform_disabled is not None:
-            return global_disabled | _normalize_string_set(platform_disabled)
-    return global_disabled
+            global_disabled = global_disabled | _normalize_string_set(platform_disabled)
+    return global_disabled | _per_user_disabled()
+
+
+def _per_user_disabled() -> Set[str]:
+    """BL-3428/ADR-046: skills som er skjult for DENNE innloggede brukeren.
+
+    Symbiose fikk multiuser i BL-3404. Identiteten ble skilt per bruker, men
+    kapabiliteten var det ikke: bruker nummer to fikk de samme 115 skillene som
+    eieren, inkludert governance-verktoy. Dette er evne-sidens gate.
+
+    HVOR PRINSIPALEN KOMMER FRA — to kilder, samme sannhet, ingen ny:
+      1. ``HERMES_SESSION_USER_ID`` — satt av messaging-gatewayen
+         (gateway/run.py) for Telegram/Discord/o.l.
+      2. ``session_identity.get_identity(sid)`` — sid→bruker, stemplet av
+         gatewayen ved ``prompt.submit`` fra den autentiserte proxyen paa .14
+         (BL-2790 / BL-2466 WP2). Dette er stien CHAT-flaten bruker:
+         api_server og ACP binder sesjonen UTEN user_id, saa contextvaren er
+         tom der. Maalt 2026-08-02: 112 oppforinger i session_identity.json.
+
+    Uten (2) ville gaten vaert en no-op nettopp paa flaten den er laget for.
+    Begge er den SAMME autoriteten (.14s butikk-login + TOTP) lest to steder —
+    ikke to konkurrerende kilder. Det var to KONKURRERENDE kilder for samme
+    sporsmaal som ga K1 i BL-3404.
+
+    FEIL-RETNING, bevisst asymmetrisk:
+      * ingen prinsipal i det hele tatt (konsoll, PTY, cron, legacy) -> tomt
+        sett. Gaten oppforer seg som for. En feil skal ikke kunne laase eieren
+        ute av sine egne verktoy.
+      * IDENTIFISERT sesjon der oppslaget FEILER (korrupt
+        session_identity.json) -> fail-LUKKET: behandles som ukjent bruker og
+        faar kun det system-klassifiserte. Det er session_identity-modulens
+        egen kontrakt: «tool-gaten kan feile LUKKET for identifiserte sesjoner
+        uten aa straffe legacy-stier».
+    """
+    try:
+        from gateway.session_context import get_session_env
+    except Exception:
+        return set()
+    user = ""
+    try:
+        user = (get_session_env("HERMES_SESSION_USER_ID", "") or "").strip()
+    except Exception:
+        user = ""
+    identified = False
+    if not user:
+        sid = ""
+        try:
+            sid = ((get_session_env("HERMES_SESSION_ID", "") or "")
+                   or (get_session_env("HERMES_SESSION_CHAT_ID", "") or "")).strip()
+        except Exception:
+            sid = ""
+            identified = True   # kunne ikke avgjoere — ikke anta legacy
+        if sid:
+            identified = True
+            try:
+                from hermes_cli.dashboard_auth import session_identity
+                user = (session_identity.get_identity(sid, canonical=True) or "").strip()
+            except Exception:
+                # Korrupt identitets-infrastruktur paa en IDENTIFISERT sesjon.
+                # Fail-lukket: fall gjennom med tom bruker, som gir
+                # system-only under.
+                user = ""
+    if not user and not identified:
+        return set()          # ren legacy/konsoll — gaten som for
+    try:
+        from hermes_cli.dashboard_auth import user_store
+        return user_store.resolve_disabled_skills(user)
+    except Exception:
+        # (a) (reviewer): her sto `return set()` — altsaa ALLE skills — ogsaa
+        # naar oppslaget kastet paa en IDENTIFISERT sesjon. Det var stikk i
+        # strid med kontrakten fem linjer over. En identifisert sesjon som ikke
+        # kan slaas opp skal faa det MINSTE settet, ikke det stoerste.
+        if identified:
+            # Fail-lukket, men ikke BLINDT lukket: en identifisert sesjon som
+            # ikke kan slaas opp skal behandles som UKJENT BRUKER — altsaa
+            # system-klassifiserte skills, samme som resolve_disabled_skills
+            # gir dem. Foerste utkast sendte policy={} her og skjulte dermed
+            # OGSAA de system-klassifiserte, altsaa alt. Det var strengere enn
+            # den tilstanden det skulle etterligne, og ville gitt en tom
+            # assistent for enhver bruker ved en forbigaaende lesefeil.
+            # Fanget av testen som dekker nettopp denne funksjonen — etter at
+            # den hadde passert review.
+            # KANONISK, ikke lokalt (B1-klassen — dette er TREDJE gang en ny
+            # kodesti i denne endringen har resolvert butikken ambient. Enhver
+            # ny lesing av users.json MAA gaa via canonical_users_path, ellers
+            # leser den runtimens hjem der fila ikke finnes.)
+            pol = {}
+            try:
+                from hermes_cli.dashboard_auth import user_store as _us
+                from hermes_cli.dashboard_auth import capability_policy as _cp
+                pol = _us.get_capability_policy(_cp.canonical_users_path())
+            except Exception:
+                pol = {}       # heller ikke policyen lesbar -> skjul alt
+            try:
+                from hermes_cli.dashboard_auth import capability_policy as cp
+                return cp.disabled_for("", is_owner=False, granted=[], policy=pol)
+            except Exception:
+                return set()   # ingen policy-modul i det hele tatt -> gaten som foer
+        return set()
 
 
 def _normalize_string_set(values) -> Set[str]:

@@ -176,6 +176,9 @@ def signing_secret(store: dict) -> bytes:
 
 def _public(u: dict) -> dict:
     return {
+        # BL-3428/ADR-046: hvilke skill-kategorier denne brukeren har fått UTOVER
+        # de system-klassifiserte. Tom liste = kun system (ADR-045 D2, fail-closed).
+        "granted_capabilities": list(u.get("granted_capabilities") or []),
         "username": u.get("username", ""),
         "display_name": u.get("display_name", ""),
         "email": u.get("email", ""),
@@ -197,6 +200,132 @@ def get_user(username: str, path: Optional[Path] = None) -> Optional[dict]:
         if u.get("username") == username:
             return dict(u)
     return None
+
+
+# ── BL-3428 / ADR-046: kapabilitets-styring ────────────────────────────────
+# «HVA er artefaktet» bor i skillen (frontmatter, ADR-045 D1). «HVEM får det»
+# bor her, hos brukeren — en tildeling handler om en person, ikke om et verktøy.
+# Kategori-klassifiseringen er det mellomliggende laget for de 113 skillene som
+# ikke erklærer noe selv; den bor i butikkens `capability_policy`.
+
+
+def get_capability_policy(path: Optional[Path] = None) -> dict:
+    """Mortens klassifisering av skill-kategoriene. Tom = ingenting klassifisert,
+    og da gjelder fail-closed-defaulten for alt (ADR-045 D2)."""
+    pol = load_store(path).get("capability_policy")
+    return pol if isinstance(pol, dict) else {"categories": {}}
+
+
+def set_capability_policy(categories: dict, path: Optional[Path] = None) -> dict:
+    """Klassifiser kategorier. Kun 'system' | 'owner' | 'steward:<navn>' godtas —
+    en ugyldig verdi lagres ALDRI, for da ville den blitt lest som «ukjent» og
+    falt til default, og Morten ville trodd han hadde satt noe han ikke hadde."""
+    import re as _re
+    ok = _re.compile(r"^(system|owner|steward:[a-z0-9_.-]{1,40})$")
+    clean = {}
+    for k, v in (categories or {}).items():
+        k = str(k).strip()[:64]
+        v = str(v).strip()
+        if not k:
+            continue
+        if v == "":
+            continue                    # tom = fjern klassifiseringen
+        if not ok.match(v):
+            raise ValueError(f"ugyldig synlighet {v!r} for kategori {k!r}")
+        clean[k] = v
+    with _LOCK:
+        store = load_store(path)
+        store["capability_policy"] = {"categories": clean, "updated_at": _now()}
+        save_store(store, path)
+        return store["capability_policy"]
+
+
+def set_granted_capabilities(username: str, granted: list,
+                             path: Optional[Path] = None) -> dict:
+    """Sett hvilke kategorier/skills en bruker får utover de system-klassifiserte."""
+    clean = sorted({str(g).strip()[:64] for g in (granted or []) if str(g).strip()})
+    if len(clean) > 200:
+        raise ValueError("for mange tildelinger (maks 200)")
+    with _LOCK:
+        store = load_store(path)
+        for u in store.get("users", []):
+            if u.get("username") == username:
+                u["granted_capabilities"] = clean
+                save_store(store, path)
+                return _public(u)
+    raise KeyError(f"ukjent bruker: {username}")
+
+
+def policy_health(path: Optional[Path] = None) -> dict:
+    """Er policy-infrastrukturen frisk? Brukes av /brukere til å SI FRA.
+
+    B1 (reviewer, KRITISK): gaten og styringsflaten kjørte i ULIKE HERMES_HOME
+    (dashboard ~/.hermes-gui med users.json + 115 skills; gatewayen ~/.hermes
+    med 93 skills og INGEN users.json). Butikken er derfor pinnet kanonisk. Men
+    en pinning som er FEIL må ikke feile stille — den må være synlig i flaten.
+    """
+    try:
+        from hermes_cli.dashboard_auth import capability_policy as cp
+        canon = cp.canonical_users_path()
+    except Exception as exc:
+        return {"ok": False, "reason": f"policy-modulen mangler: {exc}"}
+    local = store_path()
+    return {
+        "ok": canon.is_file(),
+        "canonical_store": str(canon),
+        "canonical_exists": canon.is_file(),
+        "local_store": str(local),
+        # True = flaten du styrer i, og butikken gaten leser, er SAMME fil.
+        "same_store": str(canon) == str(local),
+        "reason": "" if canon.is_file() else
+                  f"kanonisk butikk finnes ikke: {canon} — sett {cp.CANONICAL_HOME_ENV}",
+    }
+
+
+def resolve_disabled_skills(username: str, path: Optional[Path] = None) -> set:
+    """Skill-navn som SKAL skjules for denne prinsipalen.
+
+    Dette er funksjonen runtime-gaten (agent.skill_utils.get_disabled_skill_names)
+    kaller.
+
+    TO STIER, TO OPPHAV (B1):
+      · BUTIKKEN leses KANONISK (capability_policy.canonical_users_path) —
+        ikke fra kallerens HERMES_HOME. En autorisasjonsavgjørelse kan ikke
+        henge på en kontekst-overstyrbar sti.
+      · SKILLS-TREET skannes LOKALT hos kalleren, fordi vi returnerer navn på
+        de skillene runtimen faktisk har. De to hjemmene har drevet 22 fra
+        hverandre, og det er en pre-eksisterende defekt (ADR-045 §1) — men det
+        er runtimens eget tre som er sannheten om hva den kan vise.
+
+    FEILRETNING — og hvorfor den IKKE er fail-closed her:
+    Finner vi ikke den kanoniske butikken, kan vi ikke skille noen fra noen.
+    Å fail-CLOSE da ville skjult ALT for ALLE — nøyaktig skaden B1 ville
+    forårsaket, og et driftsavbrudd for eieren utløst av en sti-feil. Vi faller
+    derfor til status quo (ingen filtrering) og SIER FRA via policy_health(),
+    som /brukere viser. Trusselen dette åpner for — noen som kan slette
+    users.json på .15 — eier allerede boksen.
+    En KJENT bruker som ikke har fått noe får derimot fortsatt kun det
+    system-klassifiserte: DER er fail-closed riktig, fordi vi VET hvem de er.
+    """
+    try:
+        from hermes_cli.dashboard_auth import capability_policy as cp
+    except Exception:
+        return set()          # policy-laget finnes ikke → gaten som før
+    canon = cp.canonical_users_path()
+    if not canon.is_file():
+        return set()          # se docstring: status quo + signal, ikke blackout
+    p = path or canon
+    username = (username or "").strip().lower()
+    u = get_user(username, p) if username else None
+    pol = get_capability_policy(p)
+    if u is None or u.get("disabled"):
+        return cp.disabled_for("", is_owner=False, granted=[], policy=pol)
+    return cp.disabled_for(
+        username,
+        is_owner=(u.get("role") == "admin"),
+        granted=u.get("granted_capabilities") or [],
+        policy=pol,
+    )
 
 
 def get_public_user(username: str, path: Optional[Path] = None) -> Optional[dict]:

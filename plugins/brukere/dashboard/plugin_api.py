@@ -238,6 +238,106 @@ def login_check(body: LoginCheckIn, request: Request):
     return {"ok": False}
 
 
+# ── BL-3428 / ADR-046: kapabilitets-styring ────────────────────────────────
+
+
+@router.get("/capabilities")
+def get_capabilities(request: Request):
+    """Skill-katalogen slik Morten skal styre den: én rad per KATEGORI.
+
+    115 skills ville vært en liste ingen leser; kategorien er granulariteten
+    beslutningen faktisk tas på. ``declared`` viser skills som overstyrer
+    kategorien selv — artefaktet vinner (ADR-045 D1)."""
+    _require_admin(request)
+    from hermes_cli.dashboard_auth import capability_policy as cp
+    pol = user_store.get_capability_policy()
+    inv = cp.inventory(policy=pol)
+    return {
+        "categories": inv,
+        "policy": pol,
+        # B1: sier fra hvis gaten og denne flaten ikke leser samme butikk.
+        "health": user_store.policy_health(),
+        "total_skills": sum(r["count"] for r in inv),
+        "unclassified": [r["category"] for r in inv if not r["classification"]],
+        "default_visibility": cp.DEFAULT_VISIBILITY,
+        # Admin-flaten og HAANDHEVINGEN leser ULIKE skill-tre (ADR-045 §1: de
+        # to hjemmene har drevet fra hverandre). Uten dette feltet ville Morten
+        # klassifisert en kategori som ikke finnes der gaten virker, og sett
+        # ingen effekt — stille, foerste gang. Divergensen peker fail-closed
+        # (ukjent kategori => owner => skjult), men den skal vaere SYNLIG.
+        "enforced_tree": _enforced_tree_summary(inv),
+    }
+
+
+def _enforced_tree_summary(admin_inv: list) -> dict:
+    """Kategoriene slik RUNTIME-hjemmet ser dem, ved siden av admin-hjemmets."""
+    from hermes_cli.dashboard_auth import capability_policy as cp
+    import os as _os
+    home = _os.environ.get("SYMBIOSE_RUNTIME_HOME") or _os.path.expanduser("~/.hermes")
+    try:
+        enf = cp.inventory(home=home)
+    except Exception as exc:
+        return {"ok": False, "reason": str(exc), "home": home}
+    a = {r["category"]: r["count"] for r in admin_inv}
+    e = {r["category"]: r["count"] for r in enf}
+    return {
+        "ok": True, "home": home,
+        "skills": sum(e.values()), "categories": len(e),
+        "kun_i_admin": sorted(set(a) - set(e)),      # klassifiserbar, aldri haandhevet
+        "kun_i_runtime": sorted(set(e) - set(a)),    # haandhevet, ikke klassifiserbar
+    }
+
+
+class PolicyIn(BaseModel):
+    categories: dict
+
+
+@router.post("/capabilities/policy")
+def set_policy(body: PolicyIn, request: Request):
+    """Klassifiser kategoriene. Kun system|owner|steward:<navn> godtas."""
+    _require_admin(request)
+    try:
+        return {"ok": True, "policy": user_store.set_capability_policy(body.categories)}
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc))
+
+
+class GrantIn(BaseModel):
+    granted: list
+
+
+@router.post("/users/{username}/capabilities")
+def set_grants(username: str, body: GrantIn, request: Request):
+    """Gi en bruker tilgang til kategorier utover de system-klassifiserte."""
+    _require_admin(request)
+    try:
+        return {"ok": True, "user": user_store.set_granted_capabilities(username, body.granted)}
+    except KeyError as exc:
+        raise HTTPException(status_code=404, detail=str(exc))
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc))
+
+
+@router.get("/capabilities/effective/{username}")
+def effective(username: str, request: Request):
+    """Hva brukeren FAKTISK ser — regnet ut av samme funksjon som runtime-gaten
+    kaller. Uten dette ville styringsflaten vært en påstand; med den er den en
+    måling. (Reviewer-lærdom fra BL-3404: en flate som ikke måler det den viser
+    er en løgn som ser ut som en funksjon.)"""
+    _require_admin(request)
+    from hermes_cli.dashboard_auth import capability_policy as cp
+    pol = user_store.get_capability_policy()
+    u = user_store.get_user(username)
+    if u is None:
+        raise HTTPException(status_code=404, detail=f"ukjent bruker: {username}")
+    vis = cp.visible_skills(username, is_owner=(u.get("role") == "admin"),
+                            granted=u.get("granted_capabilities") or [], policy=pol)
+    dis = user_store.resolve_disabled_skills(username)
+    return {"username": username, "role": u.get("role"),
+            "visible_count": len(vis), "hidden_count": len(dis),
+            "visible": sorted(vis)[:400]}
+
+
 # ── BL-3404: selvregistrering på frontend-flaten, godkjent her ──────────────
 
 

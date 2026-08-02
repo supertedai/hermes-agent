@@ -33,14 +33,33 @@ _MAX_ENTRIES = 500
 _MAX_AGE_S = 7 * 24 * 3600
 
 
-def identity_path() -> Path:
-    """``HERMES_HOME/session_identity.json`` — samme hjem som users-butikken."""
+def identity_path(canonical: bool = True) -> Path:
+    """``HERMES_HOME/session_identity.json`` — samme hjem som users-butikken.
+
+    KANONISK ER DEFAULT (BL-3432 / C1). Første forsøk la ``canonical=True``
+    kun på LESESIDEN og lot skriveren stå. Resultatet var strengt verre enn en
+    konsekvent feil sti: gatewayen stemplet nye sesjoner i
+    ``~/.hermes/session_identity.json`` mens gaten leste
+    ``~/.hermes-gui/…`` — så ALT virket for eksisterende sesjoner og brøt kun
+    for NYE. Det er den vanskeligste feilen å oppdage, og min egen etter-måling
+    passerte nettopp fordi den slo opp en sid fra den gamle fila.
+
+    Derfor: én sti for alle. Skriver og leser kan ikke divergere når de deler
+    default. ``canonical=False`` finnes som eksplisitt opt-out for kallere som
+    virkelig vil ha det lokale hjemmet — ingen i dag.
+    """
+    if canonical:
+        try:
+            from .capability_policy import canonical_users_path
+            return canonical_users_path().parent / "session_identity.json"
+        except Exception:
+            pass
     return store_path().parent / "session_identity.json"
 
 
-def _load() -> dict:
+def _load(canonical: bool = True) -> dict:
     """Rå lesing. IO-/parse-feil PROPAGERER — leserne skal feile lukket."""
-    p = identity_path()
+    p = identity_path(canonical)
     if not p.exists():
         return {}
     raw = p.read_text(encoding="utf-8")
@@ -78,7 +97,7 @@ def set_identity(session_id: str, user_id: str) -> None:
             for k, _ in oldest[: len(data) - _MAX_ENTRIES]:
                 data.pop(k, None)
         p = identity_path()
-        p.parent.mkdir(parents=True, exist_ok=True)
+        p.parent.mkdir(mode=0o700, parents=True, exist_ok=True)  # match save_store
         fd, tmp = tempfile.mkstemp(dir=str(p.parent), prefix=".sessid-")
         try:
             with os.fdopen(fd, "w", encoding="utf-8") as f:
@@ -92,7 +111,7 @@ def set_identity(session_id: str, user_id: str) -> None:
                 pass
 
 
-def get_identity(session_id: str) -> Optional[str]:
+def get_identity(session_id: str, canonical: bool = True) -> Optional[str]:
     """Innsenderen av turnene i sesjonen, eller None ved REN miss (legacy).
 
     Korrupt fil → exception (fail-lukket hos kalleren, se modul-docstring).
@@ -101,7 +120,7 @@ def get_identity(session_id: str) -> Optional[str]:
     if not sid:
         return None
     with _LOCK:
-        data = _load()
+        data = _load(canonical)
     ent = data.get(sid)
     if not isinstance(ent, dict):
         return None
