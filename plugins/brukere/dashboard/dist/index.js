@@ -269,117 +269,133 @@
 
 
   // ── BL-3428 / ADR-046: kapabilitets-styring ──────────────────────────────
-  // «HVA er artefaktet» bor i skillen (frontmatter, ADR-045 D1). «HVEM får det»
-  // bor hos brukeren. Denne flaten er det MELLOMLIGGENDE laget: kategori-default
-  // for de skillene som ikke erklærer noe selv. Granulariteten er KATEGORI —
-  // 115 rader ville vært en liste ingen leser.
+  // Morten: «admin skal ha alt, og user skal jeg kunne sette en og en på.»
+  // Derfor ÉN tabell: rad = kategori, kolonne = hvem. Admin-kolonnen er låst
+  // (rollen ER tilgangen), «alle» gjelder også FRAMTIDIGE brukere, og hver
+  // bruker har sin egen avkrysning. Ingen «klassifisering» å oversette i hodet.
+  //
+  // Under panseret er dette de samme to feltene som før — «alle» skriver
+  // policyens kategori=system, en enkelt avkrysning skriver brukerens
+  // granted_capabilities — men det er en implementasjonsdetalj Morten ikke
+  // skal måtte kjenne for å styre tilgang.
   function Kapabiliteter(props) {
+    const users = (props.users || []).filter((u) => u.role !== "admin" && !u.disabled);
     const [data, setData] = useState(null);
     const [busy, setBusy] = useState(false);
     const [msg, setMsg] = useState(null);
-    const [draft, setDraft] = useState({});
+    const [alle, setAlle] = useState({});     // kategori -> alle brukere
+    const [gitt, setGitt] = useState({});     // brukernavn -> [kategorier]
+
     const load = () => jfetch("/capabilities").then((d) => {
       setData(d);
-      const init = {};
-      (d.categories || []).forEach((c) => { init[c.category] = c.classification || ""; });
-      setDraft(init);
+      const a = {};
+      (d.categories || []).forEach((c) => {
+        a[c.category] = (c.classification || c.effective_default) === "system";
+      });
+      setAlle(a);
+      const g = {};
+      (props.users || []).forEach((u) => { g[u.username] = (u.granted_capabilities || []).slice(); });
+      setGitt(g);
     }).catch((e) => setMsg(String(e)));
     useEffect(() => { load(); }, [props.tick]);
 
     if (!data) return h("p", { className: "text-sm text-muted-foreground" }, "laster …");
     const cats = data.categories || [];
-    const save = () => {
-      setBusy(true);
-      const body = {};
-      Object.keys(draft).forEach((k) => { if (draft[k]) body[k] = draft[k]; });
-      jfetch("/capabilities/policy", jsonOpts("POST", { categories: body }))
-        .then((r) => { setMsg(r && r.detail ? String(r.detail) : "lagret"); load(); if (props.onChanged) props.onChanged(); })
-        .catch((e) => setMsg(String(e))).finally(() => setBusy(false));
-    };
-    return h("div", { className: "space-y-3" },
-      h("div", { style: GRID },
-        tile(cats.length, "kategorier"),
-        tile(data.total_skills, "skills totalt"),
-        tile((data.unclassified || []).length, "uklassifisert"),
-        tile(data.default_visibility, "default")),
-      h("p", { className: "text-xs text-muted-foreground" },
-        "To grupper: ADMIN (= owner, ser alt) og BRUKER (ser system + det du tildeler). Uklassifisert = «" + data.default_visibility + "», altså kun admin. Det er med vilje " +
-        "(ADR-045 D2): «vi rakk ikke å klassifisere den» skal aldri bety «alle ser den». " +
-        "En skill som erklærer visibility i sin egen SKILL.md overstyrer kategorien."),
-      Table(["kategori", "skills", "klassifisering", "erklærer selv"],
-        cats.map((c) => h("tr", { key: c.category, className: "border-t border-border/60" },
-          h("td", { className: TD + " font-medium whitespace-nowrap" },
-            c.category,
-            c.symbiose_owned ? h(Badge, { tone: "destructive", className: "ml-2 text-xs" }, "Symbiose") : null),
-          h("td", { className: TD + " tabular-nums" }, c.count),
-          h("td", { className: TD },
-            h("select", { className: INPUT + " !py-1 !text-xs", value: draft[c.category] || "",
-              onChange: (e) => setDraft(Object.assign({}, draft, { [c.category]: e.target.value })) },
-              h("option", { value: "" }, "— (" + c.effective_default + ")"),
-              h("option", { value: "system" }, "system — alle innloggede"),
-              h("option", { value: "owner" }, "owner — kun admin"))),
-          h("td", { className: TD + " text-xs text-muted-foreground" },
-            Object.keys(c.declared || {}).length
-              ? Object.keys(c.declared).length + " skill(s) overstyrer" : "—")))),
-      h("div", { className: "flex items-center gap-3" },
-        h(Button, { onClick: save, disabled: busy }, "Lagre klassifisering"),
-        msg ? h("span", { className: "text-sm text-muted-foreground" }, msg) : null));
-  }
+    const et = data.enforced_tree || {};
 
-  // Per bruker: hva de faktisk ser, og hva du kan gi dem utover system.
-  function BrukerTilgang(props) {
-    const u = props.user, cats = props.cats || [];
-    const [granted, setGranted] = useState(u.granted_capabilities || []);
-    const [eff, setEff] = useState(null);
-    const [busy, setBusy] = useState(false);
-    useEffect(() => {
-      jfetch("/capabilities/effective/" + encodeURIComponent(u.username))
-        .then(setEff).catch(() => setEff(null));
-    }, [u.username, props.tick]);
-    const toggle = (c) => setGranted(granted.indexOf(c) >= 0
-      ? granted.filter((x) => x !== c) : granted.concat([c]));
-    const save = () => {
-      setBusy(true);
-      jfetch("/users/" + encodeURIComponent(u.username) + "/capabilities",
-             jsonOpts("POST", { granted: granted }))
-        .then(() => props.onChanged()).finally(() => setBusy(false));
+    const harBruker = (u, cat) => (gitt[u] || []).indexOf(cat) >= 0;
+    const toggleBruker = (u, cat) => setGitt(Object.assign({}, gitt, {
+      [u]: harBruker(u, cat) ? (gitt[u] || []).filter((x) => x !== cat)
+                             : (gitt[u] || []).concat([cat]) }));
+
+    const lagre = () => {
+      setBusy(true); setMsg(null);
+      const pol = {};
+      cats.forEach((c) => { pol[c.category] = alle[c.category] ? "system" : "owner"; });
+      jfetch("/capabilities/policy", jsonOpts("POST", { categories: pol }))
+        .then(() => Promise.all((props.users || []).map((u) =>
+          jfetch("/users/" + encodeURIComponent(u.username) + "/capabilities",
+                 jsonOpts("POST", { granted: gitt[u.username] || [] })))))
+        .then(() => { setMsg("lagret"); load(); if (props.onChanged) props.onChanged(); })
+        .catch((e) => setMsg(String(e)))
+        .finally(() => setBusy(false));
     };
-    const isAdmin = u.role === "admin";
-    return h("div", { className: "border border-border bg-background/40 p-3 space-y-2" },
-      h("div", { className: "flex items-center justify-between gap-2 flex-wrap" },
-        h("div", null,
-          h("span", { className: "font-medium" }, u.username),
-          h(Badge, { tone: isAdmin ? "success" : "secondary", className: "ml-2 text-xs" }, u.role),
-          u.disabled ? h(Badge, { tone: "destructive", className: "ml-1 text-xs" }, "deaktivert") : null),
-        h("span", { className: "text-xs text-muted-foreground tabular-nums" },
-          eff ? ("ser " + eff.visible_count + " av " + (eff.visible_count + eff.hidden_count) + " skills") : "…")),
-      isAdmin
+
+    const cb = (checked, onChange, disabled) => h("input", {
+      type: "checkbox", checked: checked, disabled: !!disabled, onChange: onChange });
+
+    return h("div", { className: "space-y-3" },
+      et.ok && (et.kun_i_admin || []).length + (et.kun_i_runtime || []).length > 0
+        ? h("div", { className: "border border-amber-600/40 bg-amber-500/5 px-3 py-2 text-xs space-y-1" },
+            h("div", { className: "text-amber-500 font-medium" },
+              "De to Hermes-hjemmene har ulike skill-tre — denne flaten viser " +
+              data.total_skills + ", gaten håndhever " + et.skills + "."),
+            (et.kun_i_admin || []).length
+              ? h("div", { className: "text-muted-foreground" },
+                  "Vises her, men håndheves ALDRI: " + et.kun_i_admin.join(", ")) : null,
+            (et.kun_i_runtime || []).length
+              ? h("div", { className: "text-muted-foreground" },
+                  "Håndheves, men vises ikke her (blir skjult for vanlige brukere): " +
+                  et.kun_i_runtime.join(", ")) : null)
+        : null,
+      users.length === 0
         ? h("p", { className: "text-xs text-muted-foreground" },
-            "ADMIN = owner: ser alt, og administrerer brukere. Rollen ER tilgangen — " +
-            "det finnes ingen mellomting. Vil du begrense noen, gjør dem til «bruker» først.")
-        : h(React.Fragment, null,
-            h("div", { className: "flex flex-wrap gap-2" },
-              cats.filter((c) => (c.classification || c.effective_default) !== "system")
-                  .map((c) => h("label", { key: c.category,
-                    className: "inline-flex items-center gap-1.5 text-xs text-muted-foreground" },
-                    h("input", { type: "checkbox", checked: granted.indexOf(c.category) >= 0,
-                      onChange: () => toggle(c.category) }),
-                    c.category + " (" + c.count + ")"))),
-            h("div", { className: "flex flex-wrap items-center gap-2 mt-1" },
-              h(Button, { className: "px-2 py-1 text-xs", onClick: save, disabled: busy },
-                "Lagre tilgang"),
-              // «Om nødvendig likt owner» (Morten): ett klikk i stedet for én
-              // avkrysning per kategori. Gir SAMME skills som admin — men IKKE
-              // admin-retten til å administrere brukere. Evne, ikke myndighet.
+            "Du er eneste bruker, og admin ser alt. Kolonnene til høyre fylles ut " +
+            "når du legger til en bruker — eller godkjenner en søknad. Kryss av " +
+            "«alle brukere» nå for å bestemme hva de får fra dag én.")
+        : null,
+      h("div", { className: "overflow-x-auto" },
+        h("table", { className: "w-full text-sm" },
+          h("thead", null,
+            h("tr", { className: "border-b border-border" },
+              // ADMIN-kolonna er fjernet (Morten: «bare med user»). Den var
+              // alltid ✓ og aldri klikkbar — en kolonne som bærer null
+              // informasjon er støy i en tabell som skal tas beslutninger i.
+              // At admin ser alt står i teksten over, én gang.
+              ["kategori", "skills", "alle"].concat(users.map((u) => u.username))
+                .map((c, i) => h("th", { key: c,
+                  className: "text-left font-medium text-[0.6875rem] uppercase tracking-wider text-muted-foreground py-2 pr-3" +
+                    (i >= 2 ? " text-center" : "") }, c)))),
+          h("tbody", null, cats.map((c) => {
+            const erklaert = Object.keys(c.declared || {}).length;
+            return h("tr", { key: c.category, className: "border-t border-border/60" },
+              h("td", { className: TD + " whitespace-nowrap" },
+                h("span", { className: "font-medium" }, c.category),
+                c.symbiose_owned
+                  ? h(Badge, { tone: "destructive", className: "ml-2 text-xs" }, "Symbiose")
+                  : null,
+                erklaert
+                  ? h("span", { className: "ml-2 text-xs text-muted-foreground" },
+                      "(" + erklaert + " styrer seg selv)")
+                  : null),
+              h("td", { className: TD + " tabular-nums" }, c.count),
+              h("td", { className: TD + " text-center" },
+                cb(!!alle[c.category], () => setAlle(Object.assign({}, alle,
+                  { [c.category]: !alle[c.category] })))),
+              users.map((u) => h("td", { key: u.username, className: TD + " text-center" },
+                cb(alle[c.category] || harBruker(u.username, c.category),
+                   () => toggleBruker(u.username, c.category),
+                   alle[c.category]))));
+          })))),
+      h("div", { className: "flex flex-wrap items-center gap-3" },
+        h(Button, { onClick: lagre, disabled: busy }, "Lagre tilganger"),
+        users.length
+          ? h(React.Fragment, null,
               h(Button, { ghost: true, className: "px-2 py-1 text-xs", disabled: busy,
-                onClick: () => setGranted(cats.map((c) => c.category)) },
-                "Sett lik owner (alle " + cats.length + " kategorier)"),
+                onClick: () => { const g = {}; users.forEach((u) => { g[u.username] = cats.map((c) => c.category); });
+                                 setGitt(Object.assign({}, gitt, g)); } },
+                "Gi alle brukere alt (lik admin)"),
               h(Button, { ghost: true, className: "px-2 py-1 text-xs", disabled: busy,
-                onClick: () => setGranted([]) }, "Kun system"),
-              granted.length
-                ? h("span", { className: "text-xs text-muted-foreground" },
-                    granted.length + " kategori(er) valgt — husk å lagre")
-                : null)));
+                onClick: () => { const g = {}; users.forEach((u) => { g[u.username] = []; });
+                                 setGitt(Object.assign({}, gitt, g)); setAlle({}); } },
+                "Nullstill alt"))
+          : null,
+        msg ? h("span", { className: "text-sm text-muted-foreground" }, msg) : null),
+      h("p", { className: "text-xs text-muted-foreground" },
+        "«Alle» gjelder også brukere du legger til senere. En enkelt avkrysning " +
+        "gjelder bare den brukeren. Uten noen avkrysning ser kun admin kategorien — " +
+        "det er med vilje (ADR-045 D2): «vi rakk ikke å bestemme» skal aldri bety " +
+        "«alle ser den». En skill som styrer seg selv i sin egen SKILL.md overstyrer raden."));
   }
 
   function BrukerePage() {
@@ -462,13 +478,8 @@
 
     sections.push(Section({ title: "Tilganger — hvem ser hvilke skills",
       badgeTone: "outline", badge: "ADR-046",
-      sub: "BL-3404 skilte IDENTITETEN per bruker; dette skiller KAPABILITETEN. Uten dette får bruker nummer to de samme 115 skillene som deg — inkludert symbiose/flyby som skriver til grafen, og de 28 opus-skillene som er governance-verktøy for eieren." },
-      h(React.Fragment, null,
-        h(Kapabiliteter, { tick: tick, onChanged: reload }),
-        h("div", { className: "mt-4 space-y-2" },
-          h("div", { className: "text-[0.6875rem] uppercase tracking-wide text-muted-foreground" }, "per bruker"),
-          (users || []).map((u) => h(BrukerTilgang, { key: u.username, user: u,
-            cats: (capData && capData.categories) || [], tick: tick, onChanged: reload }))))));
+      sub: "For hver kategori krysser du av hvilke brukere som skal se den. «Alle» gjelder også dem du legger til senere. Uten avkrysning ser kun admin den — admin ser alltid alt, og det er ikke valgbart." },
+      h(Kapabiliteter, { tick: tick, users: users || [], onChanged: reload })));
 
     sections.push(Section({ title: "Slik virker det", badgeTone: "outline", badge: "BL-2653" },
       h("ul", { className: "list-disc pl-5 space-y-1 text-sm text-muted-foreground" },
