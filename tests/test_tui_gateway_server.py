@@ -5025,7 +5025,7 @@ def test_ensure_session_db_row_stamps_profile_name(monkeypatch, tmp_path):
     created = []
 
     class _ProfileDB:
-        def __init__(self, db_path=None):
+        def __init__(self, db_path=None, read_only=False):
             created.append({"db_path": db_path})
 
         def create_session(self, key, **kwargs):
@@ -10631,7 +10631,7 @@ def test_session_list_honors_params_profile_opens_profile_db(monkeypatch, tmp_pa
             return [{"id": "launch-1", "source": "tui", "title": "L"}]
 
     class ProfileDB:
-        def __init__(self, db_path=None):
+        def __init__(self, db_path=None, read_only=False):
             seen["db_path"] = db_path
 
         def list_sessions_rich(self, **kwargs):
@@ -10679,7 +10679,7 @@ def test_session_most_recent_honors_params_profile(monkeypatch, tmp_path):
             return [{"id": "launch-tip", "source": "tui", "title": "L", "started_at": 9}]
 
     class ProfileDB2:
-        def __init__(self, db_path=None):
+        def __init__(self, db_path=None, read_only=False):
             self.db_path = db_path
 
         def list_sessions_rich(self, **kwargs):
@@ -10740,7 +10740,7 @@ def test_session_delete_honors_params_profile_sessions_dir(monkeypatch, tmp_path
     captured: dict = {}
 
     class ProfileDB:
-        def __init__(self, db_path=None):
+        def __init__(self, db_path=None, read_only=False):
             captured["db_path"] = db_path
 
         def delete_session(self, sid, sessions_dir=None):
@@ -10788,7 +10788,7 @@ def test_session_title_uses_session_profile_db_not_launch(monkeypatch, tmp_path)
             return {"id": _key, "title": "from-launch"}
 
     class ProfileDB:
-        def __init__(self, db_path=None):
+        def __init__(self, db_path=None, read_only=False):
             self.db_path = db_path
             seen["db_path"] = db_path
 
@@ -10856,7 +10856,7 @@ def test_session_history_uses_session_profile_db(monkeypatch, tmp_path):
             return [{"role": "user", "content": "launch"}]
 
     class ProfileDB:
-        def __init__(self, db_path=None):
+        def __init__(self, db_path=None, read_only=False):
             seen["db_path"] = db_path
 
         def get_messages_as_conversation(self, _key, include_ancestors=True, **_kwargs):
@@ -10907,7 +10907,7 @@ def test_session_status_uses_session_profile_db(monkeypatch, tmp_path):
             return {"id": _key, "title": "launch-title", "started_at": 1}
 
     class ProfileDB:
-        def __init__(self, db_path=None):
+        def __init__(self, db_path=None, read_only=False):
             seen["db_path"] = db_path
 
         def get_session(self, _key):
@@ -10956,7 +10956,7 @@ def test_teardown_ends_session_in_profile_db(monkeypatch, tmp_path):
             seen["launch_end"] = True
 
     class ProfileDB:
-        def __init__(self, db_path=None):
+        def __init__(self, db_path=None, read_only=False):
             seen["db_path"] = db_path
 
         def get_session(self, _key):
@@ -11006,7 +11006,7 @@ def test_session_branch_writes_to_parent_profile_db(monkeypatch, tmp_path):
             return True
 
     class ProfileDB:
-        def __init__(self, db_path=None):
+        def __init__(self, db_path=None, read_only=False):
             seen["db_path"] = db_path
             seen.setdefault("inits", 0)
             seen["inits"] += 1
@@ -11113,7 +11113,7 @@ def test_pending_title_finalizer_uses_session_profile_db(monkeypatch, tmp_path):
             return True
 
     class ProfileDB:
-        def __init__(self, db_path=None):
+        def __init__(self, db_path=None, read_only=False):
             seen["db_path"] = db_path
 
         def set_session_title(self, key, title):

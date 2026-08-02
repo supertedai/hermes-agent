@@ -1198,13 +1198,13 @@ def _db_for_profile(profile: str | None = None):
         # BL-2518: this is a cross-profile READ (resume-picker / session.list
         # polling another user's profile in app-global remote mode) and must
         # NEVER DDL/write-lock another user's live db. read_only=True is
-        # REQUIRED. If the profile has never had a session yet, its state.db
-        # won't exist -- do not let SessionDB's own bootstrap create/write one
-        # just because we polled it; report unavailable instead.
-        db_path = Path(profile_home) / "state.db"
-        if not db_path.exists():
-            return None, False
-        return SessionDB(db_path=db_path, read_only=True), True
+        # REQUIRED -- mode=ro naturally refuses to create a missing file (see
+        # SessionDB's own read_only branch docstring: "callers guard on
+        # db_path.exists(); a SELECT against an empty file raises and the
+        # caller degrades per-profile"), so a not-yet-provisioned profile
+        # fails closed here via the except below, same as any other open
+        # error -- no separate existence pre-check needed.
+        return SessionDB(db_path=Path(profile_home) / "state.db", read_only=True), True
     except Exception as exc:
         logger.warning(
             "TUI profile session store unavailable for %s: %s",
