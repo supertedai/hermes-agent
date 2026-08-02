@@ -161,6 +161,16 @@ def _(rid, params: dict) -> dict:
 
 @method("session.list")
 def _(rid, params: dict) -> dict:
+    # BL-2518: a requested profile with no state.db yet (never had a session)
+    # is not an error -- it is an empty resume list. Distinguish that from a
+    # genuinely unavailable/broken store (which _db_for_profile still reports
+    # as db=None too, but we cannot tell the two apart after the fact without
+    # re-deriving the path, so check up front for the profile case only).
+    _profile_param = (params.get("profile") or "").strip() or None
+    if _profile_param:
+        _phome = _profile_home(_profile_param)
+        if _phome is not None and not (Path(_phome) / "state.db").exists():
+            return _ok(rid, {"sessions": []})
     with _profile_db(params) as db:
         if db is None:
             return _db_unavailable_error(rid, code=5006)

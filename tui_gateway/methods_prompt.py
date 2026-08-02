@@ -102,6 +102,21 @@ def _(rid, params: dict) -> dict:
             logger.info("prompt.submit: typed stop phrase — voice chat ended")
             return _ok(rid, {"voice_stopped": True})
     truncate_user_ordinal = params.get("truncate_before_user_ordinal")
+    # BL-2790 (BL-2466/WP2): den autentiserte frontend-proxyen (.14) stempler
+    # innsenderens brukernavn på prompt.submit. Registrer sid→bruker (fil i
+    # HERMES_HOME — krysser compute-host-prosessgrensen) så tool-laget kan
+    # scope Symbiose-recall og gate verktøy per rolle (server-side rolle-
+    # oppslag). Fravær av feltet = legacy/admin-æra (Morten) → ingen
+    # registrering, eier-default nedstrøms. FEILER LUKKET: kan ikke en
+    # assertert identitet registreres, kjøres ikke turnen — ellers ville en
+    # ikke-admin fått eier-default recall.
+    _uid = params.get("user_id")
+    if isinstance(_uid, str) and _uid.strip():
+        try:
+            from hermes_cli.dashboard_auth.session_identity import set_identity
+            set_identity(sid, _uid)
+        except Exception as exc:
+            return _err(rid, 5033, f"identitetsregistrering feilet: {exc}")
     if params.get("interrupted"):
         # Client-side barge-in (desktop VAD / typing over playback) — latch it
         # so this turn's model message carries the interruption note.
