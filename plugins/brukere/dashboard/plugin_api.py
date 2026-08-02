@@ -235,38 +235,7 @@ def login_check(body: LoginCheckIn, request: Request):
     )
     if res["status"] == "ok":
         return {"ok": True, "user": res["user"]}
-    if res["status"] == "enroll":
-        # BL-3404: passordet stemmer, men 2FA er ikke innrullert ennå.
-        # ``ok`` er FALSE med vilje — en gate som ikke kjenner innrullerings-
-        # steget nekter da innlogging (fail-lukket) i stedet for å slippe
-        # inn en konto uten andre faktor. Den nye gaten leser ``enroll``.
-        return {"ok": False, "enroll": res["enroll"],
-                "user": res["user"], "reason": "totp_enrollment_required"}
     return {"ok": False}
-
-
-class EnrollIn(BaseModel):
-    username: str
-    code: str
-    client_ts: Optional[float] = None
-
-
-@router.post("/enroll-totp")
-def enroll_totp(body: EnrollIn, request: Request):
-    """Fullfør 2FA-innrulleringen for en godkjent søker (BL-3404).
-
-    Kalles av frontend-gaten rett etter at brukeren har skannet secreten og
-    tastet en kode. Virker KUN i den ene tilstanden «ventende secret, ingen
-    ekte ennå» — etterpå er ruta død for den brukeren, og innlogging krever
-    passord + kode som for alle andre.
-    """
-    _require_admin(request)
-    ok = user_store.enroll_totp(
-        body.username, body.code, at_time=_at_time(body.client_ts)
-    )
-    if not ok:
-        return {"ok": False}
-    return {"ok": True, "user": user_store.get_public_user(body.username)}
 
 
 # ── BL-3404: selvregistrering på frontend-flaten, godkjent her ──────────────
@@ -278,6 +247,7 @@ class RegisterIn(BaseModel):
     display_name: str = ""
     email: str = ""
     source_ip: str = ""
+    totp_secret: str = ""   # verifisert med en ekte kode av gaten før innsending
 
 
 @router.post("/register-request")
@@ -296,6 +266,7 @@ def register_request(body: RegisterIn, request: Request):
         display_name=body.display_name,
         email=body.email,
         source_ip=body.source_ip,
+        totp_secret=body.totp_secret,
     )
     return {"ok": True}
 
@@ -308,21 +279,24 @@ def get_pending(request: Request, include_closed: bool = False):
 
 class ApproveIn(BaseModel):
     role: str = "user"
+    attempt: int = 0   # hvilken innsending som blir kontoen; 0 = den første
 
 
 @router.post("/pending/{pid}/approve")
 def approve(pid: str, body: ApproveIn, request: Request):
     """Godkjenn søknad → bruker opprettes med 2FA som ventende krav.
 
-    2FA-secreten returneres bevisst IKKE hit: den skal til søkerens egen
-    authenticator ved første innlogging. Du godkjenner personen, du
-    håndterer ikke hemmeligheten.
+    Søkeren koblet på 2FA allerede i registreringsskjemaet, så kontoen er
+    ferdig sikret i det du godkjenner. Nøkkelen returneres bevisst IKKE hit:
+    den bor i søkerens authenticator. Du godkjenner personen, du håndterer
+    ikke hemmeligheten.
     """
     _require_admin(request)
     session = getattr(request.state, "session", None)
     by = getattr(session, "user_id", "") if session else "morten@loopback"
     try:
-        user = user_store.approve_pending(pid, approved_by=by, role=body.role)
+        user = user_store.approve_pending(pid, approved_by=by, role=body.role,
+                                          attempt=body.attempt)
     except KeyError as exc:
         raise HTTPException(status_code=404, detail=str(exc))
     except ValueError as exc:

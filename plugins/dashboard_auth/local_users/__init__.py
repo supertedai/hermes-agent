@@ -102,13 +102,12 @@ class LocalUsersProvider(DashboardAuthProvider):
         # kodefelt, og kan derfor ikke verifisere en andre faktor. Slipper den
         # gjennom en bruker som HAR 2FA, er den en bakdør rundt kravet den
         # dagen dashboardet bindes gated. Derfor nektes begge tilstandene:
-        #   · totp_secret satt      → 2FA er påkrevd, og kan ikke sjekkes her
-        #   · totp_pending_secret   → godkjent søker, ikke innrullert ennå
-        # (Første utkast lukket kun den andre — reviewer-funn.) Morten selv har
-        # 2FA, så denne stien er i praksis stengt for alle med andre faktor;
-        # skal dashboardet få passord-innlogging må den lære TOTP først.
+        # `totp_secret` satt ⇒ 2FA er påkrevd, og kan ikke sjekkes her.
+        # Morten selv har 2FA, så denne stien er i praksis stengt for alle med
+        # andre faktor; skal dashboardet få passord-innlogging må den lære
+        # TOTP først (BL-3421 punkt 3).
         name = user["username"]
-        if user_store.has_totp(name) or user_store.pending_totp_secret(name):
+        if user_store.has_totp(name):
             raise InvalidCredentialsError(
                 "kontoen krever 2FA; denne innloggingsveien støtter ikke koden"
             )

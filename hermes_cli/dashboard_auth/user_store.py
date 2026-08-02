@@ -185,9 +185,6 @@ def _public(u: dict) -> dict:
         "created_by": u.get("created_by", ""),
         "last_login": u.get("last_login", ""),
         "has_totp": bool(u.get("totp_secret")),
-        # BL-3404: godkjent søker som ennå ikke har skannet inn authenticator.
-        # Kontoen finnes, men gaten slipper den KUN inn i innrullerings-steget.
-        "totp_pending": bool(u.get("totp_pending_secret")) and not u.get("totp_secret"),
     }
 
 
@@ -223,7 +220,6 @@ def create_user(
     created_by: str = "",
     totp: bool = False,
     totp_secret: str = "",
-    totp_pending: bool = False,
     path: Optional[Path] = None,
 ) -> dict:
     """Opprett bruker. Første bruker i en tom butikk MÅ være admin
@@ -232,12 +228,12 @@ def create_user(
     (``totp_secret`` kan overstyre — migreringsveien fra .auth.json);
     secreten returneres da ÉN gang i feltet ``totp_secret``.
 
-    BL-3404 (selvregistrering): ``password_hash`` lar godkjenningsveien
-    gjenbruke hashen som ble laget da søkeren fylte skjemaet — klartekst-
-    passordet forlot aldri den ene requesten. ``totp_pending=True`` legger
-    secreten i ``totp_pending_secret`` og returnerer den ALDRI: den skal
-    til brukerens egen authenticator ved første innlogging, ikke til
-    admin-flaten (én hemmelighet, én mottaker)."""
+    BL-3404 (selvregistrering): ``password_hash`` OG ``totp_secret`` lar
+    godkjenningsveien gjenbruke det søkeren laget da de fylte skjemaet —
+    klartekst-passordet forlot aldri den ene requesten, og 2FA-nøkkelen ble
+    verifisert med en ekte kode før søknaden i det hele tatt ble sendt.
+    Godkjenningen returnerer secreten ALDRI: den bor i søkerens egen
+    authenticator, ikke i admin-flaten (én hemmelighet, én mottaker)."""
     username = (username or "").strip().lower()
     if not USERNAME_RE.match(username):
         raise ValueError(
@@ -259,7 +255,7 @@ def create_user(
             raise ValueError("passord må være minst 8 tegn")
         stored_hash = hash_password(password)
     secret_b32 = (totp_secret or "").strip() or (
-        generate_totp_secret() if (totp or totp_pending) else ""
+        generate_totp_secret() if totp else ""
     )
     with _LOCK:
         store = load_store(path)
@@ -281,11 +277,11 @@ def create_user(
             "last_login": "",
         }
         if secret_b32:
-            user["totp_pending_secret" if totp_pending else "totp_secret"] = secret_b32
+            user["totp_secret"] = secret_b32
         store["users"].append(user)
         save_store(store, path)
     out = _public(user)
-    if secret_b32 and not totp_pending:
+    if secret_b32 and not totp_secret:
         out["totp_secret"] = secret_b32  # vises ÉN gang ved opprettelse
         out["otpauth_uri"] = otpauth_uri(username, secret_b32)
     return out
@@ -454,12 +450,7 @@ def set_totp(
                     u["totp_secret"] = secret_b32
                 else:
                     u.pop("totp_secret", None)
-                # BL-3404 (reviewer-funn M4): en ventende innrullerings-secret
-                # MÅ dø sammen med den ekte. Uten dette ville «2FA på» og så
-                # «2FA av» på en godkjent-men-ikke-innrullert bruker vekket den
-                # foreldreløse pending-secreten til live igjen — og kastet
-                # brukeren inn i innrullering med en nøkkel ingen har.
-                u.pop("totp_pending_secret", None)
+                u.pop("totp_pending_secret", None)   # rydder evt. arv fra rev1
                 save_store(store, path)
                 return
     raise KeyError(f"ukjent bruker: {username}")
@@ -485,8 +476,6 @@ def verify_login(
     user = check_login(username, password, path, stamp=False)
     if user is None:
         return None
-    if pending_totp_secret(user["username"], path):
-        return None
     secret = get_totp_secret(user["username"], path)
     if secret and not check_totp(secret, code, at_time=at_time):
         return None
@@ -499,24 +488,51 @@ def has_totp(username: str, path: Optional[Path] = None) -> bool:
 
 
 # ---------------------------------------------------------------------------
-# BL-3404: selvregistrering med admin-godkjenning
+# BL-3404 rev2: selvregistrering med admin-godkjenning og 2FA I SKJEMAET
 #
 # Flyten, og hvorfor den ser slik ut:
-#   1. Besøkende fyller skjemaet på ai.byopus.com. Gaten (.14) sender det
-#      server-til-server hit over SAMME ssh-tunnel som login-check.
-#   2. Passordet hashes HER, i requesten som bar det. Ingen klartekst når
+#   1. Besøkende fyller skjemaet på ai.byopus.com — INKLUDERT tofaktor: gaten
+#      viser en TOTP-nøkkel og krever en gyldig kode før noe sendes videre.
+#   2. Gaten sender det server-til-server hit over SAMME ssh-tunnel som
+#      login-check, med den verifiserte nøkkelen.
+#   3. Passordet hashes HER, i requesten som bar det. Ingen klartekst når
 #      noen gang disk, logg eller admin-flate.
-#   3. Søknaden ligger som «open» til Morten godkjenner i /brukere.
-#   4. Godkjenning oppretter brukeren med den lagrede hashen + en 2FA-secret
-#      i ``totp_pending_secret``. Secreten returneres ALDRI til admin.
-#   5. Brukeren logger inn første gang: gaten får «enroll»-svar (IKKE en
-#      sesjon), viser secreten én gang, og krever en gyldig kode før kontoen
-#      promoteres til ekte ``totp_secret``. Først da gis sesjon.
-# Ingen sletting: avslåtte og godkjente søknader står med status og stempel.
-# ---------------------------------------------------------------------------
-
+#   4. Søknaden ligger som «open» til Morten godkjenner i /brukere. En søknad
+#      UTEN gyldig nøkkel avvises — alt som når admin-flaten er 2FA-sikret.
+#   5. Godkjenning oppretter brukeren med den lagrede hashen OG nøkkelen.
+#      Nøkkelen returneres ALDRI til admin: den bor i søkerens authenticator.
+#      Fra første innlogging kreves passord + kode, som for alle andre.
+#
+#   rev1 utsatte 2FA til søkerens første innlogging («innrullering»). Morten
+#   spurte tre ganger hvor 2FA var på registreringssiden — den var usynlig
+#   nettopp der man forventer den, og den etterlot en godkjent konto som
+#   ENFAKTOR til søkeren kom tilbake. Steget er fjernet i sin helhet, og med
+#   det den andre signerte token-typen som ga K1.
+#
+# Ingen sletting: avslåtte, godkjente og utløpte søknader står med status og
+# stempel — men uten hemmeligheter (_strip_secrets).
 PENDING_OPEN_MAX = 50  # abuse-tak: over dette avvises nye søknader stille
+ATTEMPTS_MAX = 5       # innsendinger per åpen søknad som beholdes i sin helhet
+# F7/(g): en ÅPEN søknad bærer nå et komplett legitimasjonspar — passord-hash
+# OG et levende TOTP-frø — for en konto som ikke finnes ennå. Uten utløp ligger
+# det i ro på disk (og i backup) til noen bestemmer seg. Etter denne fristen
+# auto-avslås søknaden og hemmelighetene strippes. Det lukker samtidig
+# kø-fyllingen og «avvist søker søker på nytt»-slitasjen.
+PENDING_TTL_S = 14 * 24 * 3600
 APPROVING_STALE_S = 300  # se _effective_status
+
+
+def _pending_age(p: dict) -> float:
+    """Alder i sekunder. ``created_epoch`` er autoritativ; eldre rader uten
+    den faller tilbake til å parse ``created_at`` (og regnes som ferske hvis
+    heller ikke det lar seg lese — en uleselig dato skal ikke auto-avslå noen)."""
+    try:
+        return max(0.0, time.time() - float(p.get("created_epoch") or 0)) \
+            if p.get("created_epoch") else \
+            max(0.0, time.time() - time.mktime(time.strptime(
+                str(p.get("created_at", ""))[:19], "%Y-%m-%dT%H:%M:%S")))
+    except (ValueError, TypeError, OverflowError):
+        return 0.0
 
 
 def _effective_status(p: dict) -> str:
@@ -535,7 +551,13 @@ def _effective_status(p: dict) -> str:
     if st == "approving":
         since = float(p.get("approving_since") or 0)
         if not since or time.time() - since > APPROVING_STALE_S:
-            return "open"
+            st = "open"        # krasjet midt i godkjenning — tilbake i køen
+    # G2 (reviewer): TTL-sjekken MÅ komme etter demoteringen over. Sto den
+    # først, ble en krasjet «approving»-rad aldri «expired», og beholdt hash
+    # + TOTP-frø i ubegrenset tid — F6 dekket kun tilfellet der brukeren
+    # FAKTISK ble opprettet.
+    if st == "open" and _pending_age(p) > PENDING_TTL_S:
+        return "expired"
     return st
 
 
@@ -555,6 +577,12 @@ def _public_pending(p: dict) -> dict:
         "resubmit_count": int(p.get("resubmit_count", 0) or 0),
         "last_attempt_at": p.get("last_attempt_at", ""),
         "last_attempt_ip": p.get("last_attempt_ip", ""),
+        # Hver innsending, uten hash og uten 2FA-nøkkel. Er det mer enn én må
+        # Morten velge hvilken som skal bli kontoen — nr. 0 er standard.
+        "attempts": [{"at": a.get("at", ""), "ip": a.get("ip", ""),
+                      "display_name": a.get("display_name", ""),
+                      "email": a.get("email", "")}
+                     for a in (p.get("attempts") or []) if isinstance(a, dict)],
         # True = brukernavnet fantes allerede da søknaden kom; godkjenning vil
         # feile. Vist i admin-flaten, aldri utad (ville vært et enumereringsorakel).
         "collision": bool(p.get("collision")),
@@ -564,8 +592,35 @@ def _public_pending(p: dict) -> dict:
     }
 
 
+def expire_stale_pending(path: Optional[Path] = None) -> int:
+    """Auto-avslå åpne søknader eldre enn ``PENDING_TTL_S`` og STRIPP dem.
+
+    Kalles fra :func:`list_pending`, altså hver gang admin-flaten polles —
+    det er den eneste jevnlige pulsen butikken har. En ren lesefunksjon som
+    skriver er ikke pent, men alternativet er at hemmelighetene ligger igjen
+    til noen tilfeldigvis kjører noe annet."""
+    n = 0
+    with _LOCK:
+        store = load_store(path)
+        for p in store.get("pending") or []:
+            # _effective_status, ikke råfeltet (G2): ellers hopper denne over
+            # nøyaktig de radene som trenger den mest — de som krasjet i
+            # «approving» og bærer et levende TOTP-frø.
+            if not isinstance(p, dict) or _effective_status(p) != "expired":
+                continue
+            p["status"] = "expired"
+            p["decided_at"] = _now()
+            p["decided_by"] = "auto (utløpt, %d dager)" % (PENDING_TTL_S // 86400)
+            _strip_secrets(p)
+            n += 1
+        if n:
+            save_store(store, path)
+    return n
+
+
 def list_pending(include_closed: bool = False, path: Optional[Path] = None) -> list:
     """Søknader, nyeste først. Uten ``include_closed``: kun «open»."""
+    expire_stale_pending(path)
     items = load_store(path).get("pending") or []
     if not isinstance(items, list):
         return []
@@ -577,7 +632,7 @@ def list_pending(include_closed: bool = False, path: Optional[Path] = None) -> l
     history = {}
     for p in items:
         st = p.get("status", "open")
-        if st in ("approved", "rejected"):
+        if st in ("approved", "rejected", "expired"):
             history.setdefault(p.get("username", ""), []).append(
                 {"status": st, "at": p.get("decided_at", ""),
                  "by": p.get("decided_by", ""), "reason": p.get("reason", "")})
@@ -602,6 +657,7 @@ def add_pending(
     display_name: str = "",
     email: str = "",
     source_ip: str = "",
+    totp_secret: str = "",
     path: Optional[Path] = None,
 ) -> bool:
     """Registrer en søknad. Returnerer False når den avvises (ugyldig navn,
@@ -615,6 +671,14 @@ def add_pending(
     if not USERNAME_RE.match(username) or username in RESERVED_USERNAMES:
         return False
     if not password or len(password) < 8 or len(password) > 256:
+        return False
+    # BL-3404 rev2 (Morten: «hvor er 2fa???»): 2FA settes opp i REGISTRERINGS-
+    # skjemaet, ikke ved første innlogging. Gaten har allerede verifisert en
+    # gyldig kode mot denne nøkkelen før søknaden sendes hit — en søknad UTEN
+    # nøkkel er derfor ikke en gyldig søknad, og avvises. Det er den mekaniske
+    # garantien for at alt som når admin-flaten er ferdig 2FA-sikret.
+    totp_secret = (totp_secret or "").strip().upper()
+    if not re.match(r"^[A-Z2-7]{16,64}$", totp_secret):
         return False
     # Kapping (reviewer-funn K2): feltene kommer fra en OFFENTLIG rute og
     # havner i auth-butikken, som parses ved hver eneste innlogging. Uten tak
@@ -638,17 +702,32 @@ def add_pending(
             -1,
         )
         if existing_idx >= 0:
-            # KAPRING (reviewer-funn K3): her ERSTATTET vi tidligere raden —
-            # «siste passord gjelder». Da kunne hvem som helst som gjettet et
-            # brukernavn med åpen søknad sende inn sin EGEN passord-hash, og
-            # Morten ville godkjent «Alice» inn i angriperens konto uten å se
-            # at grunnlaget var byttet. Nå vinner den FØRSTE søknaden; senere
-            # forsøk endrer ingenting, men telles og vises i admin-flaten så
-            # gjentatte forsøk er synlige i stedet for stille.
+            # KAPRING (reviewer-funn K3) vs. MISTET TELEFON — begge løses her.
+            #
+            # Opprinnelig ERSTATTET vi raden («siste passord gjelder»), og da
+            # kunne hvem som helst som gjettet et brukernavn med åpen søknad
+            # sende inn sin EGEN hash, og Morten ville godkjent «Alice» inn i
+            # angriperens konto uten å se at grunnlaget var byttet.
+            # Neste utkast lot den FØRSTE vinne og forkastet resten — trygt,
+            # men da satt en søker som mistet telefonen mellom registrering og
+            # godkjenning fast: de kunne ikke sende inn på nytt.
+            #
+            # Nå BEVARES hver innsending som et eget forsøk. Den FØRSTE er
+            # fortsatt standard, så ingen kan bytte grunnlaget stille — men
+            # Morten kan bevisst velge et senere forsøk når søkeren sier de
+            # måtte gjøre det om igjen. Valget er hans, og det er synlig.
             rec = items[existing_idx]
+            atts = rec.setdefault("attempts", [])
             rec["resubmit_count"] = int(rec.get("resubmit_count", 0)) + 1
             rec["last_attempt_at"] = _now()
             rec["last_attempt_ip"] = (source_ip or "")[:64]
+            if len(atts) < ATTEMPTS_MAX:
+                atts.append({
+                    "at": _now(), "ip": (source_ip or "")[:64],
+                    "display_name": display_name or username, "email": email,
+                    "password_hash": hash_password(password),
+                    "totp_secret": totp_secret,
+                })
             store["pending"] = items
             save_store(store, path)
             return True
@@ -663,9 +742,15 @@ def add_pending(
             "username": username,
             "display_name": display_name or username,
             "email": email,
-            "password_hash": pw_hash,
+            "attempts": [{
+                "at": _now(), "ip": (source_ip or "")[:64],
+                "display_name": display_name or username, "email": email,
+                "password_hash": pw_hash,
+                "totp_secret": totp_secret,
+            }],
             "status": "open",
             "created_at": _now(),
+            "created_epoch": time.time(),
             "source_ip": (source_ip or "")[:64],
             "collision": collision,
             "resubmit_count": 0,
@@ -680,6 +765,29 @@ def add_pending(
     return True
 
 
+def _reopen_approving(pid: str, path: Optional[Path]) -> None:
+    """Legg en «approving»-rad tilbake i køen, urørt, så et nytt forsøk virker."""
+    with _LOCK:
+        store = load_store(path)
+        rec = _find_pending(store, pid)
+        if rec is not None and rec.get("status") == "approving":
+            rec["status"] = "open"
+            rec.pop("approving_since", None)
+            save_store(store, path)
+
+
+def _strip_secrets(rec: dict) -> None:
+    """Fjern hash og 2FA-nøkkel fra en AVGJORT søknad — fra raden selv OG fra
+    hvert forsøk. En avgjort søknad skal aldri være en andre kopi av noe som
+    kan brukes til å logge inn."""
+    rec.pop("password_hash", None)
+    rec.pop("totp_secret", None)
+    for a in (rec.get("attempts") or []):
+        if isinstance(a, dict):
+            a.pop("password_hash", None)
+            a.pop("totp_secret", None)
+
+
 def _find_pending(store: dict, pid: str) -> Optional[dict]:
     for p in store.get("pending") or []:
         if isinstance(p, dict) and p.get("id") == pid:
@@ -689,9 +797,14 @@ def _find_pending(store: dict, pid: str) -> Optional[dict]:
 
 def approve_pending(
     pid: str, *, approved_by: str = "", role: str = "user",
-    path: Optional[Path] = None,
+    attempt: int = 0, path: Optional[Path] = None,
 ) -> dict:
-    """Godkjenn en søknad → oppretter brukeren med 2FA som VENTENDE krav.
+    """Godkjenn en søknad → oppretter brukeren, ferdig 2FA-sikret.
+
+    ``attempt`` velger hvilken innsending som blir kontoen. 0 (standard) er
+    den FØRSTE — så ingen kan bytte grunnlaget stille ved å sende inn på nytt.
+    Et senere forsøk krever at Morten aktivt peker på det, hvilket er nøyaktig
+    når han har snakket med søkeren (typisk: «jeg mistet telefonen».
 
     Returnerer den public bruker-dicten. 2FA-secreten returneres bevisst
     IKKE — den hører hjemme i brukerens authenticator, ikke i admin-flaten.
@@ -712,10 +825,18 @@ def approve_pending(
             raise ValueError(f"søknaden er allerede {rec.get('status')}")
         rec["status"] = "approving"
         rec["approving_since"] = time.time()
-        pw_hash = str(rec.get("password_hash") or "")
+        atts = rec.get("attempts") or []
+        if not isinstance(atts, list) or not atts:
+            raise ValueError("søknaden har ingen innsendinger")
+        if not (0 <= attempt < len(atts)):
+            raise ValueError(
+                f"ukjent innsending {attempt} (søknaden har {len(atts)})")
+        a = atts[attempt]
         username = str(rec.get("username") or "")
-        display_name = str(rec.get("display_name") or "")
-        email = str(rec.get("email") or "")
+        pw_hash = str(a.get("password_hash") or "")
+        display_name = str(a.get("display_name") or "")
+        email = str(a.get("email") or "")
+        totp_secret = str(a.get("totp_secret") or "")
         save_store(store, path)
     try:
         # create_user tar _LOCK selv — kall utenfor blokka over.
@@ -725,18 +846,55 @@ def approve_pending(
             display_name=display_name,
             email=email,
             role=role,
-            created_by=f"selvregistrering, godkjent av {approved_by or 'admin'}",
-            totp_pending=True,
+            created_by=("selvregistrering, godkjent av %s%s"
+                        % (approved_by or "admin",
+                           "" if attempt == 0 else " (innsending nr. %d)" % (attempt + 1))),
+            totp_secret=totp_secret,
             path=path,
         )
+    except ValueError as exc:
+        # F6 (reviewer): dør prosessen ETTER at create_user lyktes men FØR
+        # stemplingen, står raden igjen som «approving» → «open» med en levende
+        # passord-hash OG et levende TOTP-frø til en konto som NÅ finnes. Neste
+        # godkjenning feiler på unikhet, og uten dette rullet vi bare tilbake
+        # igjen — hemmelighetene ble liggende til noen avslo manuelt.
+        # «Finnes allerede» på en approving-rad betyr at opprettelsen FAKTISK
+        # skjedde: stemple ferdig og strippe er riktig utfall, ikke rollback.
+        # MEN: «finnes allerede» betyr ikke alltid at VI laget den. En ekte
+        # navnekollisjon (søknad om et navn som alt er i bruk) gir samme feil,
+        # og den skal IKKE stemples som godkjent — den skal tilbake i køen så
+        # Morten kan avvise den. Skillet er eksakt: hvis den eksisterende
+        # brukeren bærer NØYAKTIG hashen fra denne innsendingen, er det vår
+        # egen fullførte opprettelse vi ser. Ellers er det en fremmed konto.
+        ours = False
+        if "finnes allerede" in str(exc) and pw_hash:
+            existing = get_user(username, path) or {}
+            ours = hmac.compare_digest(
+                str(existing.get("password_hash", "")).encode(), pw_hash.encode())
+        if ours:
+            with _LOCK:
+                store = load_store(path)
+                rec = _find_pending(store, pid)
+                if rec is not None and rec.get("status") == "approving":
+                    rec["status"] = "approved"
+                    rec.pop("approving_since", None)
+                    rec["decided_at"] = _now()
+                    rec["decided_by"] = approved_by
+                    rec["decided_attempt"] = attempt
+                    rec["note"] = "konto fantes alt — antatt fullført godkjenning"
+                    _strip_secrets(rec)
+                    save_store(store, path)
+            # Dette ER et vellykket utfall (kontoen finnes, laget av nettopp
+            # denne innsendingen) — returner brukeren i stedet for å kaste
+            # 422 «finnes allerede» i ansiktet på Morten (reviewer (i)).
+            existing = get_public_user(username, path)
+            if existing is not None:
+                return existing
+        else:
+            _reopen_approving(pid, path)
+        raise
     except BaseException:
-        with _LOCK:                       # tilbake i køen, urørt
-            store = load_store(path)
-            rec = _find_pending(store, pid)
-            if rec is not None and rec.get("status") == "approving":
-                rec["status"] = "open"
-                rec.pop("approving_since", None)
-                save_store(store, path)
+        _reopen_approving(pid, path)
         raise
     with _LOCK:
         store = load_store(path)
@@ -746,7 +904,10 @@ def approve_pending(
             rec.pop("approving_since", None)
             rec["decided_at"] = _now()
             rec["decided_by"] = approved_by
-            rec.pop("password_hash", None)  # hashen lever nå i bruker-raden
+            # Hash OG 2FA-nøkkel lever nå i bruker-raden — søknaden skal ikke
+            # bli en andre kopi av noen av dem.
+            rec["decided_attempt"] = attempt
+            _strip_secrets(rec)
             save_store(store, path)
     return user
 
@@ -768,42 +929,9 @@ def reject_pending(
         rec["decided_at"] = _now()
         rec["decided_by"] = rejected_by
         rec["reason"] = (reason or "").strip()[:200]
-        rec.pop("password_hash", None)
+        _strip_secrets(rec)   # et avslag etterlater verken hash eller nøkkel
         save_store(store, path)
         return _public_pending(rec)
-
-
-def pending_totp_secret(username: str, path: Optional[Path] = None) -> str:
-    """Ventende (ikke-innrullert) 2FA-secret. Tom når brukeren er ferdig."""
-    u = get_user(username, path) or {}
-    if u.get("totp_secret"):
-        return ""
-    return str(u.get("totp_pending_secret") or "")
-
-
-def enroll_totp(
-    username: str, code: str, at_time: Optional[float] = None,
-    path: Optional[Path] = None,
-) -> bool:
-    """Fullfør 2FA-innrullering: en gyldig kode promoterer
-    ``totp_pending_secret`` → ``totp_secret``. Idempotent-trygg: virker kun
-    i den ene tilstanden (ventende secret, ingen ekte ennå)."""
-    username = (username or "").strip().lower()
-    with _LOCK:
-        store = load_store(path)
-        for u in store.get("users", []):
-            if u.get("username") != username:
-                continue
-            if u.get("disabled") or u.get("totp_secret"):
-                return False
-            secret = str(u.get("totp_pending_secret") or "")
-            if not secret or not check_totp(secret, code, at_time=at_time):
-                return False
-            u["totp_secret"] = secret
-            u.pop("totp_pending_secret", None)
-            save_store(store, path)
-            return True
-    return False
 
 
 def verify_login_ex(
@@ -813,8 +941,6 @@ def verify_login_ex(
     """Innloggingssjekk som også kan svare «denne må rulle inn 2FA først».
 
     ``{"status": "ok", "user": …}`` — full innlogging.
-    ``{"status": "enroll", "user": …, "enroll": {secret, otpauth_uri}}`` —
-    passord riktig, men 2FA ikke innrullert ennå: gaten skal IKKE gi sesjon.
     ``{"status": "no"}`` — generisk avvisning (aldri hvilken faktor).
     """
     # stamp=False: «sist innlogget» settes først når innloggingen faktisk
@@ -830,13 +956,6 @@ def verify_login_ex(
             return {"status": "no"}
         _stamp_login(name, path)
         return {"status": "ok", "user": user}
-    pending = pending_totp_secret(name, path)
-    if pending:
-        return {
-            "status": "enroll",
-            "user": user,
-            "enroll": {"secret": pending, "otpauth_uri": otpauth_uri(name, pending)},
-        }
     _stamp_login(name, path)
     return {"status": "ok", "user": user}
 
