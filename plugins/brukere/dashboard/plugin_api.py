@@ -47,7 +47,8 @@ def _require_admin(request: Request) -> None:
     if session is None:
         return
     user = user_store.get_user(getattr(session, "user_id", "") or "")
-    if not user or user.get("disabled") or user.get("role") != "admin":
+    # KUN admin — superuser ser alt, men styrer ingen (ADR-046 rev2).
+    if not user or user.get("disabled") or user.get("role") not in user_store.ADMIN_ROLES:
         raise HTTPException(status_code=403, detail="krever admin-rolle")
 
 
@@ -57,7 +58,8 @@ def _is_admin(request: Request) -> bool:
     if session is None:
         return True
     user = user_store.get_user(getattr(session, "user_id", "") or "")
-    return bool(user and not user.get("disabled") and user.get("role") == "admin")
+    return bool(user and not user.get("disabled")
+                and user.get("role") in user_store.ADMIN_ROLES)
 
 
 @router.get("/status")
@@ -78,6 +80,7 @@ def status(request: Request):
             user_count=len(users),
             active_count=len(active),
             admin_count=sum(1 for u in active if u["role"] == "admin"),
+            superuser_count=sum(1 for u in active if u["role"] == "superuser"),
             pending_count=len(user_store.list_pending()),
         )
     return out
@@ -330,7 +333,7 @@ def effective(username: str, request: Request):
     u = user_store.get_user(username)
     if u is None:
         raise HTTPException(status_code=404, detail=f"ukjent bruker: {username}")
-    vis = cp.visible_skills(username, is_owner=(u.get("role") == "admin"),
+    vis = cp.visible_skills(username, is_owner=(u.get("role") in user_store.FULL_ACCESS_ROLES),
                             granted=u.get("granted_capabilities") or [], policy=pol)
     dis = user_store.resolve_disabled_skills(username)
     return {"username": username, "role": u.get("role"),

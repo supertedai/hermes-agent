@@ -113,8 +113,9 @@
           placeholder: "navn@…", autoComplete: "off", onChange: (e) => setEmail(e.target.value) })),
         bootstrap ? null : Field("rolle",
           h("select", { className: INPUT, value: role, onChange: (e) => setRole(e.target.value) },
-            h("option", { value: "user" }, "bruker"),
-            h("option", { value: "admin" }, "admin")))),
+            h("option", { value: "user" }, "bruker — ser det du krysser av"),
+            h("option", { value: "superuser" }, "superuser — ser alt, styrer ingen"),
+            h("option", { value: "admin" }, "admin — ser alt og styrer brukere")))),
       h("div", { className: "flex flex-wrap items-end gap-3" },
         h("label", { className: "inline-flex items-center gap-2 text-sm text-muted-foreground" },
           h("input", { type: "checkbox", checked: generate,
@@ -178,7 +179,8 @@
         h("td", { className: TD }, u.display_name || ""),
         h("td", { className: TD + " text-muted-foreground" }, u.email || ""),
         h("td", { className: TD }, h(Badge, {
-          tone: u.role === "admin" ? "success" : "secondary", className: "text-xs" }, u.role)),
+          tone: u.role === "admin" ? "success" : (u.role === "superuser" ? "outline" : "secondary"),
+          className: "text-xs" }, u.role)),
         h("td", { className: TD }, h(Badge, {
           tone: u.disabled ? "destructive" : "success", className: "text-xs" },
           u.disabled ? "deaktivert" : "aktiv")),
@@ -192,9 +194,11 @@
             h(Button, { ghost: true, className: btn, disabled: busy,
               onClick: () => patch({ disabled: !u.disabled }) },
               u.disabled ? "aktiver" : "deaktiver"),
-            h(Button, { ghost: true, className: btn, disabled: busy,
-              onClick: () => patch({ role: u.role === "admin" ? "user" : "admin" }) },
-              u.role === "admin" ? "gjør til bruker" : "gjør til admin"),
+            h("select", { className: INPUT + " !w-auto !py-1 !text-xs", value: u.role,
+              disabled: busy, onChange: (e) => patch({ role: e.target.value }) },
+              h("option", { value: "user" }, "bruker"),
+              h("option", { value: "superuser" }, "superuser — ser alt"),
+              h("option", { value: "admin" }, "admin — ser alt + styrer")),
             h(Button, { ghost: true, className: btn, disabled: busy, onClick: resetPw },
               "nytt passord"),
             h(Button, { ghost: true, className: btn, disabled: busy, onClick: toggleTotp },
@@ -279,7 +283,11 @@
   // granted_capabilities — men det er en implementasjonsdetalj Morten ikke
   // skal måtte kjenne for å styre tilgang.
   function Kapabiliteter(props) {
-    const users = (props.users || []).filter((u) => u.role !== "admin" && !u.disabled);
+    // Kun rollen «user» får en kolonne. admin og superuser ser HELE katalogen,
+    // så en avkrysning for dem ville vært et valg uten virkning — samme grunn
+    // som ADMIN-kolonna ble fjernet.
+    const users = (props.users || []).filter((u) => u.role === "user" && !u.disabled);
+    const fulle = (props.users || []).filter((u) => u.full_access && !u.disabled);
     const [data, setData] = useState(null);
     const [busy, setBusy] = useState(false);
     const [msg, setMsg] = useState(null);
@@ -338,6 +346,11 @@
                   "Håndheves, men vises ikke her (blir skjult for vanlige brukere): " +
                   et.kun_i_runtime.join(", ")) : null)
         : null,
+      h("p", { className: "text-xs text-muted-foreground" },
+        "Admin- og superuser-kolonnene er låst: de rollene ser hele katalogen, " +
+        "og det er ikke et valg. Forskjellen mellom dem er MYNDIGHET, ikke " +
+        "tilgang — admin administrerer brukere, superuser gjør ikke." +
+        (fulle.length ? "  I dag: " + fulle.map((u) => u.username + " (" + u.role + ")").join(", ") + "." : "")),
       users.length === 0
         ? h("p", { className: "text-xs text-muted-foreground" },
             "Du er eneste bruker, og admin ser alt. Kolonnene til høyre fylles ut " +
@@ -348,14 +361,17 @@
         h("table", { className: "w-full text-sm" },
           h("thead", null,
             h("tr", { className: "border-b border-border" },
-              // ADMIN-kolonna er fjernet (Morten: «bare med user»). Den var
-              // alltid ✓ og aldri klikkbar — en kolonne som bærer null
-              // informasjon er støy i en tabell som skal tas beslutninger i.
-              // At admin ser alt står i teksten over, én gang.
-              ["kategori", "skills", "alle"].concat(users.map((u) => u.username))
+              // Alle tre gruppene står i tabellen (Morten). Admin og superuser
+              // er LÅSTE haker: de er ikke valg, de er fakta om rollen — men
+              // de skal være synlige i samme rad som valgene, ellers må man
+              // huske dem utenfor tabellen.
+              ["kategori", "skills", "admin", "superuser", "alle brukere"]
+                .concat(users.map((u) => u.username))
                 .map((c, i) => h("th", { key: c,
-                  className: "text-left font-medium text-[0.6875rem] uppercase tracking-wider text-muted-foreground py-2 pr-3" +
-                    (i >= 2 ? " text-center" : "") }, c)))),
+                  className: "font-medium text-[0.6875rem] uppercase tracking-wider py-2 pr-3 " +
+                    (i >= 2 ? "text-center " : "text-left ") +
+                    (i === 2 || i === 3 ? "text-emerald-600/70" : "text-muted-foreground") },
+                  c)))),
           h("tbody", null, cats.map((c) => {
             const erklaert = Object.keys(c.declared || {}).length;
             return h("tr", { key: c.category, className: "border-t border-border/60" },
@@ -369,6 +385,11 @@
                       "(" + erklaert + " styrer seg selv)")
                   : null),
               h("td", { className: TD + " tabular-nums" }, c.count),
+              // admin + superuser: låst, alltid på. Ikke et valg — en opplysning.
+              h("td", { className: TD + " text-center" },
+                cb(true, function () {}, true)),
+              h("td", { className: TD + " text-center" },
+                cb(true, function () {}, true)),
               h("td", { className: TD + " text-center" },
                 cb(!!alle[c.category], () => setAlle(Object.assign({}, alle,
                   { [c.category]: !alle[c.category] })))),
@@ -444,6 +465,7 @@
         tile(status.user_count, "brukere"),
         tile(status.active_count, "aktive"),
         tile(status.admin_count, "admin"),
+        tile(status.superuser_count != null ? status.superuser_count : 0, "superuser"),
         tile(status.pending_count != null ? status.pending_count : 0, "søknader"),
         tile(status.gate_active ? "på" : "av (loopback)", "innloggings-gate"))));
 

@@ -47,7 +47,19 @@ _SCRYPT_DKLEN = 32
 _SCRYPT_SALT_BYTES = 16
 
 USERNAME_RE = re.compile(r"^[a-z][a-z0-9_.-]{2,31}$")
-ROLES = ("admin", "user")
+# BL-3432/ADR-046 rev2 (Morten: «kari og ola skal være user og superuser»):
+# TRE roller, fordi EVNE og MYNDIGHET er to forskjellige ting.
+#   admin      ser alt  +  administrerer brukere        (= owner)
+#   superuser  ser alt  +  administrerer INGEN
+#   user       ser det som er krysset av for dem
+# Superuser fyller hullet ADR-046 §D4 navnga: modellen kunne ikke uttrykke
+# «full tilgang uten styringsrett». Nå kan den.
+ROLES = ("admin", "superuser", "user")
+# Rollene som ser HELE katalogen. Bevisst egen konstant og ikke en test på
+# `!= "user"` — legges en fjerde rolle til, skal den ikke arve alt ved et uhell.
+FULL_ACCESS_ROLES = ("admin", "superuser")
+# Rollen som får styre andre. Egen konstant av samme grunn.
+ADMIN_ROLES = ("admin",)
 
 # BL-2790 (Reviewer-mandat BL-2789, A7-dimensjon): identitets-sentineler og
 # aliaser som server-siden (.12) klassifiserer som EIER-trafikk. En bruker med
@@ -188,6 +200,8 @@ def _public(u: dict) -> dict:
         "created_by": u.get("created_by", ""),
         "last_login": u.get("last_login", ""),
         "has_totp": bool(u.get("totp_secret")),
+        # Ser hele katalogen? Avledet av rollen, så flaten slipper å gjette.
+        "full_access": u.get("role") in FULL_ACCESS_ROLES,
     }
 
 
@@ -322,7 +336,7 @@ def resolve_disabled_skills(username: str, path: Optional[Path] = None) -> set:
         return cp.disabled_for("", is_owner=False, granted=[], policy=pol)
     return cp.disabled_for(
         username,
-        is_owner=(u.get("role") == "admin"),
+        is_owner=(u.get("role") in FULL_ACCESS_ROLES),
         granted=u.get("granted_capabilities") or [],
         policy=pol,
     )
