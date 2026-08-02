@@ -92,10 +92,29 @@ class LocalUsersProvider(DashboardAuthProvider):
     # ---- passord-innlogging ------------------------------------------------
 
     def complete_password_login(self, *, username: str, password: str) -> Session:
-        user = user_store.check_login(username, password)
+        # stamp=False (reviewer-funn M1): uten den stemplet en NEKTET
+        # innlogging «sist innlogget» — samme løgn som stamp-flagget ble
+        # innført for å fjerne. Stemples nedenfor, når sesjonen faktisk mynter.
+        user = user_store.check_login(username, password, stamp=False)
         if user is None:
             raise InvalidCredentialsError("invalid username or password")
-        return self._mint_session(user)
+        # BL-3404: denne veien er REN passord-innlogging — den har ikke noe
+        # kodefelt, og kan derfor ikke verifisere en andre faktor. Slipper den
+        # gjennom en bruker som HAR 2FA, er den en bakdør rundt kravet den
+        # dagen dashboardet bindes gated. Derfor nektes begge tilstandene:
+        #   · totp_secret satt      → 2FA er påkrevd, og kan ikke sjekkes her
+        #   · totp_pending_secret   → godkjent søker, ikke innrullert ennå
+        # (Første utkast lukket kun den andre — reviewer-funn.) Morten selv har
+        # 2FA, så denne stien er i praksis stengt for alle med andre faktor;
+        # skal dashboardet få passord-innlogging må den lære TOTP først.
+        name = user["username"]
+        if user_store.has_totp(name) or user_store.pending_totp_secret(name):
+            raise InvalidCredentialsError(
+                "kontoen krever 2FA; denne innloggingsveien støtter ikke koden"
+            )
+        session = self._mint_session(user)
+        user_store._stamp_login(name)
+        return session
 
     # ---- sesjonslivssyklus -------------------------------------------------
 

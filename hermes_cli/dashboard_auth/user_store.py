@@ -185,6 +185,9 @@ def _public(u: dict) -> dict:
         "created_by": u.get("created_by", ""),
         "last_login": u.get("last_login", ""),
         "has_totp": bool(u.get("totp_secret")),
+        # BL-3404: godkjent søker som ennå ikke har skannet inn authenticator.
+        # Kontoen finnes, men gaten slipper den KUN inn i innrullerings-steget.
+        "totp_pending": bool(u.get("totp_pending_secret")) and not u.get("totp_secret"),
     }
 
 
@@ -199,6 +202,12 @@ def get_user(username: str, path: Optional[Path] = None) -> Optional[dict]:
     return None
 
 
+def get_public_user(username: str, path: Optional[Path] = None) -> Optional[dict]:
+    """Som :func:`get_user`, men uten hash/secret — trygg å returnere ut."""
+    u = get_user(username, path)
+    return _public(u) if u else None
+
+
 def _now() -> str:
     return time.strftime("%Y-%m-%dT%H:%M:%S%z")
 
@@ -206,20 +215,29 @@ def _now() -> str:
 def create_user(
     *,
     username: str,
-    password: str,
+    password: str = "",
+    password_hash: str = "",
     display_name: str = "",
     email: str = "",
     role: str = "user",
     created_by: str = "",
     totp: bool = False,
     totp_secret: str = "",
+    totp_pending: bool = False,
     path: Optional[Path] = None,
 ) -> dict:
     """Opprett bruker. Første bruker i en tom butikk MÅ være admin
     (bootstrap — «jeg som første og eneste bruker»), og genererer
     samtidig signeringssecreten. ``totp=True`` genererer 2FA-secret
     (``totp_secret`` kan overstyre — migreringsveien fra .auth.json);
-    secreten returneres da ÉN gang i feltet ``totp_secret``."""
+    secreten returneres da ÉN gang i feltet ``totp_secret``.
+
+    BL-3404 (selvregistrering): ``password_hash`` lar godkjenningsveien
+    gjenbruke hashen som ble laget da søkeren fylte skjemaet — klartekst-
+    passordet forlot aldri den ene requesten. ``totp_pending=True`` legger
+    secreten i ``totp_pending_secret`` og returnerer den ALDRI: den skal
+    til brukerens egen authenticator ved første innlogging, ikke til
+    admin-flaten (én hemmelighet, én mottaker)."""
     username = (username or "").strip().lower()
     if not USERNAME_RE.match(username):
         raise ValueError(
@@ -232,10 +250,16 @@ def create_user(
         )
     if role not in ROLES:
         raise ValueError(f"ugyldig rolle {role!r} (tillatt: {ROLES})")
-    if not password or len(password) < 8:
-        raise ValueError("passord må være minst 8 tegn")
+    if password_hash:
+        if not str(password_hash).startswith("scrypt$"):
+            raise ValueError("ugyldig password_hash-format")
+        stored_hash = str(password_hash)
+    else:
+        if not password or len(password) < 8:
+            raise ValueError("passord må være minst 8 tegn")
+        stored_hash = hash_password(password)
     secret_b32 = (totp_secret or "").strip() or (
-        generate_totp_secret() if totp else ""
+        generate_totp_secret() if (totp or totp_pending) else ""
     )
     with _LOCK:
         store = load_store(path)
@@ -250,18 +274,18 @@ def create_user(
             "display_name": (display_name or "").strip() or username,
             "email": (email or "").strip(),
             "role": role,
-            "password_hash": hash_password(password),
+            "password_hash": stored_hash,
             "disabled": False,
             "created_at": _now(),
             "created_by": created_by,
             "last_login": "",
         }
         if secret_b32:
-            user["totp_secret"] = secret_b32
+            user["totp_pending_secret" if totp_pending else "totp_secret"] = secret_b32
         store["users"].append(user)
         save_store(store, path)
     out = _public(user)
-    if secret_b32:
+    if secret_b32 and not totp_pending:
         out["totp_secret"] = secret_b32  # vises ÉN gang ved opprettelse
         out["otpauth_uri"] = otpauth_uri(username, secret_b32)
     return out
@@ -332,7 +356,8 @@ def set_password(username: str, password: str, path: Optional[Path] = None) -> N
     raise KeyError(f"ukjent bruker: {username}")
 
 
-def check_login(username: str, password: str, path: Optional[Path] = None) -> Optional[dict]:
+def check_login(username: str, password: str, path: Optional[Path] = None,
+                stamp: bool = True) -> Optional[dict]:
     """Konstant-tid innloggingssjekk.
 
     Returnerer public bruker-dict ved suksess, ellers ``None`` — skiller
@@ -355,8 +380,12 @@ def check_login(username: str, password: str, path: Optional[Path] = None) -> Op
         ok = verify_password(password, target_hash)
         if not (ok and target is not None and not target.get("disabled")):
             return None
-        target["last_login"] = _now()
-        save_store(store, path)
+        # ``stamp=False``: passordet stemte, men innloggingen er ikke ferdig
+        # (BL-3404 innrullering står igjen). «Sist innlogget» skal fortelle om
+        # fullførte innlogginger, ellers lyver admin-flaten.
+        if stamp:
+            target["last_login"] = _now()
+            save_store(store, path)
         return _public(target)
 
 
@@ -425,6 +454,12 @@ def set_totp(
                     u["totp_secret"] = secret_b32
                 else:
                     u.pop("totp_secret", None)
+                # BL-3404 (reviewer-funn M4): en ventende innrullerings-secret
+                # MÅ dø sammen med den ekte. Uten dette ville «2FA på» og så
+                # «2FA av» på en godkjent-men-ikke-innrullert bruker vekket den
+                # foreldreløse pending-secreten til live igjen — og kastet
+                # brukeren inn i innrullering med en nøkkel ingen har.
+                u.pop("totp_pending_secret", None)
                 save_store(store, path)
                 return
     raise KeyError(f"ukjent bruker: {username}")
@@ -439,18 +474,381 @@ def verify_login(
     Generisk feil — skiller aldri ukjent bruker / feil passord / feil kode.
     Har brukeren ``totp_secret`` er koden OBLIGATORISK. ``at_time`` — se
     :func:`check_totp` (klokke-skew-kompensasjon fra pålitelig gate).
+
+    MERK (BL-3404, reviewer-funn): denne har i dag INGEN kallere — gaten
+    bruker :func:`verify_login_ex` og provideren bruker :func:`check_login`.
+    Den beholdes som et stabilt API, men den måtte lukkes for
+    innrullerings-tilstanden: uten sjekken under ville en godkjent, ikke
+    innrullert bruker sluppet gjennom her (ingen ``totp_secret`` ennå) den
+    dagen noen wirer den opp igjen.
     """
-    user = check_login(username, password, path)
+    user = check_login(username, password, path, stamp=False)
     if user is None:
+        return None
+    if pending_totp_secret(user["username"], path):
         return None
     secret = get_totp_secret(user["username"], path)
     if secret and not check_totp(secret, code, at_time=at_time):
         return None
+    _stamp_login(user["username"], path)   # kun ved FULLFØRT innlogging
     return user
 
 
 def has_totp(username: str, path: Optional[Path] = None) -> bool:
     return bool(get_totp_secret(username, path))
+
+
+# ---------------------------------------------------------------------------
+# BL-3404: selvregistrering med admin-godkjenning
+#
+# Flyten, og hvorfor den ser slik ut:
+#   1. Besøkende fyller skjemaet på ai.byopus.com. Gaten (.14) sender det
+#      server-til-server hit over SAMME ssh-tunnel som login-check.
+#   2. Passordet hashes HER, i requesten som bar det. Ingen klartekst når
+#      noen gang disk, logg eller admin-flate.
+#   3. Søknaden ligger som «open» til Morten godkjenner i /brukere.
+#   4. Godkjenning oppretter brukeren med den lagrede hashen + en 2FA-secret
+#      i ``totp_pending_secret``. Secreten returneres ALDRI til admin.
+#   5. Brukeren logger inn første gang: gaten får «enroll»-svar (IKKE en
+#      sesjon), viser secreten én gang, og krever en gyldig kode før kontoen
+#      promoteres til ekte ``totp_secret``. Først da gis sesjon.
+# Ingen sletting: avslåtte og godkjente søknader står med status og stempel.
+# ---------------------------------------------------------------------------
+
+PENDING_OPEN_MAX = 50  # abuse-tak: over dette avvises nye søknader stille
+APPROVING_STALE_S = 300  # se _effective_status
+
+
+def _effective_status(p: dict) -> str:
+    """Status slik resten av verden skal se den.
+
+    ``approving`` er en mellomtilstand som kun skal leve i sekundene mens
+    :func:`approve_pending` oppretter brukeren. Dør prosessen HARDT (SIGKILL,
+    strømbrudd) rekker verken commit eller rollback å skje, og raden ble da
+    usynlig for alltid: ute av køen, og både godkjenn og avslå kastet fordi de
+    krever ``open``. Morten kunne verken se eller avgjøre den (reviewer-funn
+    M5/(iv)). Etter ``APPROVING_STALE_S`` regnes den derfor som ``open`` igjen
+    — opprettelsen har enten lyktes (da finnes brukeren, og godkjenning feiler
+    tydelig på unikhet) eller aldri skjedd.
+    """
+    st = p.get("status", "open")
+    if st == "approving":
+        since = float(p.get("approving_since") or 0)
+        if not since or time.time() - since > APPROVING_STALE_S:
+            return "open"
+    return st
+
+
+def _public_pending(p: dict) -> dict:
+    """Søknad uten password_hash — hashen forlater aldri butikken."""
+    return {
+        "id": p.get("id", ""),
+        "username": p.get("username", ""),
+        "display_name": p.get("display_name", ""),
+        "email": p.get("email", ""),
+        "status": p.get("status", "open"),
+        "created_at": p.get("created_at", ""),
+        "source_ip": p.get("source_ip", ""),
+        # >0 = noen har sendt inn skjemaet for DETTE brukernavnet flere ganger.
+        # Kan være søkeren som prøvde igjen — eller noen som forsøkte å kapre
+        # søknaden (reviewer-funn K3). Vises i admin-flaten; se før du godkjenner.
+        "resubmit_count": int(p.get("resubmit_count", 0) or 0),
+        "last_attempt_at": p.get("last_attempt_at", ""),
+        "last_attempt_ip": p.get("last_attempt_ip", ""),
+        # True = brukernavnet fantes allerede da søknaden kom; godkjenning vil
+        # feile. Vist i admin-flaten, aldri utad (ville vært et enumereringsorakel).
+        "collision": bool(p.get("collision")),
+        "decided_at": p.get("decided_at", ""),
+        "decided_by": p.get("decided_by", ""),
+        "reason": p.get("reason", ""),
+    }
+
+
+def list_pending(include_closed: bool = False, path: Optional[Path] = None) -> list:
+    """Søknader, nyeste først. Uten ``include_closed``: kun «open»."""
+    items = load_store(path).get("pending") or []
+    if not isinstance(items, list):
+        return []
+    items = [p for p in items if isinstance(p, dict)]
+    # Tidligere avgjørelser for SAMME brukernavn (reviewer-funn M3): en du
+    # nettopp avviste kunne søke på nytt og få en helt blank rad. Porten
+    # «Morten godkjenner personen» hadde ingen hukommelse om Mortens egen
+    # forrige avgjørelse. Nå følger historikken med raden.
+    history = {}
+    for p in items:
+        st = p.get("status", "open")
+        if st in ("approved", "rejected"):
+            history.setdefault(p.get("username", ""), []).append(
+                {"status": st, "at": p.get("decided_at", ""),
+                 "by": p.get("decided_by", ""), "reason": p.get("reason", "")})
+    out = []
+    for p in items:
+        eff = _effective_status(p)
+        if not include_closed and eff != "open":
+            continue
+        row = _public_pending(p)
+        row["status"] = eff
+        row["stale_approving"] = eff != p.get("status", "open")
+        row["prior_decisions"] = history.get(p.get("username", ""), [])[-3:]
+        out.append(row)
+    out.reverse()
+    return out
+
+
+def add_pending(
+    *,
+    username: str,
+    password: str,
+    display_name: str = "",
+    email: str = "",
+    source_ip: str = "",
+    path: Optional[Path] = None,
+) -> bool:
+    """Registrer en søknad. Returnerer False når den avvises (ugyldig navn,
+    reservert navn, kø full) — kalleren svarer likevel generisk utad, så
+    skjemaet aldri blir et orakel for hvilke brukernavn som finnes.
+
+    En ny søknad for et brukernavn som allerede har en åpen søknad ERSTATTER
+    den (siste passord gjelder) i stedet for å legge en dublett i køen.
+    """
+    username = (username or "").strip().lower()
+    if not USERNAME_RE.match(username) or username in RESERVED_USERNAMES:
+        return False
+    if not password or len(password) < 8 or len(password) > 256:
+        return False
+    # Kapping (reviewer-funn K2): feltene kommer fra en OFFENTLIG rute og
+    # havner i auth-butikken, som parses ved hver eneste innlogging. Uten tak
+    # kan én besøkende gjøre users.json så stor at hele innloggingsveien dør.
+    display_name = (display_name or "").strip()[:80]
+    email = (email or "").strip()[:200]
+    with _LOCK:
+        store = load_store(path)
+        items = store.get("pending")
+        if not isinstance(items, list):
+            items = []
+        open_items = [p for p in items if _effective_status(p) == "open"]
+        # Kollisjon mot eksisterende bruker: søknaden tas imot (ingen lekkasje
+        # utad), men flagges så Morten ser hvorfor godkjenning vil feile.
+        collision = any(
+            u.get("username") == username for u in store.get("users", [])
+        )
+        existing_idx = next(
+            (i for i, p in enumerate(items)
+             if _effective_status(p) == "open" and p.get("username") == username),
+            -1,
+        )
+        if existing_idx >= 0:
+            # KAPRING (reviewer-funn K3): her ERSTATTET vi tidligere raden —
+            # «siste passord gjelder». Da kunne hvem som helst som gjettet et
+            # brukernavn med åpen søknad sende inn sin EGEN passord-hash, og
+            # Morten ville godkjent «Alice» inn i angriperens konto uten å se
+            # at grunnlaget var byttet. Nå vinner den FØRSTE søknaden; senere
+            # forsøk endrer ingenting, men telles og vises i admin-flaten så
+            # gjentatte forsøk er synlige i stedet for stille.
+            rec = items[existing_idx]
+            rec["resubmit_count"] = int(rec.get("resubmit_count", 0)) + 1
+            rec["last_attempt_at"] = _now()
+            rec["last_attempt_ip"] = (source_ip or "")[:64]
+            store["pending"] = items
+            save_store(store, path)
+            return True
+        if len(open_items) >= PENDING_OPEN_MAX:
+            return False
+        # Hashing FØRST her (reviewer-funn L7): scrypt koster ~16 MiB og holder
+        # den globale _LOCK-en — som blokkerer enhver innlogging imens. Ligger
+        # den over gjenforsøks-returnen betaler vi den for arbeid vi kaster.
+        pw_hash = hash_password(password)  # klartekst dør med denne funksjonen
+        items.append({
+            "id": secrets.token_hex(8),
+            "username": username,
+            "display_name": display_name or username,
+            "email": email,
+            "password_hash": pw_hash,
+            "status": "open",
+            "created_at": _now(),
+            "source_ip": (source_ip or "")[:64],
+            "collision": collision,
+            "resubmit_count": 0,
+            "last_attempt_at": "",
+            "last_attempt_ip": "",
+            "decided_at": "",
+            "decided_by": "",
+            "reason": "",
+        })
+        store["pending"] = items
+        save_store(store, path)
+    return True
+
+
+def _find_pending(store: dict, pid: str) -> Optional[dict]:
+    for p in store.get("pending") or []:
+        if isinstance(p, dict) and p.get("id") == pid:
+            return p
+    return None
+
+
+def approve_pending(
+    pid: str, *, approved_by: str = "", role: str = "user",
+    path: Optional[Path] = None,
+) -> dict:
+    """Godkjenn en søknad → oppretter brukeren med 2FA som VENTENDE krav.
+
+    Returnerer den public bruker-dicten. 2FA-secreten returneres bevisst
+    IKKE — den hører hjemme i brukerens authenticator, ikke i admin-flaten.
+    """
+    # Reviewer-funn (e): låsen slippes mellom lesing og create_user, og det
+    # siste steget stemplet «approved» UTEN å re-sjekke status. Et avslag som
+    # rakk inn i mellomtiden ble da overskrevet — kontoen ble opprettet for en
+    # søknad som var avvist. Løsningen er en mellomtilstand: raden merkes
+    # «approving» under låsen (og forsvinner dermed fra køen, så den ikke kan
+    # godkjennes eller avslås to ganger), og rulles tilbake til «open» hvis
+    # opprettelsen feiler.
+    with _LOCK:
+        store = load_store(path)
+        rec = _find_pending(store, pid)
+        if rec is None:
+            raise KeyError(f"ukjent søknad: {pid}")
+        if _effective_status(rec) != "open":
+            raise ValueError(f"søknaden er allerede {rec.get('status')}")
+        rec["status"] = "approving"
+        rec["approving_since"] = time.time()
+        pw_hash = str(rec.get("password_hash") or "")
+        username = str(rec.get("username") or "")
+        display_name = str(rec.get("display_name") or "")
+        email = str(rec.get("email") or "")
+        save_store(store, path)
+    try:
+        # create_user tar _LOCK selv — kall utenfor blokka over.
+        user = create_user(
+            username=username,
+            password_hash=pw_hash,
+            display_name=display_name,
+            email=email,
+            role=role,
+            created_by=f"selvregistrering, godkjent av {approved_by or 'admin'}",
+            totp_pending=True,
+            path=path,
+        )
+    except BaseException:
+        with _LOCK:                       # tilbake i køen, urørt
+            store = load_store(path)
+            rec = _find_pending(store, pid)
+            if rec is not None and rec.get("status") == "approving":
+                rec["status"] = "open"
+                rec.pop("approving_since", None)
+                save_store(store, path)
+        raise
+    with _LOCK:
+        store = load_store(path)
+        rec = _find_pending(store, pid)
+        if rec is not None:
+            rec["status"] = "approved"
+            rec.pop("approving_since", None)
+            rec["decided_at"] = _now()
+            rec["decided_by"] = approved_by
+            rec.pop("password_hash", None)  # hashen lever nå i bruker-raden
+            save_store(store, path)
+    return user
+
+
+def reject_pending(
+    pid: str, *, rejected_by: str = "", reason: str = "",
+    path: Optional[Path] = None,
+) -> dict:
+    """Avslå en søknad. Raden består (vi sletter ingenting), men hashen
+    fjernes — et avslag skal ikke etterlate et brukbart passord-verifikat."""
+    with _LOCK:
+        store = load_store(path)
+        rec = _find_pending(store, pid)
+        if rec is None:
+            raise KeyError(f"ukjent søknad: {pid}")
+        if _effective_status(rec) != "open":
+            raise ValueError(f"søknaden er allerede {rec.get('status')}")
+        rec["status"] = "rejected"
+        rec["decided_at"] = _now()
+        rec["decided_by"] = rejected_by
+        rec["reason"] = (reason or "").strip()[:200]
+        rec.pop("password_hash", None)
+        save_store(store, path)
+        return _public_pending(rec)
+
+
+def pending_totp_secret(username: str, path: Optional[Path] = None) -> str:
+    """Ventende (ikke-innrullert) 2FA-secret. Tom når brukeren er ferdig."""
+    u = get_user(username, path) or {}
+    if u.get("totp_secret"):
+        return ""
+    return str(u.get("totp_pending_secret") or "")
+
+
+def enroll_totp(
+    username: str, code: str, at_time: Optional[float] = None,
+    path: Optional[Path] = None,
+) -> bool:
+    """Fullfør 2FA-innrullering: en gyldig kode promoterer
+    ``totp_pending_secret`` → ``totp_secret``. Idempotent-trygg: virker kun
+    i den ene tilstanden (ventende secret, ingen ekte ennå)."""
+    username = (username or "").strip().lower()
+    with _LOCK:
+        store = load_store(path)
+        for u in store.get("users", []):
+            if u.get("username") != username:
+                continue
+            if u.get("disabled") or u.get("totp_secret"):
+                return False
+            secret = str(u.get("totp_pending_secret") or "")
+            if not secret or not check_totp(secret, code, at_time=at_time):
+                return False
+            u["totp_secret"] = secret
+            u.pop("totp_pending_secret", None)
+            save_store(store, path)
+            return True
+    return False
+
+
+def verify_login_ex(
+    username: str, password: str, code: str = "",
+    at_time: Optional[float] = None, path: Optional[Path] = None,
+) -> dict:
+    """Innloggingssjekk som også kan svare «denne må rulle inn 2FA først».
+
+    ``{"status": "ok", "user": …}`` — full innlogging.
+    ``{"status": "enroll", "user": …, "enroll": {secret, otpauth_uri}}`` —
+    passord riktig, men 2FA ikke innrullert ennå: gaten skal IKKE gi sesjon.
+    ``{"status": "no"}`` — generisk avvisning (aldri hvilken faktor).
+    """
+    # stamp=False: «sist innlogget» settes først når innloggingen faktisk
+    # fullfører — ellers ville et avbrutt innrullerings-forsøk sett ut som
+    # en vellykket innlogging i admin-flaten (reviewer-funn).
+    user = check_login(username, password, path, stamp=False)
+    if user is None:
+        return {"status": "no"}
+    name = user["username"]
+    secret = get_totp_secret(name, path)
+    if secret:
+        if not check_totp(secret, code, at_time=at_time):
+            return {"status": "no"}
+        _stamp_login(name, path)
+        return {"status": "ok", "user": user}
+    pending = pending_totp_secret(name, path)
+    if pending:
+        return {
+            "status": "enroll",
+            "user": user,
+            "enroll": {"secret": pending, "otpauth_uri": otpauth_uri(name, pending)},
+        }
+    _stamp_login(name, path)
+    return {"status": "ok", "user": user}
+
+
+def _stamp_login(username: str, path: Optional[Path] = None) -> None:
+    with _LOCK:
+        store = load_store(path)
+        for u in store.get("users", []):
+            if u.get("username") == username:
+                u["last_login"] = _now()
+                save_store(store, path)
+                return
 
 
 def generate_password(length: int = 16) -> str:

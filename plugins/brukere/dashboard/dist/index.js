@@ -183,8 +183,9 @@
           tone: u.disabled ? "destructive" : "success", className: "text-xs" },
           u.disabled ? "deaktivert" : "aktiv")),
         h("td", { className: TD }, h(Badge, {
-          tone: u.has_totp ? "success" : "outline", className: "text-xs" },
-          u.has_totp ? "2FA på" : "2FA av")),
+          tone: u.has_totp ? "success" : (u.totp_pending ? "secondary" : "outline"),
+          className: "text-xs" },
+          u.has_totp ? "2FA på" : (u.totp_pending ? "2FA venter" : "2FA av"))),
         h("td", { className: TD + " text-muted-foreground whitespace-nowrap text-xs" },
           u.last_login || "aldri"),
         h("td", { className: TD },
@@ -204,10 +205,62 @@
         pwMsg)) : null);
   }
 
+  // BL-3404: søknad fra registreringsskjemaet på ai.byopus.com. Du godkjenner
+  // PERSONEN — 2FA-secreten ser du aldri: den går til søkerens egen
+  // authenticator ved første innlogging, og uten den kommer de ikke inn.
+  function PendingRow(props) {
+    const p = props.item;
+    const [busy, setBusy] = useState(false);
+    const [msg, setMsg] = useState(null);
+    const [role, setRole] = useState("user");
+    const act = (what, body) => {
+      setBusy(true);
+      jfetch("/pending/" + encodeURIComponent(p.id) + "/" + what, jsonOpts("POST", body || {}))
+        .then((r) => {
+          if (r && r.detail) { setMsg(String(r.detail)); return; }
+          props.onChanged();
+        })
+        .catch((e) => setMsg(String(e)))
+        .finally(() => setBusy(false));
+    };
+    const btn = "px-2 py-1 text-xs";
+    return h(React.Fragment, null,
+      h("tr", { className: "border-t border-border/60" },
+        h("td", { className: TD + " font-medium whitespace-nowrap" }, p.username),
+        h("td", { className: TD }, p.display_name || ""),
+        h("td", { className: TD + " text-muted-foreground" }, p.email || ""),
+        h("td", { className: TD + " text-muted-foreground whitespace-nowrap text-xs" }, p.created_at || ""),
+        h("td", { className: TD + " text-muted-foreground whitespace-nowrap text-xs" }, p.source_ip || ""),
+        h("td", { className: TD },
+          p.collision
+            ? h(Badge, { tone: "destructive", className: "text-xs" }, "navn opptatt")
+            : h("select", { className: INPUT + " !py-1 !text-xs", value: role,
+                onChange: (e) => setRole(e.target.value) },
+                h("option", { value: "user" }, "bruker"),
+                h("option", { value: "admin" }, "admin"))),
+        h("td", { className: TD },
+          h("div", { className: "flex flex-wrap gap-1.5" },
+            h(Button, { className: btn, disabled: busy || p.collision,
+              onClick: () => act("approve", { role: role }) }, "godkjenn"),
+            h(Button, { ghost: true, className: btn, disabled: busy,
+              onClick: () => act("reject", {}) }, "avslå")))),
+      // Gjentatte innsendinger for SAMME brukernavn: kan være søkeren som
+      // prøvde igjen — eller noen som forsøkte å kapre søknaden. Den første
+      // innsendingen er den som gjelder (passordet under er søkerens eget),
+      // men du skal se at det skjedde før du godkjenner.
+      p.resubmit_count > 0 ? h("tr", null, h("td", { colSpan: 7,
+        className: "py-1 pr-3 text-xs text-amber-500" },
+        "⚠ skjemaet er sendt inn " + (p.resubmit_count + 1) + " ganger for dette brukernavnet" +
+        (p.last_attempt_ip ? " (siste fra " + p.last_attempt_ip + " " + p.last_attempt_at + ")" : "") +
+        " — kun den FØRSTE gjelder; bekreft med søkeren hvis du ikke forventet det.")) : null,
+      msg ? h("tr", null, h("td", { colSpan: 7, className: "py-1 pr-3 text-xs text-destructive" }, msg)) : null);
+  }
+
   function BrukerePage() {
     const [tick, setTick] = useState(0);
     const [status, setStatus] = useState(null);
     const [users, setUsers] = useState(null);
+    const [pending, setPending] = useState(null);
     const [err, setErr] = useState(null);
     const reload = () => setTick((t) => t + 1);
 
@@ -219,8 +272,10 @@
         if (!s.bootstrap_required) {
           jfetch("/users").then((d) => alive && setUsers((d && d.users) || []))
             .catch((e) => alive && setErr(String(e)));
+          jfetch("/pending").then((d) => alive && setPending((d && d.pending) || []))
+            .catch(() => alive && setPending([]));
         } else {
-          setUsers([]);
+          setUsers([]); setPending([]);
         }
       }).catch((e) => alive && setErr(String(e)));
       return () => { alive = false; };
@@ -245,7 +300,22 @@
         tile(status.user_count, "brukere"),
         tile(status.active_count, "aktive"),
         tile(status.admin_count, "admin"),
+        tile(status.pending_count != null ? status.pending_count : 0, "søknader"),
         tile(status.gate_active ? "på" : "av (loopback)", "innloggings-gate"))));
+
+    if (!status.bootstrap_required) {
+      const open = pending || [];
+      sections.push(Section({
+        title: "Søknader om tilgang", badge: open.length,
+        badgeTone: open.length ? "destructive" : "outline",
+        sub: "Sendt fra «Registrer deg» på ai.byopus.com. Godkjenning oppretter kontoen med 2FA som KRAV — søkeren må skanne inn authenticator ved første innlogging før de slipper inn. Secreten vises kun for dem, aldri her." },
+        pending === null
+          ? h("p", { className: "text-sm text-muted-foreground" }, "laster …")
+          : open.length === 0
+            ? h("p", { className: "text-sm text-muted-foreground" }, "ingen åpne søknader.")
+            : Table(["bruker", "navn", "e-post", "søkt", "fra IP", "rolle", ""],
+                open.map((p) => h(PendingRow, { key: p.id, item: p, onChanged: reload })))));
+    }
 
     if (status.bootstrap_required) {
       sections.push(Section({ title: "Opprett første bruker (deg)", badgeTone: "outline",
@@ -267,7 +337,9 @@
         h("li", null, "Butikk: users.json (0600) i HERMES_HOME — scrypt-hash, aldri klartekst; signeringssecret genereres ved første bruker."),
         h("li", null, "Innlogging: login-siden viser «Symbiose-bruker»-skjema når dashboardet bindes med auth-gate; i dag (loopback :9119) er alt bak sesjons-tokenet ditt."),
         h("li", null, "Roller: admin administrerer brukere; bruker chatter. Siste aktive admin kan verken deaktiveres eller degraderes."),
-        h("li", null, "Ingen sletting — brukere deaktiveres (husets «vi sletter ingenting»)."),
+        h("li", null, "Selvregistrering (BL-3404): «Registrer deg» på ai.byopus.com lager en SØKNAD, ikke en konto. Passordet søkeren velger hashes med én gang og lagres aldri i klartekst; skjemaet svarer alltid likt, så det ikke kan brukes til å finne ut hvilke brukernavn som finnes."),
+        h("li", null, "2FA er ufravikelig for selvregistrerte: godkjenning lager kontoen med en VENTENDE secret. Første innlogging gir ingen sesjon — kun innrullerings-steget, der søkeren skanner secreten og må taste en gyldig kode. Du ser den aldri."),
+        h("li", null, "Ingen sletting — brukere deaktiveres, søknader avslås (begge står igjen med stempel; husets «vi sletter ingenting»). Et avslag fjerner passord-hashen."),
         h("li", null, "Neste fase (multiuser-planen): per-bruker identitet gjennom adapter/rawmaterial og datalags-scoping (BL-2466) — A7-remodellering er Morten-gatet (BL-2467)."))));
 
     return h("div", { className: "p-4 space-y-4" }, sections);

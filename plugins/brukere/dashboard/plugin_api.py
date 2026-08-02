@@ -28,6 +28,18 @@ from hermes_cli.dashboard_auth import user_store
 router = APIRouter()
 
 
+def _at_time(client_ts: Optional[float]) -> Optional[float]:
+    """Klokke-skew-kompensasjon fra frontend-gaten (.14 har NTP-riktig klokke,
+    .15 driver — chrony når ikke kildene gjennom brannmuren). ±300 s rommer
+    dagens ~2 min skew, men krymper vinduet en kompromittert oppstrøms-caller
+    kunne utnytte (reviewer-funn b1)."""
+    import time as _time
+
+    if client_ts is not None and abs(client_ts - _time.time()) < 300:
+        return float(client_ts)
+    return None
+
+
 def _require_admin(request: Request) -> None:
     """Admin-gate. Loopback-/token-modus (ingen session) = Morten = OK;
     gated modus krever en session hvis bruker har rolle admin i butikken."""
@@ -66,6 +78,7 @@ def status(request: Request):
             user_count=len(users),
             active_count=len(active),
             admin_count=sum(1 for u in active if u["role"] == "admin"),
+            pending_count=len(user_store.list_pending()),
         )
     return out
 
@@ -216,19 +229,123 @@ def login_check(body: LoginCheckIn, request: Request):
     noe skulle gå galt oppstrøms).
     """
     _require_admin(request)
-    import time as _time
-
-    # ±300 s: rommer dagens ~2 min skew med margin, men krymper vinduet en
-    # kompromittert oppstrøms-caller kunne utnytte (reviewer-funn b1).
-    at_time = None
-    if body.client_ts is not None and abs(body.client_ts - _time.time()) < 300:
-        at_time = float(body.client_ts)
-    user = user_store.verify_login(
+    at_time = _at_time(body.client_ts)
+    res = user_store.verify_login_ex(
         body.username, body.password, body.code, at_time=at_time
     )
-    if user is None:
+    if res["status"] == "ok":
+        return {"ok": True, "user": res["user"]}
+    if res["status"] == "enroll":
+        # BL-3404: passordet stemmer, men 2FA er ikke innrullert ennå.
+        # ``ok`` er FALSE med vilje — en gate som ikke kjenner innrullerings-
+        # steget nekter da innlogging (fail-lukket) i stedet for å slippe
+        # inn en konto uten andre faktor. Den nye gaten leser ``enroll``.
+        return {"ok": False, "enroll": res["enroll"],
+                "user": res["user"], "reason": "totp_enrollment_required"}
+    return {"ok": False}
+
+
+class EnrollIn(BaseModel):
+    username: str
+    code: str
+    client_ts: Optional[float] = None
+
+
+@router.post("/enroll-totp")
+def enroll_totp(body: EnrollIn, request: Request):
+    """Fullfør 2FA-innrulleringen for en godkjent søker (BL-3404).
+
+    Kalles av frontend-gaten rett etter at brukeren har skannet secreten og
+    tastet en kode. Virker KUN i den ene tilstanden «ventende secret, ingen
+    ekte ennå» — etterpå er ruta død for den brukeren, og innlogging krever
+    passord + kode som for alle andre.
+    """
+    _require_admin(request)
+    ok = user_store.enroll_totp(
+        body.username, body.code, at_time=_at_time(body.client_ts)
+    )
+    if not ok:
         return {"ok": False}
+    return {"ok": True, "user": user_store.get_public_user(body.username)}
+
+
+# ── BL-3404: selvregistrering på frontend-flaten, godkjent her ──────────────
+
+
+class RegisterIn(BaseModel):
+    username: str
+    password: str
+    display_name: str = ""
+    email: str = ""
+    source_ip: str = ""
+
+
+@router.post("/register-request")
+def register_request(body: RegisterIn, request: Request):
+    """Ta imot en søknad fra ai.byopus.com (server-til-server over tunnelen).
+
+    Svaret er ALLTID ``{"ok": true}``. Skjemaet skal ikke kunne brukes til å
+    finne ut hvilke brukernavn som finnes — avvisninger (ugyldig/reservert
+    navn, full kø) skjer stille og lander ikke i køen. Passordet hashes i
+    denne requesten og forlater aldri butikken i klartekst.
+    """
+    _require_admin(request)
+    user_store.add_pending(
+        username=body.username,
+        password=body.password,
+        display_name=body.display_name,
+        email=body.email,
+        source_ip=body.source_ip,
+    )
+    return {"ok": True}
+
+
+@router.get("/pending")
+def get_pending(request: Request, include_closed: bool = False):
+    _require_admin(request)
+    return {"pending": user_store.list_pending(include_closed=include_closed)}
+
+
+class ApproveIn(BaseModel):
+    role: str = "user"
+
+
+@router.post("/pending/{pid}/approve")
+def approve(pid: str, body: ApproveIn, request: Request):
+    """Godkjenn søknad → bruker opprettes med 2FA som ventende krav.
+
+    2FA-secreten returneres bevisst IKKE hit: den skal til søkerens egen
+    authenticator ved første innlogging. Du godkjenner personen, du
+    håndterer ikke hemmeligheten.
+    """
+    _require_admin(request)
+    session = getattr(request.state, "session", None)
+    by = getattr(session, "user_id", "") if session else "morten@loopback"
+    try:
+        user = user_store.approve_pending(pid, approved_by=by, role=body.role)
+    except KeyError as exc:
+        raise HTTPException(status_code=404, detail=str(exc))
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc))
     return {"ok": True, "user": user}
+
+
+class RejectIn(BaseModel):
+    reason: str = ""
+
+
+@router.post("/pending/{pid}/reject")
+def reject(pid: str, body: RejectIn, request: Request):
+    _require_admin(request)
+    session = getattr(request.state, "session", None)
+    by = getattr(session, "user_id", "") if session else "morten@loopback"
+    try:
+        rec = user_store.reject_pending(pid, rejected_by=by, reason=body.reason)
+    except KeyError as exc:
+        raise HTTPException(status_code=404, detail=str(exc))
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc))
+    return {"ok": True, "pending": rec}
 
 
 @router.get("/user-active/{username}")
