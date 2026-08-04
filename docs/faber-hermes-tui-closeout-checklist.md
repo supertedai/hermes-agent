@@ -131,11 +131,35 @@ Et punkt kan bare merkes `[x]` når implementasjon, relevant test, autoritativ r
 
 ### C. Postcommit og læring
 
-- [ ] **Reell Faber-landed postcommit**
-  - Done når én faktisk Faber-jobb har verifisert:
-    `commit_closer → Brain/Change Log → selfstate → readback → smoke → rollback`.
-- [ ] **Før/etter-læringsmåling**
-  - Done når baseline, endring, etter-måling, konfidens og valideringsstatus er lagret med commit/goal-link.
+- [x] **Reell Faber-landed postcommit** — LUKKET (`f7ee57a89`, BL-3684)
+  - `PostcommitLoop` har alltid kunnet kjøre kjeden; det som manglet var én ekte implementasjon av
+    de sju callbackene. Kjeden hadde derfor bare noen gang kjørt mot test-fixtures.
+    `agent/faber_postcommit_adapters.py` lukker det hullet.
+  - Kjørt for ekte på landet commit `0787027db` → `success=True`, `missing=()`,
+    **`DefinitionOfDone: PASS`**, med reell evidens per steg:
+    - `commit_closer`: closure recorded, nåbar fra HEAD, 2 filer
+    - `brain_change_log`: `docs/FABER_CHANGE_LOG.md` ← `0787027db`
+    - `selfstate`: recorded (`hermes.local`)
+    - `readback`: bekrefter closure + selfstate + change_log
+    - `runtime_smoke`: importerte modulen commiten rørte
+    - `rollback`: `git revert 0787027db` reverserer rent
+    - `tests`: 10 passed
+  - **Omfang, sagt og ikke antydet:** adapterne er Hermes-lokale. `selfstate` skriver under
+    `HERMES_HOME` og skriver IKKE til Symbiose-grafen — den har én skrivegate på `.13`, og en
+    skriver nummer to fra `.15` ville laget nettopp de ulenkede fakta gaten finnes for å hindre.
+    `brain_change_log` skriver Fabers egen endringslogg, ikke Mortens Obsidian-vault.
+  - Hvert steg feiler LUKKET (tom streng ⇒ `DefinitionOfDone` nekter landingen). `commit_closer`
+    krever at commiten er NÅBAR fra HEAD — å eksistere er ikke å ha landet.
+  - Sol Review PASS · Sol PASS. 10 målrettede tester. Rollback: `git revert f7ee57a89`.
+- [x] **Før/etter-læringsmåling** — LUKKET (`f7ee57a89`, BL-3684)
+  - `record_learning()` krever navngitt metrikk, begge målinger, metode, konfidens og
+    commit/goal-link, og **utleder** status fra tallene i stedet for å ta den på ordet. Identisk
+    før/etter gir `inconclusive`, aldri `confirmed` — det er der en læringspåstand er lettest å
+    fremsette og vanskeligst å begrunne.
+  - Første ekte event:
+    `metric=canonical_memory_layers_with_explicit_status_and_reason`, baseline `0` → etter `20`,
+    `status=confirmed`, konfidens `0.95`, `goal_id=faber.code.closeout.B1B2`, commit `0787027db`.
+    Baseline etablert med `git cat-file` (modulen fantes ikke i `0787027db^`), ikke antatt.
 - [ ] **Workflow-/skill-effekt**
   - Done når læringen viser målbar effekt på en senere coding-turn, eller eksplisitt blir tilbakevist.
 - [ ] **Læring injisert tilbake i Hermes TUI**
