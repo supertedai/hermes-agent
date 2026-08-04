@@ -147,13 +147,18 @@ def test_preflight_clear_is_not_called_runnable(tmp_path):
 def test_cli_blocks_when_no_registry_can_be_resolved(monkeypatch, capsys):
     monkeypatch.delenv("HERMES_HOME", raising=False)
     assert _cli([]) == 2
-    assert json.loads(capsys.readouterr().out)["status"] == "BLOCK"
+    captured = capsys.readouterr()
+    # On stderr, because a scheduled caller discards stdout — a BLOCK there is silent.
+    assert captured.out == ""
+    assert json.loads(captured.err)["status"] == "BLOCK"
 
 
 def test_cli_blocks_on_a_missing_registry_instead_of_reporting_zero(tmp_path, monkeypatch, capsys):
     monkeypatch.setenv("HERMES_HOME", str(tmp_path))   # no faber/goals.json under it
     assert _cli([]) == 2
-    out = json.loads(capsys.readouterr().out)
+    captured = capsys.readouterr()
+    assert captured.out == ""
+    out = json.loads(captured.err)
     assert out["status"] == "BLOCK"
     assert "does not exist" in out["reasons"][0]
 

@@ -19,6 +19,7 @@ import argparse
 import json
 import os
 import subprocess
+import sys
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from pathlib import Path
@@ -230,25 +231,28 @@ def _cli(argv: Sequence[str] | None = None) -> int:
     parser.add_argument("--record", help="Write the readback here (a .jsonl trail is kept alongside)")
     parser.add_argument("--repo", action="append", default=[], metavar="GOAL_ID=PATH",
                         help="Measure git cleanliness for a goal's target tree (repeatable)")
+    def block(*reasons: str) -> int:
+        # stderr, not stdout: a scheduled caller sends stdout to /dev/null because
+        # --record already persists the readback, so a BLOCK printed to stdout is a
+        # silent failure -- exactly the absence this module exists to remove.
+        print(json.dumps({"status": "BLOCK", "reasons": list(reasons)}, ensure_ascii=False), file=sys.stderr)
+        return 2
+
     args = parser.parse_args(argv)
     home = os.environ.get("HERMES_HOME", "").strip()
     registry_path = args.registry or (os.path.join(home, "faber", "goals.json") if home else "")
     if not registry_path:
-        print(json.dumps({"status": "BLOCK", "reasons": [
-            "no registry: pass --registry, or set HERMES_HOME (several Hermes profiles exist)"]}))
-        return 2
+        return block("no registry: pass --registry, or set HERMES_HOME (several Hermes profiles exist)")
     registry_path = os.path.expanduser(registry_path)
     # Reporting "0 goals" for a path that is not there is the silent absence this
     # module exists to remove, so a missing registry is a BLOCK, not an empty run.
     if not os.path.exists(registry_path):
-        print(json.dumps({"status": "BLOCK", "reasons": [f"registry does not exist: {registry_path}"]}))
-        return 2
+        return block(f"registry does not exist: {registry_path}")
     repo_paths = {}
     for item in args.repo:
         goal_id, _, path = item.partition("=")
         if not goal_id or not path:
-            print(json.dumps({"status": "BLOCK", "reasons": [f"--repo expects GOAL_ID=PATH, got {item!r}"]}))
-            return 2
+            return block(f"--repo expects GOAL_ID=PATH, got {item!r}")
         repo_paths[goal_id] = path
     result = observe(FaberGoalRegistry(registry_path), repo_paths=repo_paths)
     if args.record:
