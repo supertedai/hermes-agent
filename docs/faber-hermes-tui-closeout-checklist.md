@@ -91,11 +91,41 @@ Et punkt kan bare merkes `[x]` når implementasjon, relevant test, autoritativ r
 
 ### B. Minne — 20-lags kontrakt
 
-- [ ] **20-lags profile-readback**
-  - Done når alle 20 lag har eksplisitt status: `usable`, `empty`, `blind` eller `excluded`, med reader og årsak.
-  - `20/20 selected` alene er ikke nok.
-- [ ] **Per-turn memory provenance**
-  - Done når Faber-readback viser valgt scope, inkluderte lag, ekskluderte lag, tokenbudsjett og ingen silent drop.
+- [x] **20-lags profile-readback** — LUKKET, live-målt (`0787027db`, BL-3664)
+  - `agent/faber_memory_readback.py` rapporterer ALLE 20 kanoniske lag i hver readback, med
+    substrat-tilstand, reader, antall instanser og årsak.
+  - Readbacken skiller to spørsmål som stadig blandes: (1) *holder laget noe for denne
+    prinsipalen* (autoritativ Symbiose-måling) og (2) *ble det lest denne turen* (planleggerens
+    valg under tokenbudsjett). Et målt lag som ikke ble lest er `budget_crowded_out` — ikke tomt,
+    ikke blindt.
+  - `blind`, `absent`, `no_principal`, `pending_link` og `unreported_by_authority` holdes
+    adskilt; de flates aldri sammen. Uåpnbar status-API gir `unreachable` for alle 20, aldri
+    `usable`.
+  - Live-målt mot `:8010/api/v1/memory/layers`:
+    - `morten`: `principal_exists=true`, **usable 7/20**, lest 7/20, 1792/1800 tokens —
+      `{selected:4, blind:10, pending_link:1, budget_crowded_out:3, absent:2}`
+    - `faber`: **`principal_exists=false`**, **usable 0/20**, lest 7/20 —
+      `{no_principal:7, blind:11, absent:2}`
+  - Sol Review PASS · Sol PASS. 10 målrettede tester. Rollback: `git revert 0787027db`.
+- [x] **Per-turn memory provenance** — LUKKET (`0787027db`, BL-3664)
+  - Readbacken viser scope (prinsipal + fase), inkluderte og ekskluderte lag, tokenbudsjett og
+    estimert forbruk.
+  - Ingen silent drop: test beviser at `selected ∪ excluded` er nøyaktig det kanoniske registeret
+    og at snittet er tomt — et lag kan ikke forsvinne ut av en readback.
+
+### B-funn som IKKE er lukket (avdekket av readbacken over)
+
+- [ ] **Planleggeren er blind for substrat-tilstand**
+  - Den velger på prioritet/ferskhet/kostnad, ikke på om laget kan levere noe.
+  - Målt for `morten`: 3 av 7 slots brennes på lag som ikke leverer, mens 3 lag som HAR innhold
+    blir budsjett-fortrengt.
+  - Målt for `faber`: 7 lag leses bak en prinsipal som ikke finnes.
+  - Done når valget tar substrat-tilstand som input, eller når det er dokumentert hvorfor ikke.
+- [ ] **`faber` mangler prinsipal i den autoritative minneflaten**
+  - Hermes-GUI viser «12/20 lag» for faber; `:8010/api/v1/memory/layers?user=faber` sier
+    `principal_exists=false` og 0 målte lag. To kilder er uenige om samme spørsmål.
+  - Done når det er avgjort hvilken som er autoritativ, og den andre enten samstemmer eller
+    slutter å påstå et tall.
 - [ ] **Validert memory write/promotion**
   - Done når commit/runtime-resultat bare promoteres til riktig minnelag etter owner-, provenance- og kvalitetssjekk.
 
