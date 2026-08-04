@@ -1734,6 +1734,57 @@ def init_agent(
     from agent.memory_manager import inject_memory_provider_tools as _inject_memory_provider_tools
     _inject_memory_provider_tools(agent)
 
+    # Attach the Code/Faber scheduler bridge to the canonical MemoryManager
+    # only. The bridge observes the authoritative 20-layer registry and
+    # lifecycle; it does not create storage or replace provider retrieval.
+    agent._memory_scheduler_bridge = None
+    if agent._memory_manager is not None:
+        try:
+            from agent.continuous_pipeline import (
+                CANONICAL_MEMORY_LAYER_IDS,
+                MemoryLayerSpec,
+                MemoryManagerBridge,
+                MemoryScheduler,
+            )
+            _canonical_specs = tuple(
+                MemoryLayerSpec(layer_id, "symbiose.canonical")
+                for layer_id in CANONICAL_MEMORY_LAYER_IDS
+            )
+            agent._memory_scheduler_bridge = MemoryManagerBridge(
+                agent._memory_manager,
+                MemoryScheduler(_canonical_specs, require_canonical=True),
+            )
+        except Exception as _scheduler_err:
+            _ra().logger.error("Memory scheduler bridge unavailable; refusing ungated memory runtime: %s", _scheduler_err)
+            raise RuntimeError("Memory scheduler bridge initialization failed") from _scheduler_err
+
+    # Code/faber pipeline wake is deliberately read-only. It records that a
+    # primary Hermes runtime opened, but does not create a second memory store,
+    # start a scheduler thread, or authorize an action. The existing
+    # MemoryManager/MemoryProvider remains the canonical memory lifecycle.
+    agent._code_runtime_wake = None
+    if not skip_memory:
+        try:
+            from agent.continuous_pipeline import runtime_open as _runtime_open
+            agent._code_runtime_wake = _runtime_open()
+        except Exception as _wake_err:
+            _ra().logger.debug("Code runtime wake unavailable: %s", _wake_err)
+
+    # Faber runtime binding is explicit and fail-closed: initialization cannot
+    # silently downgrade the production agent to an ungated workflow.
+    agent._faber_runtime = None
+    try:
+        from agent.code_workflow import FaberGoalRegistry, HandoffStore
+        from agent.faber_runtime import FaberRuntime
+        _faber_state_dir = os.path.join(str(get_hermes_home()), "faber")
+        agent._faber_runtime = FaberRuntime(
+            goal_registry=FaberGoalRegistry(os.path.join(_faber_state_dir, "goals.json")),
+            handoff_store=HandoffStore(os.path.join(_faber_state_dir, "handoff.json")),
+        )
+    except Exception as _faber_err:
+        _ra().logger.error("Faber governed runtime unavailable; refusing silent downgrade: %s", _faber_err)
+        raise RuntimeError("Faber governed runtime initialization failed") from _faber_err
+
     # Skills config: nudge interval for skill creation reminders
     agent._skill_nudge_interval = 10
     try:
