@@ -237,6 +237,27 @@ def _(rid, params: dict) -> dict:
         session["last_active"] = time.time()
         _start_inflight_turn(session, text)
 
+    # BL-3618: governed Faber coding-ingress. Every coding-relevant turn is
+    # stamped with a provenance envelope (trace_id/goal_id/owner/surface) and an
+    # explicit consent + injection-gate readback before it can reach Faber.
+    # The ingest side fails CLOSED (no gate evidence is never a pass); the CHAT
+    # side fails open on purpose — an ingest-surface fault must not take the
+    # user's conversation down with it. Making Faber the only authoritative code
+    # runtime is a separate, enactment-gated change, not this one.
+    # Placed ABOVE the compute-host branch on purpose: that branch RETURNS for an
+    # isolated turn, so a hook below it would silently stop covering every session
+    # the moment turn_isolation is switched on — a gate that quietly stops gating.
+    try:
+        from agent.faber_coding_ingress import record_coding_turn
+
+        record_coding_turn(
+            text if isinstance(text, str) else "",
+            session_key=str(session.get("session_key") or ""),
+            session_id=sid,
+            turn_index=len(session.get("history", []) or []),
+        )
+    except Exception:
+        logger.debug("faber coding-ingress record failed", exc_info=True)
     if turn_isolation:
         isolated_response = _submit_prompt_to_compute_host(rid, sid, session, text)
         if not isolated_response.get("error"):
@@ -274,24 +295,6 @@ def _(rid, params: dict) -> dict:
             5071,
             f"session storage could not be written: {exc}",
         )
-    # BL-3618: governed Faber coding-ingress. Every coding-relevant turn is
-    # stamped with a provenance envelope (trace_id/goal_id/owner/surface) and an
-    # explicit consent + injection-gate readback before it can reach Faber.
-    # The ingest side fails CLOSED (no gate evidence is never a pass); the CHAT
-    # side fails open on purpose — an ingest-surface fault must not take the
-    # user's conversation down with it. Making Faber the only authoritative code
-    # runtime is a separate, enactment-gated change, not this one.
-    try:
-        from agent.faber_coding_ingress import record_coding_turn
-
-        record_coding_turn(
-            text if isinstance(text, str) else "",
-            session_key=str(session.get("session_key") or ""),
-            session_id=sid,
-            turn_index=len(session.get("history", []) or []),
-        )
-    except Exception:
-        logger.debug("faber coding-ingress record failed", exc_info=True)
     _start_agent_build(sid, session)
 
     def run_after_agent_ready() -> None:
