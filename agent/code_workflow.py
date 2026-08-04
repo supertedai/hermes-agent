@@ -121,7 +121,8 @@ class FaberGoalRegistry:
     def __init__(self, path: str | os.PathLike[str] | None = None):
         self.path = Path(path).expanduser() if path else None
         self._goals: dict[str, FaberGoal] = {}
-        self._disk_sig: tuple[int, int] | None = None
+        self._disk_sig: tuple[int, int, int] | None = None
+        self._last_load_ok = True
         if self.path:
             self._load()
 
@@ -132,6 +133,10 @@ class FaberGoalRegistry:
         whole session, so without this a session that started before a goal was
         promoted would never see it — the backlog would appear empty until the
         runtime was restarted, and restarting is not a step this layer may take.
+
+        The signature is taken BEFORE the read and stamped from that same stat:
+        stamping a fresh stat afterwards would pin content read a moment earlier
+        against a newer file, and the session would never refresh again.
         """
         if self.path is None:
             return
@@ -139,11 +144,16 @@ class FaberGoalRegistry:
             stat = self.path.stat()
         except OSError:
             return
-        signature = (stat.st_mtime_ns, stat.st_size)
+        signature = (stat.st_mtime_ns, stat.st_size, stat.st_ino)
         if signature == self._disk_sig:
             return
-        self._goals = {}
-        self._load()
+        previous = self._goals
+        self._load(signature=signature)
+        # A transient unreadable file must not silently empty a live backlog:
+        # reporting zero goals is the absence this class exists to prevent.
+        if not self._goals and previous and not self._last_load_ok:
+            self._goals = previous
+            self._disk_sig = None
 
     def put(self, goal: FaberGoal) -> FaberGoal:
         self.put_all([goal])
@@ -246,7 +256,7 @@ class FaberGoalRegistry:
                 )
 
     def _stamp_disk_signature(self) -> None:
-        """Record the on-disk identity of the state we just wrote or read."""
+        """Record the on-disk identity of the state we just wrote."""
         if self.path is None:
             self._disk_sig = None
             return
@@ -255,7 +265,7 @@ class FaberGoalRegistry:
         except OSError:
             self._disk_sig = None
             return
-        self._disk_sig = (stat.st_mtime_ns, stat.st_size)
+        self._disk_sig = (stat.st_mtime_ns, stat.st_size, stat.st_ino)
 
     def _read_disk_goals(self) -> dict[str, FaberGoal]:
         """Read the persisted goals, refusing to silently drop unreadable state.
@@ -318,9 +328,10 @@ class FaberGoalRegistry:
         )
         return goal if goal.owner == "faber" and goal.projection == "code" else None
 
-    def _load(self) -> None:
+    def _load(self, *, signature: tuple[int, int, int] | None = None) -> None:
         if self.path is None or not self.path.exists():
             return
+        self._last_load_ok = False
         try:
             payload = json.loads(self.path.read_text(encoding="utf-8"))
             loaded: dict[str, FaberGoal] = {}
@@ -329,9 +340,13 @@ class FaberGoalRegistry:
                 if goal is not None:
                     loaded[goal.goal_id] = goal
             self._goals = loaded
+            self._last_load_ok = True
         except (OSError, ValueError, TypeError, KeyError, json.JSONDecodeError):
             self._goals = {}
-        self._stamp_disk_signature()
+        if signature is not None:
+            self._disk_sig = signature
+        else:
+            self._stamp_disk_signature()
 
 
 @dataclass(frozen=True)
@@ -536,6 +551,20 @@ class GovernedRunResult:
 _SELF_CLEARING_GATES = frozenset({"", "autonomt", "reviewer"})
 
 
+def owner_gate_block(goal: FaberGoal) -> str:
+    """Return the owner gate holding *goal*, or "" when none does.
+
+    Single source for the rule so a reader (the observe tick) and the runner can
+    never disagree about whether a goal is free to advance.
+    """
+    gate = str(goal.evidence.get("gate", "")).strip().lower()
+    if gate in _SELF_CLEARING_GATES:
+        return ""
+    if str(goal.evidence.get("owner_approval", "")).strip():
+        return ""
+    return gate
+
+
 class GovernedCodeRunner:
     """Single fail-closed runner for Faber's Code workflow.
 
@@ -571,8 +600,8 @@ class GovernedCodeRunner:
 
         if preflight.status is not PreflightStatus.PASS:
             return blocked(goal, "; ".join(preflight.reasons), "preflight", "refresh source evidence")
-        owner_gate = str(goal.evidence.get("gate", "")).strip().lower()
-        if owner_gate not in _SELF_CLEARING_GATES and not str(goal.evidence.get("owner_approval", "")).strip():
+        owner_gate = owner_gate_block(goal)
+        if owner_gate:
             return blocked(
                 goal,
                 f"owner gate '{owner_gate}' requires an explicit recorded decision",

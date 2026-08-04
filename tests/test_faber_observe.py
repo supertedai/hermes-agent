@@ -3,7 +3,7 @@ import json
 import pytest
 
 from agent.code_workflow import FaberGoal, FaberGoalRegistry, GoalState
-from agent.faber_observe import evidence_for, git_is_clean, observe, observe_goal, record
+from agent.faber_observe import _cli, evidence_for, git_is_clean, observe, observe_goal, record
 from agent.flyby_promote import build_goal, load_manifest, promote
 
 from tests.test_flyby_promote import MANIFEST, packet
@@ -20,7 +20,7 @@ def test_observe_reports_what_each_goal_waits_for(tmp_path):
     promote([packet()], registry, promoted_by="x")
     result = observe(registry)
     assert result.goals == 1
-    assert result.runnable == 0
+    assert result.preflight_clear == 0
     obs = result.observations[0]
     assert obs.preflight == "BLOCK"
     assert obs.stopped_by == "preflight"
@@ -47,7 +47,7 @@ def test_observe_names_the_owner_gate_once_preflight_would_pass(tmp_path):
     assert obs.stopped_by in {"preflight", "owner_gate"}
 
 
-def test_an_owner_approved_goal_with_full_evidence_is_reported_runnable(tmp_path, monkeypatch):
+def test_an_owner_approved_goal_with_full_evidence_clears_preflight(tmp_path, monkeypatch):
     monkeypatch.setattr("agent.faber_observe.git_is_clean", lambda repo: True)
     registry = FaberGoalRegistry(tmp_path / "goals.json")
     registry.put(
@@ -63,7 +63,7 @@ def test_an_owner_approved_goal_with_full_evidence_is_reported_runnable(tmp_path
         )
     )
     result = observe(registry, repo_paths={"faber.code.flyby:x": str(tmp_path)})
-    assert result.runnable == 1
+    assert result.preflight_clear == 1
     assert result.observations[0].stopped_by == "none"
 
 
@@ -104,7 +104,66 @@ def test_record_keeps_a_trail_and_a_latest_readback(tmp_path):
     record(observe(registry), target)
     record(observe(registry), target)
     assert json.loads(target.read_text(encoding="utf-8"))["goals"] == 1
-    assert len(target.with_suffix(".jsonl").read_text(encoding="utf-8").strip().splitlines()) == 2
+    trail = tmp_path / "observe-last.trail.jsonl"
+    assert len(trail.read_text(encoding="utf-8").strip().splitlines()) == 2
+
+
+def test_a_jsonl_target_does_not_truncate_its_own_trail(tmp_path):
+    """with_suffix('.jsonl') on a .jsonl path returns the same file, so the
+    readback write would erase the append that just happened."""
+    registry = FaberGoalRegistry(tmp_path / "goals.json")
+    promote([packet()], registry, promoted_by="x")
+    target = tmp_path / "observe.jsonl"
+    record(observe(registry), target)
+    record(observe(registry), target)
+    trail = tmp_path / "observe.trail.jsonl"
+    assert trail != target
+    assert len(trail.read_text(encoding="utf-8").strip().splitlines()) == 2
+
+
+def test_the_trail_is_bounded(tmp_path, monkeypatch):
+    monkeypatch.setattr("agent.faber_observe.TRAIL_LIMIT", 3)
+    registry = FaberGoalRegistry(tmp_path / "goals.json")
+    promote([packet()], registry, promoted_by="x")
+    target = tmp_path / "observe-last.json"
+    for _ in range(6):
+        record(observe(registry), target)
+    trail = tmp_path / "observe-last.trail.jsonl"
+    assert len(trail.read_text(encoding="utf-8").strip().splitlines()) == 3
+
+
+def test_preflight_clear_is_not_called_runnable(tmp_path):
+    """Clearing preflight and the owner gate is necessary, not sufficient — the
+    runner still has build, review and landing gates the tick cannot know."""
+    registry = FaberGoalRegistry(tmp_path / "goals.json")
+    promote([packet()], registry, promoted_by="x")
+    payload = observe(registry).to_json()
+    assert "preflight_clear" in payload and "runnable" not in payload
+    assert "still has the runner" in payload["action_taken"]
+
+
+# --- the CLI must never report an empty backlog it did not measure ------------
+
+def test_cli_blocks_when_no_registry_can_be_resolved(monkeypatch, capsys):
+    monkeypatch.delenv("HERMES_HOME", raising=False)
+    assert _cli([]) == 2
+    assert json.loads(capsys.readouterr().out)["status"] == "BLOCK"
+
+
+def test_cli_blocks_on_a_missing_registry_instead_of_reporting_zero(tmp_path, monkeypatch, capsys):
+    monkeypatch.setenv("HERMES_HOME", str(tmp_path))   # no faber/goals.json under it
+    assert _cli([]) == 2
+    out = json.loads(capsys.readouterr().out)
+    assert out["status"] == "BLOCK"
+    assert "does not exist" in out["reasons"][0]
+
+
+def test_cli_reads_the_real_registry_from_hermes_home(tmp_path, monkeypatch, capsys):
+    registry = tmp_path / "faber" / "goals.json"
+    promote([packet()], FaberGoalRegistry(registry), promoted_by="x")
+    monkeypatch.setenv("HERMES_HOME", str(tmp_path))
+    assert _cli([]) == 0
+    assert json.loads(capsys.readouterr().out)["goals"] == 1
 
 
 def test_the_whole_promoted_backlog_is_observable(tmp_path):
@@ -113,8 +172,9 @@ def test_the_whole_promoted_backlog_is_observable(tmp_path):
     promote(packets, registry, promoted_by=promoted_by)
     result = observe(registry)
     assert result.goals == 7
-    assert result.runnable == 0
+    assert result.preflight_clear == 0
     assert all(o.stopped_by == "preflight" for o in result.observations)
+    assert result.preflight_clear == 0
     assert {o.bl_ref for o in result.observations} == {f"BL-{n}" for n in range(3633, 3640)}
 
 
@@ -139,6 +199,26 @@ def test_reload_reflects_removals_not_just_additions(tmp_path):
     assert len(session.all()) == 1
     path.write_text("[]", encoding="utf-8")
     assert session.all() == ()
+
+
+def test_a_transiently_unreadable_file_does_not_empty_a_live_backlog(tmp_path):
+    """Going blind mid-session is the same silent absence the reload fixes; the
+    write path already raises rather than overwrite, and the read path keeps
+    the last good snapshot rather than report zero."""
+    path = tmp_path / "goals.json"
+    promote([packet()], FaberGoalRegistry(path), promoted_by="x")
+    session = FaberGoalRegistry(path)
+    assert len(session.all()) == 1
+    good = path.read_text(encoding="utf-8")
+    path.write_text("{ truncated mid-write", encoding="utf-8")
+    assert [g.goal_id for g in session.all()] == ["faber.code.flyby:example"]
+    # Writing THROUGH a corrupt registry is separately refused, by design.
+    with pytest.raises(ValueError, match="unreadable goal registry"):
+        promote([packet(slug="b")], FaberGoalRegistry(path), promoted_by="x")
+    # ...and the session picks the file back up once it is whole again.
+    path.write_text(good, encoding="utf-8")
+    promote([packet(slug="b")], FaberGoalRegistry(path), promoted_by="x")
+    assert len(session.all()) == 2
 
 
 def test_reload_does_not_resurrect_state_the_session_itself_wrote(tmp_path):

@@ -25,12 +25,12 @@ from pathlib import Path
 from typing import Any, Mapping, Sequence
 
 from agent.code_workflow import (
-    _SELF_CLEARING_GATES,
     FaberGoal,
     FaberGoalRegistry,
     PreflightGate,
     PreflightInput,
     PreflightStatus,
+    owner_gate_block,
 )
 
 #: Statuses PreflightGate treats as actionable.  Mirrored here only to explain a
@@ -57,7 +57,7 @@ class ObserveResult:
     observed_at: str
     registry: str
     goals: int
-    runnable: int
+    preflight_clear: int
     observations: tuple[GoalObservation, ...] = field(default_factory=tuple)
 
     def to_json(self) -> dict[str, Any]:
@@ -65,11 +65,16 @@ class ObserveResult:
             "observed_at": self.observed_at,
             "registry": self.registry,
             "goals": self.goals,
-            "runnable": self.runnable,
+            # NOT "runnable": clearing preflight and the owner gate is necessary,
+            # not sufficient. GovernedCodeRunner additionally requires test
+            # evidence, a matching reviewer diff_id, a reviewer PASS and complete
+            # prelanding DoD evidence, none of which this tick can know.
+            "preflight_clear": self.preflight_clear,
             "action_taken": (
                 "Read the governed backlog and evaluated preflight and the owner gate. "
                 "No build, review, commit, landing, ACT, or service start was attempted — "
-                "this tick has no capability to perform any of them."
+                "this tick has no capability to perform any of them. A goal counted in "
+                "preflight_clear still has the runner's build/review/landing gates ahead of it."
             ),
             "observations": [
                 {
@@ -146,21 +151,19 @@ def evidence_for(goal: FaberGoal, *, git_clean: bool) -> PreflightInput:
 def observe_goal(goal: FaberGoal, *, git_clean: bool, gate: PreflightGate) -> GoalObservation:
     """Evaluate one goal without touching it."""
     result = gate.evaluate(evidence_for(goal, git_clean=git_clean))
-    owner_gate = str(goal.evidence.get("gate", "")).strip().lower()
-    needs_owner = (
-        owner_gate not in _SELF_CLEARING_GATES
-        and not str(goal.evidence.get("owner_approval", "")).strip()
-    )
+    # The runner's own predicate, imported rather than restated: a copy here
+    # would silently diverge the moment the runner grows a condition.
+    held_by = owner_gate_block(goal)
     if result.status is not PreflightStatus.PASS:
         stopped_by = "preflight"
-    elif needs_owner:
+    elif held_by:
         stopped_by = "owner_gate"
     else:
         stopped_by = "none"
     return GoalObservation(
         goal_id=goal.goal_id,
         bl_ref=goal.bl_ref,
-        gate=owner_gate or "(unset)",
+        gate=str(goal.evidence.get("gate", "")).strip().lower() or "(unset)",
         state=goal.state.value,
         preflight=result.status.value,
         stopped_by=stopped_by,
@@ -187,18 +190,31 @@ def observe(
         observed_at=_now(),
         registry=str(registry.path) if registry.path else "(memory)",
         goals=len(observations),
-        runnable=sum(1 for o in observations if o.stopped_by == "none"),
+        preflight_clear=sum(1 for o in observations if o.stopped_by == "none"),
         observations=tuple(observations),
     )
 
 
+#: Ticks kept in the trail.  Bounded before anything schedules this, per BL-813:
+#: an append-only file a timer writes to is unbounded by construction.
+TRAIL_LIMIT = 500
+
+
 def record(result: ObserveResult, path: str | os.PathLike[str]) -> Path:
-    """Append the tick to a durable trail and refresh the latest readback."""
+    """Append the tick to a bounded trail and refresh the latest readback."""
     target = Path(path).expanduser()
+    # A ".jsonl" target would make with_suffix() return the same path, so the
+    # readback write would truncate the trail it had just appended to.
+    trail = target.with_name(target.stem + ".trail.jsonl")
     target.parent.mkdir(parents=True, exist_ok=True)
-    payload = json.dumps(result.to_json(), ensure_ascii=False)
-    with open(target.with_suffix(".jsonl"), "a", encoding="utf-8") as handle:
-        handle.write(payload + "\n")
+    with open(trail, "a", encoding="utf-8") as handle:
+        handle.write(json.dumps(result.to_json(), ensure_ascii=False) + "\n")
+    try:
+        lines = trail.read_text(encoding="utf-8").splitlines()
+        if len(lines) > TRAIL_LIMIT:
+            trail.write_text("\n".join(lines[-TRAIL_LIMIT:]) + "\n", encoding="utf-8")
+    except OSError:
+        pass
     target.write_text(json.dumps(result.to_json(), ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
     return target
 
@@ -209,16 +225,23 @@ def _cli(argv: Sequence[str] | None = None) -> int:
     )
     parser.add_argument(
         "--registry",
-        default=os.path.join(os.environ.get("HERMES_HOME", ""), "faber", "goals.json"),
         help="Faber goal registry (default: $HERMES_HOME/faber/goals.json)",
     )
     parser.add_argument("--record", help="Write the readback here (a .jsonl trail is kept alongside)")
     parser.add_argument("--repo", action="append", default=[], metavar="GOAL_ID=PATH",
                         help="Measure git cleanliness for a goal's target tree (repeatable)")
     args = parser.parse_args(argv)
-    registry_path = args.registry
-    if not registry_path or registry_path.startswith(os.sep + "faber"):
-        print(json.dumps({"status": "BLOCK", "reasons": ["--registry is required (HERMES_HOME is unset)"]}))
+    home = os.environ.get("HERMES_HOME", "").strip()
+    registry_path = args.registry or (os.path.join(home, "faber", "goals.json") if home else "")
+    if not registry_path:
+        print(json.dumps({"status": "BLOCK", "reasons": [
+            "no registry: pass --registry, or set HERMES_HOME (several Hermes profiles exist)"]}))
+        return 2
+    registry_path = os.path.expanduser(registry_path)
+    # Reporting "0 goals" for a path that is not there is the silent absence this
+    # module exists to remove, so a missing registry is a BLOCK, not an empty run.
+    if not os.path.exists(registry_path):
+        print(json.dumps({"status": "BLOCK", "reasons": [f"registry does not exist: {registry_path}"]}))
         return 2
     repo_paths = {}
     for item in args.repo:
@@ -227,7 +250,7 @@ def _cli(argv: Sequence[str] | None = None) -> int:
             print(json.dumps({"status": "BLOCK", "reasons": [f"--repo expects GOAL_ID=PATH, got {item!r}"]}))
             return 2
         repo_paths[goal_id] = path
-    result = observe(FaberGoalRegistry(os.path.expanduser(registry_path)), repo_paths=repo_paths)
+    result = observe(FaberGoalRegistry(registry_path), repo_paths=repo_paths)
     if args.record:
         record(result, args.record)
     print(json.dumps(result.to_json(), ensure_ascii=False, indent=2))

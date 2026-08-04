@@ -26,7 +26,7 @@
         "nytt gap eller forbedring får sporbar kandidat/BL-referanse"
       ],
       "source": "flyby",
-      "bl_status": "open"
+      "bl_status": "reserved"
     },
     {
       "candidate_key": "candidate_code_faber_runtime_optimization_loops_2026_08_03",
@@ -48,7 +48,7 @@
         "alle loop-resultater har proveniens, metrikk og rollback-/approval-status"
       ],
       "source": "flyby",
-      "bl_status": "open"
+      "bl_status": "reserved"
     },
     {
       "candidate_key": "candidate_lukket_sporbar_autonom_laringsloyfe_2026_08_03",
@@ -72,7 +72,7 @@
         "Feil, timeout og delvis gjennomføring håndteres idempotent og blir synlige som incidents, ikke stille tap."
       ],
       "source": "flyby",
-      "bl_status": "open"
+      "bl_status": "reserved"
     },
     {
       "candidate_key": "candidate_symbiose_security_assessment_baseline_2026_08_03",
@@ -92,7 +92,7 @@
         "Etter remediation kan samme testmatrise kjøres på nytt og sammenlignes"
       ],
       "source": "flyby",
-      "bl_status": "open"
+      "bl_status": "reserved"
     },
     {
       "candidate_key": "candidate_cyber_control_plane_detection_audit_2026_08_03",
@@ -112,7 +112,7 @@
         "Dekningsmatrise viser hvilke eksponerte Hermes-/Symbiose-flater som faktisk overvåkes"
       ],
       "source": "flyby",
-      "bl_status": "open"
+      "bl_status": "reserved"
     },
     {
       "candidate_key": "candidate_autoretrieval_rag_optimization_loop_2026_08_03",
@@ -134,7 +134,7 @@
         "Knytt resultatene til Symbiose-læringsloop/observability slik at retrieval-forbedring kan skilles fra modell-, chunking- eller datasettendringer."
       ],
       "source": "flyby",
-      "bl_status": "open"
+      "bl_status": "reserved"
     },
     {
       "candidate_key": "candidate_prediction_hit_rate_denominator_and_validation_backlog_2026_08_03",
@@ -155,7 +155,7 @@
         "Kjør en tidsavgrenset re-evaluering etter at proveniens og kohort er korrigert, slik at modellkvalitet skilles fra målefeil."
       ],
       "source": "flyby",
-      "bl_status": "open"
+      "bl_status": "reserved"
     }
   ]
 }

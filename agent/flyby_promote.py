@@ -105,10 +105,12 @@ def build_goal(packet: Mapping[str, Any], *, promoted_by: str, promoted_at: str)
         "promoted_at": promoted_at,
         # Evidence the promoter is not entitled to produce.  Left explicitly
         # unknown so the preflight gate blocks rather than passing on silence.
-        # bl_status comes from the manifest, which reads the graph: "open" only
-        # when a :BL node actually exists for the number (allocate_bl mints a
-        # pending one since BL-3673), "reserved" when it does not.  Defaulting to
-        # "reserved" keeps a manifest that never checked out of the actionable set.
+        # "reserved" and not "open": allocate_bl hands out the number and (since
+        # BL-3673) mints a pending :BL node for it, but a pending node records
+        # that a number was claimed -- not that there is an actionable work item.
+        # PreflightGate reads "open" as actionable, so promoting a reservation as
+        # open would be writing a record to make a gate pass. It stays blocked
+        # until real work lands against the number.
         "bl_status": str(packet.get("bl_status", "reserved")),
         "cad_status": str(packet.get("cad_status", "unknown")),
         "adr_status": str(packet.get("adr_status", "unknown")),
