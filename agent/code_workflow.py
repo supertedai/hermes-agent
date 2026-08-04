@@ -6,13 +6,14 @@ adapters without duplicating their storage.
 """
 from __future__ import annotations
 
+import fcntl
 import json
 import os
 import tempfile
 from dataclasses import asdict, dataclass, field, replace
 from enum import Enum
 from pathlib import Path
-from typing import Callable, Mapping
+from typing import Any, Callable, Mapping, Sequence
 
 
 class PreflightStatus(str, Enum):
@@ -124,11 +125,21 @@ class FaberGoalRegistry:
             self._load()
 
     def put(self, goal: FaberGoal) -> FaberGoal:
-        if goal.owner != "faber" or goal.projection != "code":
-            raise ValueError("goal registry accepts only Faber Code goals")
-        self._goals[goal.goal_id] = goal
-        self._save()
+        self.put_all([goal])
         return goal
+
+    def put_all(self, goals: "Sequence[FaberGoal]") -> tuple[FaberGoal, ...]:
+        """Persist several goals in a single durable write.
+
+        Either every goal lands or none does: a partial batch would leave a
+        half-installed backlog that reads as complete.
+        """
+        accepted = tuple(goals)
+        for goal in accepted:
+            if goal.owner != "faber" or goal.projection != "code":
+                raise ValueError("goal registry accepts only Faber Code goals")
+        self._merge_and_save(accepted)
+        return accepted
 
     def get(self, goal_id: str) -> FaberGoal | None:
         return self._goals.get(goal_id)
@@ -142,6 +153,45 @@ class FaberGoalRegistry:
             if goal.state in {GoalState.CANDIDATE, GoalState.PROPOSED, GoalState.BLOCKED}
         ]
         return sorted(candidates, key=lambda goal: goal.goal_id)[0] if candidates else None
+
+    def _merge_and_save(self, goals: "Sequence[FaberGoal]") -> None:
+        """Apply *goals* on top of the current on-disk state, atomically.
+
+        Held under an exclusive lock so two writers cannot interleave, and the
+        on-disk state is re-read inside the lock so a stale in-memory snapshot
+        never erases goals another writer added since construction.
+        """
+        if self.path is None:
+            for goal in goals:
+                self._goals[goal.goal_id] = goal
+            return
+        self.path.parent.mkdir(parents=True, exist_ok=True)
+        lock_path = self.path.with_name(self.path.name + ".lock")
+        with open(lock_path, "a+", encoding="utf-8") as lock:
+            fcntl.flock(lock.fileno(), fcntl.LOCK_EX)
+            try:
+                merged = self._read_disk_goals()
+                merged.update({goal.goal_id: goal for goal in goals})
+                self._goals = merged
+                self._save()
+            finally:
+                fcntl.flock(lock.fileno(), fcntl.LOCK_UN)
+
+    def _read_disk_goals(self) -> dict[str, FaberGoal]:
+        """Read the persisted goals, refusing to silently drop unreadable state.
+
+        Construction stays tolerant of a corrupt file, but a *write* must not
+        quietly replace state it could not parse.
+        """
+        if self.path is None or not self.path.exists():
+            return {}
+        try:
+            payload = json.loads(self.path.read_text(encoding="utf-8"))
+        except (OSError, json.JSONDecodeError) as exc:
+            raise ValueError(f"refusing to overwrite unreadable goal registry {self.path}: {exc}") from exc
+        if not isinstance(payload, list):
+            raise ValueError(f"refusing to overwrite malformed goal registry {self.path}")
+        return {goal.goal_id: goal for goal in (self._goal_from_item(item) for item in payload) if goal}
 
     def _save(self) -> None:
         if self.path is None:
@@ -165,29 +215,37 @@ class FaberGoalRegistry:
             if os.path.exists(tmp):
                 os.unlink(tmp)
 
+    @staticmethod
+    def _goal_from_item(item: Any) -> FaberGoal | None:
+        """Decode one persisted row, or None when it is not a Faber Code goal."""
+        if not isinstance(item, Mapping):
+            return None
+        goal = FaberGoal(
+            goal_id=str(item["goal_id"]),
+            title=str(item["title"]),
+            owner=str(item.get("owner", "faber")),
+            projection=str(item.get("projection", "code")),
+            state=GoalState(str(item.get("state", GoalState.CANDIDATE.value))),
+            cad_ref=str(item.get("cad_ref", "")),
+            adr_ref=str(item.get("adr_ref", "")),
+            bl_ref=str(item.get("bl_ref", "")),
+            rollback=str(item.get("rollback", "")),
+            evidence=dict(item.get("evidence") or {}),
+            blocked_from=(GoalState(str(item["blocked_from"]))
+                         if item.get("blocked_from") else None),
+            blocker=str(item.get("blocker", "")),
+            next_step=str(item.get("next_step", "")),
+        )
+        return goal if goal.owner == "faber" and goal.projection == "code" else None
+
     def _load(self) -> None:
         if self.path is None or not self.path.exists():
             return
         try:
             payload = json.loads(self.path.read_text(encoding="utf-8"))
             for item in payload if isinstance(payload, list) else []:
-                goal = FaberGoal(
-                    goal_id=str(item["goal_id"]),
-                    title=str(item["title"]),
-                    owner=str(item.get("owner", "faber")),
-                    projection=str(item.get("projection", "code")),
-                    state=GoalState(str(item.get("state", GoalState.CANDIDATE.value))),
-                    cad_ref=str(item.get("cad_ref", "")),
-                    adr_ref=str(item.get("adr_ref", "")),
-                    bl_ref=str(item.get("bl_ref", "")),
-                    rollback=str(item.get("rollback", "")),
-                    evidence=dict(item.get("evidence") or {}),
-                    blocked_from=(GoalState(str(item["blocked_from"]))
-                                 if item.get("blocked_from") else None),
-                    blocker=str(item.get("blocker", "")),
-                    next_step=str(item.get("next_step", "")),
-                )
-                if goal.owner == "faber" and goal.projection == "code":
+                goal = self._goal_from_item(item)
+                if goal is not None:
                     self._goals[goal.goal_id] = goal
         except (OSError, ValueError, TypeError, KeyError, json.JSONDecodeError):
             self._goals = {}
@@ -423,6 +481,14 @@ class GovernedCodeRunner:
 
         if preflight.status is not PreflightStatus.PASS:
             return blocked(goal, "; ".join(preflight.reasons), "preflight", "refresh source evidence")
+        owner_gate = str(goal.evidence.get("gate", "")).strip().lower()
+        if owner_gate and owner_gate != "reviewer" and not str(goal.evidence.get("owner_approval", "")).strip():
+            return blocked(
+                goal,
+                f"owner gate '{owner_gate}' requires an explicit recorded decision",
+                "owner_gate",
+                f"obtain the {owner_gate} decision and record it as evidence['owner_approval']",
+            )
         try:
             current = self.ledger.transition(goal, GoalState.PROPOSED)
             current = self.ledger.transition(current, GoalState.APPROVED, preflight=preflight)

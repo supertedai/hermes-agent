@@ -1,0 +1,154 @@
+{
+  "manifest_id": "BL-3632-seven-workstreams",
+  "promoted_by": "claude:BL-3632",
+  "requested_by": "morten",
+  "contract": "governed-autonomous-coding-workflow/references/flyby-faber-integration.md",
+  "note": "Promotion installs these seven candidates as PROPOSED Faber Code goals so the governed workflow can sequence them. It is not approval, build, landing, or ACT. CAD/ADR/lease/preflight stay unknown until governance supplies them.",
+  "promotions": [
+    {
+      "candidate_key": "candidate_governed_code_runner_sol_followups_2026_08_03",
+      "slug": "governed_code_runner_sol_followups",
+      "title": "Governed Code/Faber-runner: Sol BLOCK-followups til én fail-closed workflow",
+      "bl_ref": "BL-3633",
+      "gate": "reviewer",
+      "gate_class": "reviewer/landing gate",
+      "epistemic_status": "observert",
+      "repo_scope": "hermes-agent: agent/code_workflow.py, agent/faber_runtime.py, agent/continuous_pipeline.py, agent/agent_init.py",
+      "rollback": "git revert of the BL-3633 commit on hermes-agent; goal state returns to proposed and the registry entry is rewritten by the promoter",
+      "next_step": "Supply authoritative CAD/ADR/Brain evidence for BL-3633, claim a lease on the four hermes-agent files, then run one FaberRuntime preflight and read back PASS/BLOCK.",
+      "acceptance": [
+        "tom eller stale CAD/ADR/BL/Brain-evidens blokkerer før build",
+        "Faber-mål kan ikke bygge/lande uten preflight, reviewer og postcommit-evidens",
+        "ACT håndhever risiko, reversibilitet, requires_morten og requires_landing_gate fail-closed",
+        "MemoryManager-integrasjon må påvirke eller ærlig rapportere faktisk retrieval/tokenbudsjett",
+        "modellruting bruker live konfigurasjon/resolver og måler token/kostnad/kvalitet",
+        "BLOCKED lagrer atomisk handoff og neste jobb kan resume fra samme checkpoint",
+        "nytt gap eller forbedring får sporbar kandidat/BL-referanse"
+      ],
+      "source": "flyby"
+    },
+    {
+      "candidate_key": "candidate_code_faber_runtime_optimization_loops_2026_08_03",
+      "slug": "code_faber_runtime_optimization_loops",
+      "title": "Code/faber: runtime-wake og kontinuerlige optimaliseringssløyfer",
+      "bl_ref": "BL-3634",
+      "gate": "reviewer",
+      "gate_class": "runtime telemetry and baseline gate",
+      "epistemic_status": "delvis_verifisert",
+      "repo_scope": "hermes-agent: agent/continuous_pipeline.py, agent/faber_runtime.py, skills/workflow registry, 20-minute scheduler",
+      "rollback": "disable the optimization loop registration and restore the previous continuous_pipeline state file; no scheduler entry is created before the gate",
+      "next_step": "Record a runtime telemetry baseline before any loop is activated; CAD/ADR for the Code-owner + faber-steward contract are still missing, so preflight will BLOCK until governance supplies them.",
+      "acceptance": [
+        "Code-domenet er eksplisitt eier av pipeline, skills og workflow",
+        "faber er eksplisitt steward/utførende agent for kodeforvaltningen",
+        "Hermes runtime wake åpner og initialiserer pipeline-state uten å starte uautoriserte handlinger",
+        "20-minuttersloopene dekker OBSERVE, PROPOSE, ACT-gate, måling og læring",
+        "skills/workflow-optimalisering foreslås og måles, men endrer ikke sikkerhetskjerne eller lander kode uten gate",
+        "alle loop-resultater har proveniens, metrikk og rollback-/approval-status"
+      ],
+      "source": "flyby"
+    },
+    {
+      "candidate_key": "candidate_lukket_sporbar_autonom_laringsloyfe_2026_08_03",
+      "slug": "lukket_sporbar_autonom_laringsloyfe",
+      "title": "Lukket, sporbar og gradvis autonom læringssløyfe",
+      "bl_ref": "BL-3635",
+      "gate": "morten",
+      "gate_class": "learning/provenance gate",
+      "epistemic_status": "observert",
+      "repo_scope": "hermes-agent flyby intake; AGI: SelfKnowledgeFact/memory ledger, retrieval + response provenance, replay/shadow validation",
+      "rollback": "learning controller runs shadow-only; disabling the shadow writer leaves the existing ledger untouched",
+      "next_step": "Morten gate: this candidate widens autonomy, so scope the first increment to end-to-end traceability and replay/shadow measurement only, with no autonomy increase, and get Morten's decision before ACT.",
+      "acceptance": [
+        "Hver læringshendelse har proveniens, type, sikkerhet, versjon og livssyklusstatus.",
+        "Systemet skiller maskinelt mellom observasjon, tolkning, hypotese, beslutning, implementasjon og validering.",
+        "Flyby-kandidater dedupliseres, versjoneres, kan degraderes og kan trekkes tilbake uten å ødelegge historikken.",
+        "For en senere respons eller handling kan systemet vise hvilke tidligere innsikter som ble hentet og faktisk påvirket resultatet.",
+        "Læringssløyfen har replay eller kontrollgruppe/shadow-test som måler forskjellen med og uten innsikten.",
+        "Autonomi er risikobundet: ufarlige tester og prioritering kan gå autonomt, mens kode, vitenskap, klinikk og irreversible handlinger fortsatt gates.",
+        "Det finnes en avkastningsmåling som kobler lagret innsikt til forbedret resultat, redusert feilrate eller annen definert verdi.",
+        "Feil, timeout og delvis gjennomføring håndteres idempotent og blir synlige som incidents, ikke stille tap."
+      ],
+      "source": "flyby"
+    },
+    {
+      "candidate_key": "candidate_symbiose_security_assessment_baseline_2026_08_03",
+      "slug": "symbiose_security_assessment_baseline",
+      "title": "Total baseline for Symbiose/Hermes sikkerhetsvurdering",
+      "bl_ref": "BL-3636",
+      "gate": "morten",
+      "gate_class": "preflight/security gate",
+      "epistemic_status": "verifisert",
+      "repo_scope": "AGI + Symbiose .11-.15: Unified API, cyber control plane, auth, segmentation, host hardening, egress, logging, recovery",
+      "rollback": "assessment is read-only; no rollback needed for the baseline itself, and each remediation lands as its own reversible change",
+      "next_step": "Morten gate: register SECURITY_ASSESSMENT_2026-08-03.md as traceable evidence, then prioritise the non-PASS areas with an owner and gate each before any remediation is built.",
+      "acceptance": [
+        "Totalrapporten finnes som sporbar evidens med teststatus, grunnlag og begrensninger",
+        "Alle ikke-beståtte testområder har prioritert tiltak og eier/gate",
+        "Ekstern perimeter, write-path, restore og Cyber end-to-end canary er eksplisitt merket som ikke verifisert",
+        "Etter remediation kan samme testmatrise kjøres på nytt og sammenlignes"
+      ],
+      "source": "flyby"
+    },
+    {
+      "candidate_key": "candidate_cyber_control_plane_detection_audit_2026_08_03",
+      "slug": "cyber_control_plane_detection_audit",
+      "title": "Cyber-laget trenger live kontroll- og deteksjonsrevisjon",
+      "bl_ref": "BL-3637",
+      "gate": "morten",
+      "gate_class": "security observability gate",
+      "epistemic_status": "verifisert",
+      "repo_scope": "AGI: cyber sensor/ingest/correlation/alert/response chain, ThreatCorrelation, SecurityCalibration, latest_snapshot freshness",
+      "rollback": "audit is read-only; the canary is a harmless synthetic event and is removed after the trace is captured",
+      "next_step": "Morten gate: inventory sensors with heartbeat and owner, then run one harmless canary end-to-end before any null-alert status is used as security evidence.",
+      "acceptance": [
+        "Alle Cyber-sensorer og aktive tjenester er inventert med node, versjon, heartbeat og eier",
+        "En ufarlig canary-hendelse spores fra sensor via ingest og korrelasjon til alert og respons",
+        "latest_snapshot er fersk, og null-data klassifiseres som UNKNOWN/NO DATA — ikke som ingen trussel",
+        "Dekningsmatrise viser hvilke eksponerte Hermes-/Symbiose-flater som faktisk overvåkes"
+      ],
+      "source": "flyby"
+    },
+    {
+      "candidate_key": "candidate_autoretrieval_rag_optimization_loop_2026_08_03",
+      "slug": "autoretrieval_rag_optimization_loop",
+      "title": "Autonom, gated optimaliseringssløyfe for Symbiose-RAG",
+      "bl_ref": "BL-3638",
+      "gate": "reviewer",
+      "gate_class": "sandbox/holdout/shadow gate; never direct production mutation",
+      "epistemic_status": "delvis_verifisert",
+      "repo_scope": "AGI: Qdrant retrieval, embedding/chunking pipeline, eval + dataset generator, experiment ledger, sandbox/rollback",
+      "rollback": "sandbox-only spike; the production retriever is never mutated, so rollback is deleting the sandbox experiment and its ledger entries",
+      "next_step": "Build the read-only/sandboxed spike against a bounded corpus first; production activation stays behind the reviewer gate and a holdout regression gate.",
+      "acceptance": [
+        "Bygg en read-only eller sandboxed spike som kan kjøre autoretrieval-mønsteret mot et avgrenset Symbiose/Qdrant-korpus uten å endre produksjonsretrieveren.",
+        "Evaluer på et fast, versjonert og holdout-beskyttet datasett; dokumenter hvordan spørsmål/reference-highlights genereres og kontroller risiko for syntetisk bias og eval-lekkasje.",
+        "Bruk F-beta sammen med precision/recall, Precision-Omega eller tilsvarende chunk-/retrieval-metrikker, latency, kostnad og stabilitet; ikke la én score alene definere «bedre».",
+        "Hvert eksperiment får parameter-/kode-diff, corpus-/dataset-hash, modell-/embeddingversjon, score, runtime, keep/discard-beslutning og årsak; forkastede forsøk skal være reproduserbare.",
+        "Behold kun endringer som forbedrer holdout og ikke bryter regresjonsgater; ha automatisk rollback og reviewer-gate før produksjonsaktivering.",
+        "Knytt resultatene til Symbiose-læringsloop/observability slik at retrieval-forbedring kan skilles fra modell-, chunking- eller datasettendringer."
+      ],
+      "source": "flyby"
+    },
+    {
+      "candidate_key": "candidate_prediction_hit_rate_denominator_and_validation_backlog_2026_08_03",
+      "slug": "prediction_hit_rate_denominator_and_validation_backlog",
+      "title": "Kartlegg og korriger prediksjonstreffrate: nevner, datamiks og valideringsetterslep",
+      "bl_ref": "BL-3639",
+      "gate": "reviewer",
+      "gate_class": "epistemic measurement gate; no model conclusion before cohort/provenance reconciliation",
+      "epistemic_status": "delvis_verifisert",
+      "repo_scope": "AGI: LearningStitch/graph_learning, prediction_correct/prediction_incorrect, validation pipeline, calibration dashboard",
+      "rollback": "measurement-only; reporting changes are additive and the previous aggregate stays readable until it is explicitly marked invalid",
+      "next_step": "Reproduce the 1112/805 denominator from raw data before any model-quality conclusion is drawn; mark the aggregate as not-comparable until the cohort is reconciled.",
+      "acceptance": [
+        "Dokumenter nøyaktig hvilke Prediction-noder og tidsvinduer som inngår i 1112/805, og få nevneren til å reprodusere seg fra rådata.",
+        "Rapporter treffrate separat per prediction_type og samlet kun for samme evalueringskohort; inkluder antall, tidsvindu og konfidensintervall.",
+        "Forklar avviket mellom LearningStitch 1112/805 og eksplisitte LearningInsight 159/159, eller merk aggregate-tallet som ugyldig/ikke sammenlignbart.",
+        "Mål og reduser valideringsbackloggen; ingen ny modellkonklusjon før pending-kandidater og aldersfordeling er synlig.",
+        "Kjør en tidsavgrenset re-evaluering etter at proveniens og kohort er korrigert, slik at modellkvalitet skilles fra målefeil."
+      ],
+      "source": "flyby"
+    }
+  ]
+}
