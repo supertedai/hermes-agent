@@ -6,7 +6,7 @@
 
 ## Statusregel
 
-Et punkt kan bare merkes `[x]` når implementasjon, relevant test, autoritativ readback, **Sol Design → Sol Review → Sol PASS**, runtime smoke og rollback-evidens finnes. Claude brukes ikke som standardreviewer; Claude-kall er kun tillatt når en separat final-gate uttrykkelig krever det. `PARTIAL`, `SHADOW` og `PASS_WITH_REQUIRED_FOLLOWUPS` er ikke lukket.
+Et punkt kan bare merkes `[x]` når implementasjon, relevant test, autoritativ readback, **Sol Design → Sol Review → Sol PASS**, runtime smoke og rollback-evidens finnes. Claude brukes ikke som standardreviewer; Claude-kall er kun tillatt når en separat final-gate uttrykkelig krever det. `PARTIAL`, `SHADOW` og `PASS_WITH_REQUIRED_FOLLOWUPS` er ikke lukket. `[~]` = PARTIAL: arbeidet er landet og gatet, men minst én done-betingelse mangler readback — det teller som ÅPENT.
 
 ## Reviewer-rekkefølge
 
@@ -48,9 +48,41 @@ Et punkt kan bare merkes `[x]` når implementasjon, relevant test, autoritativ r
 
 ### A. Ingress og runtime-eierskap
 
-- [ ] **Alle coding-relevante TUI-turns inn til Faber**
+- [x] **Alle coding-relevante TUI-turns inn til Faber** — LUKKET, live-verifisert
   - Done når hver turn har `trace_id`, `goal_id`, owner, provenance og consent/injection-gate-readback.
   - Privat eller injection-blokkert materiale skal ikke injiseres.
+  - Landet: `9ab43999f` + `efaf03a2a` + `1bf790a93` (BL-3618). `agent/faber_coding_ingress.py` stempler hver turn
+    med `trace_id`, `goal_id`, `owner`, `owner_source` og provenance
+    (surface/session_key/session_id/turn_index/tid), og evaluerer fem gater med eksplisitt status:
+    `identity`, `relevance`, `envelope`, `injection`, `consent`.
+  - Ingest feiler LUKKET (manglende grant, injection-funn eller ufullstendig envelope er aldri PASS).
+    Chat feiler ÅPENT med vilje — en ingest-feil skal ikke ta ned samtalen. Faber som ENESTE
+    autoritative kode-runtime er neste punkt, ikke dette.
+  - Hooken står over compute-host-grenen; den grenen returnerer for isolerte turns, så en hook under
+    den ville stilltiende sluttet å gate når `turn_isolation` slås på (`efaf03a2a`).
+  - Blokkert materiale bæres ikke videre. Readback lagrer `text_sha256` + `text_len`, aldri teksten —
+    målt: 0 treff på turn-tekst i `~/.hermes-gui/faber/coding-ingress.jsonl`.
+  - Sol Design PASS · Sol Review PASS · Sol PASS (`cogito-v2-preview-deepseek-671b-moe`, live-resolvet).
+  - Tester: 15 nye passerer; målrettede suiter 20–23 passed. Bred gateway-suite står på
+    1527 failed / 3333 passed BÅDE med og uten diffen (pre-eksisterende brekkasje, `pytest_asyncio`
+    mangler) — delta 0.
+  - Live smoke mot ekte consent-/logg-stier: coding → `admitted=true`; vanlig chat →
+    `not_coding_relevant`; injection-bærende turn → `injection_block`.
+  - Consent: `~/.hermes-gui/faber/ingress-consent.json`, grant for `morten` scope `coding_turns`,
+    Morten-dirigert. Reverserbart med `granted=false` eller ved å slette fila.
+  - Rollback: `git revert 1bf790a93 efaf03a2a 9ab43999f` (hver commit verifisert: reverserer rent).
+  - Audit-stiene resolves via `HERMES_HOME`, ikke hardkodet `~/.hermes-gui` (`1bf790a93`). Første
+    versjon hardkodet stien, og gateway-suiten — som omdirigerer `HERMES_HOME` nettopp for at tester
+    ikke skal røre levende tilstand — skrev 24 syntetiske turns rett inn i produksjonsloggen. Målt
+    etter fiks: 29 linjer før suite-kjøring, 29 etter. Fallback logges, aldri stilltiende.
+  - **Runtime live-verifisert:** `hermes-dashboard.service` restartet kontrollert (Morten-autorisert,
+    `Restart=always`): PID 1130855 (start 18:14:02) → PID 1235983 (start 20:19:54), altså etter
+    committen 19:57:07 og etter fil-mtime. Health `200`.
+  - **End-to-end-bevis:** ekte TUI-sesjon `6d7b317f` produserte ingress-records kl. 20:21:10 og
+    20:22:04 gjennom den levende gatewayen — ikke en syntetisk smoke.
+  - **Avgrensning:** dette punktet lukker ENVELOPE + GATE. En admittert turn er stemplet og
+    readback-ført, men rutes ennå ikke inn i `FaberRuntime` — det er neste punkt (Faber som eneste
+    autoritative kode-runtime), og det er enactment-gated.
 - [ ] **Faber er eneste autoritative kode-runtime**
   - Done når Hermes ikke kan bygge/lande kode parallelt uten Faber-goal/livssyklus.
   - Cron, `run_agent` og pipeline må være adaptere til én autoritativ tick.
