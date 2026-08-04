@@ -1,19 +1,27 @@
 # Faber ↔ Hermes TUI — lukkeliste
 
-**Eier:** Faber for kode/runtime; Morten for godkjenning og hard-limits; Claude for landing-gate.
+**Eier:** Faber for kode/runtime; Morten for godkjenning og hard-limits; Sol for design/review; Claude bare som eksplisitt final-gate når det kreves.
 **Scope:** Hermes/Faber/TUI-loop på `.15`.
 **Eksplisitt grense:** AGI og EFC er separate systemer. Ingen AGI-artifakter, Brain/selfstate eller closeout skal skrives inn i EFC.
 
 ## Statusregel
 
-Et punkt kan bare merkes `[x]` når implementasjon, relevant test, autoritativ readback, reviewer-gate, runtime smoke og rollback-evidens finnes. `PARTIAL`, `SHADOW` og `PASS_WITH_REQUIRED_FOLLOWUPS` er ikke lukket.
+Et punkt kan bare merkes `[x]` når implementasjon, relevant test, autoritativ readback, **Sol Design → Sol Review → Sol PASS**, runtime smoke og rollback-evidens finnes. Claude brukes ikke som standardreviewer; Claude-kall er kun tillatt når en separat final-gate uttrykkelig krever det. `PARTIAL`, `SHADOW` og `PASS_WITH_REQUIRED_FOLLOWUPS` er ikke lukket.
+
+## Reviewer-rekkefølge
+
+1. **Sol Design** — vurderer løsning, scope, risiko og reversering.
+2. **Sol Review** — adversarial review av eksakt diff og tester.
+3. **Sol PASS** — landingstillatelse på samme diff.
+4. **Morten approval** — når hard-limit eller enactment krever det.
+5. **Claude** — bare ved eksplisitt final-gate; aldri som automatisk erstatning for Sol.
 
 ## Allerede lukket
 
 - [x] **Faber → Hermes TUI relay-auth**
   - Commit: `d2c13b495` — `BL-3610: allow authenticated Faber TUI relay path`.
   - `/api/internal/tui/emit` er loopback-only og validerer egen relay-secret.
-  - Claude-review: `PASS`.
+  - Historisk landing hadde Claude-review: `PASS`; nye endringer følger Sol-first-regelen over.
 - [x] **Hermetisk negativ-path-test**
   - Commit: `535ed04b4` — `BL-3611: isolate TUI negative-path relay test`.
   - Unngår at unit-test sender til live TUI-relay.
