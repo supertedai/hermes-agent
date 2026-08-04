@@ -1156,8 +1156,16 @@ def build_turn_context(
     if agent._memory_manager:
         try:
             _query = original_user_message if isinstance(original_user_message, str) else ""
-            ext_prefetch_cache = agent._memory_manager.prefetch_all(_query) or ""
+            _scheduler_bridge = getattr(agent, "_memory_scheduler_bridge", None)
+            if _scheduler_bridge is not None:
+                _hook_result = _scheduler_bridge.before_turn(_query, session_id=agent.session_id)
+                agent._last_memory_selection = _hook_result.selection
+                ext_prefetch_cache = _hook_result.context or ""
+            else:
+                ext_prefetch_cache = agent._memory_manager.prefetch_all(_query) or ""
         except Exception:
+            if getattr(agent, "_memory_scheduler_bridge", None) is not None:
+                raise
             pass
 
     # ── api_content sidecar: persist what you send ──

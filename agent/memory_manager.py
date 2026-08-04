@@ -522,7 +522,43 @@ class MemoryManager:
         """
         return extract_user_instruction_from_skill_message(text)
 
-    def prefetch_all(self, query: str, *, session_id: str = "") -> str:
+    def prefetch_layers(
+        self,
+        layers: List[str],
+        query: str,
+        *,
+        session_id: str = "",
+    ) -> Optional[Dict[str, str]]:
+        """Recall by canonical layer when every provider supports the surface."""
+        clean_query = self._strip_skill_scaffolding(query)
+        if not clean_query:
+            return {}
+        merged: Dict[str, str] = {layer: "" for layer in layers}
+        providers = list(self._providers)
+        if not providers:
+            return {}
+        for provider in providers:
+            reader = getattr(provider, "prefetch_layers", None)
+            if not callable(reader):
+                return None
+            try:
+                result = reader(layers, clean_query, session_id=session_id)
+            except Exception as exc:
+                logger.debug(
+                    "Memory provider '%s' per-layer prefetch failed: %s",
+                    provider.name,
+                    exc,
+                )
+                raise
+            if not isinstance(result, dict):
+                return None
+            for layer in layers:
+                value = result.get(layer, "")
+                if value:
+                    merged[layer] += ("\n\n" if merged[layer] else "") + str(value)
+        return merged
+
+    def prefetch_all(self, query: str, *, session_id: str = "", strict: bool = False) -> str:
         """Collect prefetch context from all providers.
 
         Returns merged context text labeled by provider. Empty providers
@@ -539,9 +575,13 @@ class MemoryManager:
                     parts.append(result)
             except Exception as e:
                 logger.debug(
-                    "Memory provider '%s' prefetch failed (non-fatal): %s",
-                    provider.name, e,
+                    "Memory provider '%s' prefetch failed%s: %s",
+                    provider.name,
+                    "" if strict else " (non-fatal)",
+                    e,
                 )
+                if strict:
+                    raise
         return "\n\n".join(parts)
 
     def _prefetch_provider(

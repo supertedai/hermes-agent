@@ -105,6 +105,21 @@ class MemoryProvider(ABC):
         """
         return ""
 
+    def prefetch_layers(
+        self,
+        layers: List[str],
+        query: str,
+        *,
+        session_id: str = "",
+    ) -> Optional[Dict[str, str]]:
+        """Optional per-layer recall surface for token-governed schedulers.
+
+        Providers that only expose merged ``prefetch`` retain the explicit
+        aggregate fallback. Returning ``None`` is a capability declaration,
+        not an empty-memory result.
+        """
+        return None
+
     def queue_prefetch(self, query: str, *, session_id: str = "") -> None:
         """Queue a background recall for the NEXT turn.
 
