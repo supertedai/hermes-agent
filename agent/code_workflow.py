@@ -128,17 +128,31 @@ class FaberGoalRegistry:
         self.put_all([goal])
         return goal
 
-    def put_all(self, goals: "Sequence[FaberGoal]") -> tuple[FaberGoal, ...]:
+    def put_all(
+        self,
+        goals: "Sequence[FaberGoal]",
+        *,
+        refuse_overwrite_states: "frozenset[GoalState] | set[GoalState]" = frozenset(),
+        allow_overwrite_ids: "Sequence[str]" = (),
+    ) -> tuple[FaberGoal, ...]:
         """Persist several goals in a single durable write.
 
         Either every goal lands or none does: a partial batch would leave a
         half-installed backlog that reads as complete.
+
+        ``refuse_overwrite_states`` is checked against the state on disk, read
+        inside the write lock — a caller's own snapshot cannot see a goal that
+        another writer advanced in the meantime, so the guard has to live here.
         """
         accepted = tuple(goals)
         for goal in accepted:
             if goal.owner != "faber" or goal.projection != "code":
                 raise ValueError("goal registry accepts only Faber Code goals")
-        self._merge_and_save(accepted)
+        self._merge_and_save(
+            accepted,
+            refuse_overwrite_states=frozenset(refuse_overwrite_states),
+            allow_overwrite_ids=frozenset(allow_overwrite_ids),
+        )
         return accepted
 
     def get(self, goal_id: str) -> FaberGoal | None:
@@ -154,7 +168,13 @@ class FaberGoalRegistry:
         ]
         return sorted(candidates, key=lambda goal: goal.goal_id)[0] if candidates else None
 
-    def _merge_and_save(self, goals: "Sequence[FaberGoal]") -> None:
+    def _merge_and_save(
+        self,
+        goals: "Sequence[FaberGoal]",
+        *,
+        refuse_overwrite_states: "frozenset[GoalState]" = frozenset(),
+        allow_overwrite_ids: "frozenset[str]" = frozenset(),
+    ) -> None:
         """Apply *goals* on top of the current on-disk state, atomically.
 
         Held under an exclusive lock so two writers cannot interleave, and the
@@ -162,6 +182,7 @@ class FaberGoalRegistry:
         never erases goals another writer added since construction.
         """
         if self.path is None:
+            self._assert_overwritable(self._goals, goals, refuse_overwrite_states, allow_overwrite_ids)
             for goal in goals:
                 self._goals[goal.goal_id] = goal
             return
@@ -171,11 +192,33 @@ class FaberGoalRegistry:
             fcntl.flock(lock.fileno(), fcntl.LOCK_EX)
             try:
                 merged = self._read_disk_goals()
+                self._assert_overwritable(merged, goals, refuse_overwrite_states, allow_overwrite_ids)
                 merged.update({goal.goal_id: goal for goal in goals})
                 self._goals = merged
                 self._save()
             finally:
                 fcntl.flock(lock.fileno(), fcntl.LOCK_UN)
+
+    @staticmethod
+    def _assert_overwritable(
+        current: "Mapping[str, FaberGoal]",
+        goals: "Sequence[FaberGoal]",
+        refuse_overwrite_states: "frozenset[GoalState]",
+        allow_overwrite_ids: "frozenset[str]",
+    ) -> None:
+        """Refuse the whole batch if it would reset work that already advanced."""
+        if not refuse_overwrite_states:
+            return
+        for goal in goals:
+            existing = current.get(goal.goal_id)
+            if (
+                existing is not None
+                and existing.state in refuse_overwrite_states
+                and goal.goal_id not in allow_overwrite_ids
+            ):
+                raise ValueError(
+                    f"{goal.goal_id} already advanced to {existing.state.value}; refusing to reset it"
+                )
 
     def _read_disk_goals(self) -> dict[str, FaberGoal]:
         """Read the persisted goals, refusing to silently drop unreadable state.
@@ -446,6 +489,13 @@ class GovernedRunResult:
     blocker: str = ""
 
 
+#: Gate values that need no separate owner decision.  "autonomt" and "reviewer"
+#: come from the Flyby intake vocabulary (see tools/flyby_tools.py); the empty
+#: string covers goals predating the gate field.  Anything else — including an
+#: unrecognised value — is treated as an owner gate and fails closed.
+_SELF_CLEARING_GATES = frozenset({"", "autonomt", "reviewer"})
+
+
 class GovernedCodeRunner:
     """Single fail-closed runner for Faber's Code workflow.
 
@@ -482,7 +532,7 @@ class GovernedCodeRunner:
         if preflight.status is not PreflightStatus.PASS:
             return blocked(goal, "; ".join(preflight.reasons), "preflight", "refresh source evidence")
         owner_gate = str(goal.evidence.get("gate", "")).strip().lower()
-        if owner_gate and owner_gate != "reviewer" and not str(goal.evidence.get("owner_approval", "")).strip():
+        if owner_gate not in _SELF_CLEARING_GATES and not str(goal.evidence.get("owner_approval", "")).strip():
             return blocked(
                 goal,
                 f"owner gate '{owner_gate}' requires an explicit recorded decision",

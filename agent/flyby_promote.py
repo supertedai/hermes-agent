@@ -105,9 +105,11 @@ def build_goal(packet: Mapping[str, Any], *, promoted_by: str, promoted_at: str)
         "promoted_at": promoted_at,
         # Evidence the promoter is not entitled to produce.  Left explicitly
         # unknown so the preflight gate blocks rather than passing on silence.
-        # bl_status is "reserved": allocate_bl.py hands out a number atomically,
-        # but the :BL ledger node only materialises at commit, so the reference
-        # is real while the ledger entry does not exist yet.
+        # bl_status is "reserved": allocate_bl.py hands out the number atomically,
+        # but no :BL ledger node exists for it.  commit_closer materialises those
+        # from commits in the AGI repo only, so a hermes-agent commit does not
+        # create one -- "reserved" is not in PreflightGate's actionable set, so a
+        # promoted goal stays blocked until a :BL node is created some other way.
         "bl_status": str(packet.get("bl_status", "reserved")),
         "cad_status": str(packet.get("cad_status", "unknown")),
         "adr_status": str(packet.get("adr_status", "unknown")),
@@ -164,7 +166,14 @@ def promote(
     if unknown:
         raise PromotionBlocked(f"--force-goal names goals not in this batch: {', '.join(sorted(unknown))}")
 
-    registry.put_all([goal for goal, _ in plan])
+    # The precheck above gives a clear error and powers --dry-run, but the
+    # authoritative guard runs inside the registry's write lock: another writer
+    # may have advanced a goal since this registry was constructed.
+    registry.put_all(
+        [goal for goal, _ in plan],
+        refuse_overwrite_states=ADVANCED_STATES,
+        allow_overwrite_ids=forced,
+    )
     return [
         {
             "goal_id": goal.goal_id,

@@ -281,6 +281,45 @@ def test_force_is_scoped_to_one_named_goal(tmp_path):
     assert registry.get("faber.code.flyby:a").state is GoalState.BUILDING
 
 
+def test_a_goal_advanced_by_another_writer_is_not_reset_by_a_stale_promoter(tmp_path):
+    """The caller's snapshot cannot see a concurrent advance, so the guard has
+    to be enforced inside the registry's write lock."""
+    path = tmp_path / "goals.json"
+    stale = FaberGoalRegistry(path)  # snapshot taken while the goal did not exist
+    FaberGoalRegistry(path).put(
+        FaberGoal("faber.code.flyby:example", "Example", state=GoalState.LANDED)
+    )
+    with pytest.raises(ValueError, match="already advanced"):
+        promote([packet()], stale, promoted_by="x")
+    assert FaberGoalRegistry(path).get("faber.code.flyby:example").state is GoalState.LANDED
+
+
+def test_an_autonomt_gate_is_not_mistaken_for_an_owner_gate():
+    """autonomt|reviewer|morten is the Flyby intake vocabulary; autonomt means
+    no owner decision is needed, so it must not dead-end the runner."""
+    result = GovernedCodeRunner().run(
+        build_goal(packet(gate="autonomt", cad_ref="CAD-M", adr_ref="ADR-038"), promoted_by="x", promoted_at="t"),
+        preflight=passing_preflight(),
+        build=lambda: {"tests": "pass", "diff_id": "d"},
+        review=lambda evidence: ReviewEvidence(ReviewVerdict.PASS, "d", "sol"),
+        prelanding_evidence=LandingEvidence("sha", ReviewVerdict.PASS, "t", "r", "s", "rb", "l", "st", "c"),
+        landing=lambda evidence: LandingEvidence("sha", ReviewVerdict.PASS, "t", "r", "s", "rb", "l", "st", "c"),
+    )
+    assert result.goal.state is GoalState.LANDED
+
+
+def test_an_unrecognised_gate_value_still_fails_closed():
+    result = GovernedCodeRunner().run(
+        build_goal(packet(gate="whatever", cad_ref="CAD-M", adr_ref="ADR-038"), promoted_by="x", promoted_at="t"),
+        preflight=passing_preflight(),
+        build=lambda: pytest.fail("build must be unreachable behind an unknown gate"),
+        review=lambda evidence: ReviewEvidence(ReviewVerdict.PASS, "d", "sol"),
+        landing=lambda evidence: pytest.fail("landing must be unreachable"),
+    )
+    assert result.goal.state is GoalState.BLOCKED
+    assert result.handoff.required_gate == "owner_gate"
+
+
 def test_force_must_name_a_goal_in_the_batch(tmp_path):
     registry = FaberGoalRegistry(tmp_path / "goals.json")
     with pytest.raises(PromotionBlocked, match="not in this batch"):
