@@ -234,6 +234,49 @@ def test_record_appends_readback_without_the_turn_text(tmp_path, granted):
     assert record["text_sha256"] == result.text_sha256
 
 
+def test_paths_follow_hermes_home_so_tests_cannot_touch_live_state(monkeypatch, tmp_path):
+    """A redirected HERMES_HOME must move the audit surface with it.
+
+    Regression: the first cut hardcoded ``~/.hermes-gui``, so the gateway suite
+    — which redirects HERMES_HOME exactly to keep tests off live state — wrote
+    synthetic turns into the production readback log.
+    """
+    import hermes_constants
+
+    monkeypatch.delenv(ingress._LOG_ENV, raising=False)
+    monkeypatch.delenv(ingress._CONSENT_ENV, raising=False)
+    monkeypatch.setattr(hermes_constants, "get_hermes_home", lambda: tmp_path)
+
+    assert ingress.faber_home() == tmp_path / "faber"
+    assert ingress.log_path() == tmp_path / "faber" / "coding-ingress.jsonl"
+    assert ingress.consent_path() == tmp_path / "faber" / "ingress-consent.json"
+
+    ingress.record_coding_turn(
+        CODING_TURN, session_key="sk", session_id="sid", turn_index=0
+    )
+    assert (tmp_path / "faber" / "coding-ingress.jsonl").exists()
+
+
+def test_home_fallback_is_logged_never_silent(monkeypatch, caplog):
+    """A silent fallback would reintroduce the bug it guards against."""
+    import hermes_constants
+
+    def boom():
+        raise RuntimeError("home unresolvable")
+
+    monkeypatch.setattr(hermes_constants, "get_hermes_home", boom)
+
+    with caplog.at_level("WARNING"):
+        assert ingress.faber_home().name == "faber"
+
+    assert any("HERMES_HOME will NOT be honored" in r.message for r in caplog.records)
+
+
+def test_env_override_still_wins_over_hermes_home(monkeypatch, tmp_path):
+    monkeypatch.setenv(ingress._LOG_ENV, str(tmp_path / "explicit.jsonl"))
+    assert ingress.log_path() == tmp_path / "explicit.jsonl"
+
+
 def test_record_survives_an_unwritable_log(tmp_path, granted):
     unwritable = tmp_path / "file.txt"
     unwritable.write_text("blocker", encoding="utf-8")

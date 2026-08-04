@@ -42,7 +42,42 @@ LEGACY_OWNER_DEFAULT = "morten"
 
 _CONSENT_ENV = "HERMES_FABER_INGRESS_CONSENT"
 _LOG_ENV = "HERMES_FABER_INGRESS_LOG"
-_FABER_HOME = Path(os.path.expanduser("~/.hermes-gui/faber"))
+
+
+def faber_home() -> Path:
+    """``HERMES_HOME/faber`` — the same home as the rest of the GUI state.
+
+    Resolved through ``get_hermes_home()`` rather than a hardcoded
+    ``~/.hermes-gui``: the first cut hardcoded it, and the gateway test suite —
+    which redirects HERMES_HOME precisely so tests cannot touch live state —
+    wrote two dozen synthetic turns straight into the production readback log.
+    An audit surface a test run can write into is not an audit surface.
+
+    The fallback is never silent. A quiet fallback would reintroduce exactly the
+    bug it is guarding: a caller with a redirected HERMES_HOME would go on
+    writing to the live path while believing it was isolated.
+    """
+    fallback = Path(os.path.expanduser("~/.hermes-gui/faber"))
+    try:
+        from hermes_constants import get_hermes_home
+    except ImportError as exc:
+        logger.warning(
+            "faber ingress: hermes_constants unavailable (%s); using %s — "
+            "a redirected HERMES_HOME will NOT be honored",
+            exc,
+            fallback,
+        )
+        return fallback
+    try:
+        return get_hermes_home() / "faber"
+    except Exception as exc:
+        logger.warning(
+            "faber ingress: get_hermes_home() failed (%s); using %s — "
+            "a redirected HERMES_HOME will NOT be honored",
+            exc,
+            fallback,
+        )
+        return fallback
 
 # Coding signals are matched conservatively: a false negative costs Faber one
 # turn of context, a false positive pushes ordinary conversation into the code
@@ -137,12 +172,12 @@ def compute_trace_id(session_key: str, turn_index: int, text: str) -> str:
 
 def consent_path() -> Path:
     override = os.environ.get(_CONSENT_ENV)
-    return Path(override) if override else _FABER_HOME / "ingress-consent.json"
+    return Path(override) if override else faber_home() / "ingress-consent.json"
 
 
 def log_path() -> Path:
     override = os.environ.get(_LOG_ENV)
-    return Path(override) if override else _FABER_HOME / "coding-ingress.jsonl"
+    return Path(override) if override else faber_home() / "coding-ingress.jsonl"
 
 
 def evaluate_consent(owner: str, *, path: Path | None = None) -> IngressGate:
