@@ -121,8 +121,29 @@ class FaberGoalRegistry:
     def __init__(self, path: str | os.PathLike[str] | None = None):
         self.path = Path(path).expanduser() if path else None
         self._goals: dict[str, FaberGoal] = {}
+        self._disk_sig: tuple[int, int] | None = None
         if self.path:
             self._load()
+
+    def _refresh_if_changed(self) -> None:
+        """Re-read the registry when the file changed underneath us.
+
+        Every agent session builds a registry at startup and holds it for the
+        whole session, so without this a session that started before a goal was
+        promoted would never see it — the backlog would appear empty until the
+        runtime was restarted, and restarting is not a step this layer may take.
+        """
+        if self.path is None:
+            return
+        try:
+            stat = self.path.stat()
+        except OSError:
+            return
+        signature = (stat.st_mtime_ns, stat.st_size)
+        if signature == self._disk_sig:
+            return
+        self._goals = {}
+        self._load()
 
     def put(self, goal: FaberGoal) -> FaberGoal:
         self.put_all([goal])
@@ -156,12 +177,15 @@ class FaberGoalRegistry:
         return accepted
 
     def get(self, goal_id: str) -> FaberGoal | None:
+        self._refresh_if_changed()
         return self._goals.get(goal_id)
 
     def all(self) -> tuple[FaberGoal, ...]:
+        self._refresh_if_changed()
         return tuple(self._goals.values())
 
     def next_operational_goal(self) -> FaberGoal | None:
+        self._refresh_if_changed()
         candidates = [
             goal for goal in self._goals.values()
             if goal.state in {GoalState.CANDIDATE, GoalState.PROPOSED, GoalState.BLOCKED}
@@ -196,6 +220,7 @@ class FaberGoalRegistry:
                 merged.update({goal.goal_id: goal for goal in goals})
                 self._goals = merged
                 self._save()
+                self._stamp_disk_signature()
             finally:
                 fcntl.flock(lock.fileno(), fcntl.LOCK_UN)
 
@@ -219,6 +244,18 @@ class FaberGoalRegistry:
                 raise ValueError(
                     f"{goal.goal_id} already advanced to {existing.state.value}; refusing to reset it"
                 )
+
+    def _stamp_disk_signature(self) -> None:
+        """Record the on-disk identity of the state we just wrote or read."""
+        if self.path is None:
+            self._disk_sig = None
+            return
+        try:
+            stat = self.path.stat()
+        except OSError:
+            self._disk_sig = None
+            return
+        self._disk_sig = (stat.st_mtime_ns, stat.st_size)
 
     def _read_disk_goals(self) -> dict[str, FaberGoal]:
         """Read the persisted goals, refusing to silently drop unreadable state.
@@ -286,12 +323,15 @@ class FaberGoalRegistry:
             return
         try:
             payload = json.loads(self.path.read_text(encoding="utf-8"))
+            loaded: dict[str, FaberGoal] = {}
             for item in payload if isinstance(payload, list) else []:
                 goal = self._goal_from_item(item)
                 if goal is not None:
-                    self._goals[goal.goal_id] = goal
+                    loaded[goal.goal_id] = goal
+            self._goals = loaded
         except (OSError, ValueError, TypeError, KeyError, json.JSONDecodeError):
             self._goals = {}
+        self._stamp_disk_signature()
 
 
 @dataclass(frozen=True)

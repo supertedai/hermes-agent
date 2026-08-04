@@ -105,11 +105,10 @@ def build_goal(packet: Mapping[str, Any], *, promoted_by: str, promoted_at: str)
         "promoted_at": promoted_at,
         # Evidence the promoter is not entitled to produce.  Left explicitly
         # unknown so the preflight gate blocks rather than passing on silence.
-        # bl_status is "reserved": allocate_bl.py hands out the number atomically,
-        # but no :BL ledger node exists for it.  commit_closer materialises those
-        # from commits in the AGI repo only, so a hermes-agent commit does not
-        # create one -- "reserved" is not in PreflightGate's actionable set, so a
-        # promoted goal stays blocked until a :BL node is created some other way.
+        # bl_status comes from the manifest, which reads the graph: "open" only
+        # when a :BL node actually exists for the number (allocate_bl mints a
+        # pending one since BL-3673), "reserved" when it does not.  Defaulting to
+        # "reserved" keeps a manifest that never checked out of the actionable set.
         "bl_status": str(packet.get("bl_status", "reserved")),
         "cad_status": str(packet.get("cad_status", "unknown")),
         "adr_status": str(packet.get("adr_status", "unknown")),
