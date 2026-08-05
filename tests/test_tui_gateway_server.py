@@ -118,6 +118,113 @@ def test_session_context_uses_session_cwd(monkeypatch, tmp_path):
         server._sessions.pop(sid, None)
 
 
+@pytest.mark.parametrize(
+    ("users", "expected"),
+    [
+        ([{"username": "Morten", "role": "admin", "disabled": False}], "morten"),
+        ([{"username": "morten", "role": "admin", "disabled": True}], ""),
+        ([
+            {"username": "morten", "role": "admin", "disabled": False},
+            {"username": "joakim", "role": "admin", "disabled": False},
+        ], ""),
+        ([{"username": "joakim", "role": "user", "disabled": False}], ""),
+    ],
+)
+def test_bl3905_local_tui_admin_is_unique_active_canonical(
+    monkeypatch, tmp_path, users, expected
+):
+    from hermes_cli.dashboard_auth import capability_policy, user_store
+
+    canonical = tmp_path / "canonical-users.json"
+    seen = {}
+    monkeypatch.setattr(capability_policy, "canonical_users_path", lambda: canonical)
+    monkeypatch.setattr(
+        user_store,
+        "list_users",
+        lambda path=None: seen.setdefault("path", path) is not None and users,
+    )
+
+    assert server._canonical_local_tui_admin() == expected
+    assert seen["path"] == canonical
+
+
+def test_bl3905_stdio_tui_binds_durable_admin_identity(monkeypatch):
+    from gateway.session_context import get_session_env
+    from hermes_cli.dashboard_auth import session_identity
+
+    sid = "bl3905-local"
+    session_key = "bl3905-key"
+    durable = "20260805_105207_bl3905"
+    bound = []
+    monkeypatch.setattr(server, "_canonical_local_tui_admin", lambda: "morten")
+    monkeypatch.setattr(
+        session_identity, "set_identity", lambda session_id, user_id: bound.append((session_id, user_id))
+    )
+    server._sessions[sid] = {
+        "session_key": session_key,
+        "source": "tui",
+        "transport": server._stdio_transport,
+        "agent": types.SimpleNamespace(session_id=durable),
+    }
+
+    tokens = server._set_session_context(session_key)
+    try:
+        assert bound == [(durable, "morten")]
+        assert get_session_env("HERMES_SESSION_ID", "") == durable
+        assert get_session_env("HERMES_SESSION_USER_ID", "") == "morten"
+    finally:
+        server._clear_session_context(tokens)
+        server._sessions.pop(sid, None)
+
+
+def test_bl3905_non_stdio_or_identity_write_failure_stays_closed(monkeypatch):
+    from gateway.session_context import get_session_env
+    from hermes_cli.dashboard_auth import session_identity
+
+    class RemoteTransport:
+        def write(self, _obj):
+            return True
+
+        def close(self):
+            return None
+
+    monkeypatch.setattr(server, "_canonical_local_tui_admin", lambda: "morten")
+    called = []
+    monkeypatch.setattr(
+        session_identity, "set_identity", lambda *args: called.append(args)
+    )
+    server._sessions["remote"] = {
+        "session_key": "remote-key",
+        "source": "tui",
+        "transport": RemoteTransport(),
+        "agent": types.SimpleNamespace(session_id="remote-durable"),
+    }
+    tokens = server._set_session_context("remote-key")
+    try:
+        assert called == []
+        assert get_session_env("HERMES_SESSION_USER_ID", "") == ""
+    finally:
+        server._clear_session_context(tokens)
+        server._sessions.pop("remote", None)
+
+    def fail_identity(*_args):
+        raise OSError("identity store unavailable")
+
+    monkeypatch.setattr(session_identity, "set_identity", fail_identity)
+    server._sessions["local-fail"] = {
+        "session_key": "local-fail-key",
+        "source": "tui",
+        "transport": server._stdio_transport,
+        "agent": types.SimpleNamespace(session_id="local-fail-durable"),
+    }
+    tokens = server._set_session_context("local-fail-key")
+    try:
+        assert get_session_env("HERMES_SESSION_USER_ID", "") == ""
+    finally:
+        server._clear_session_context(tokens)
+        server._sessions.pop("local-fail", None)
+
+
 def test_handoff_fail_marks_only_inflight_rows(monkeypatch):
     class DbContext:
         def __init__(self, db):

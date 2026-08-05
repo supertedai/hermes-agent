@@ -2899,6 +2899,31 @@ def _cwd_for_session_key(session_key: str) -> str:
     return ""
 
 
+def _canonical_local_tui_admin() -> str:
+    """Resolve the sole active admin from the canonical user store.
+
+    BL-3905: a stdio TUI is a local, authenticated-by-OS legacy surface, but it
+    still gets a durable session id.  ``mine_fakta`` correctly refuses a session
+    id with no principal, so bind that local session explicitly instead of adding
+    an owner fallback in the data tool.  Zero/multiple admins or an unreadable
+    store return no identity (fail-closed); names are never hard-coded.
+    """
+    try:
+        from hermes_cli.dashboard_auth import capability_policy, user_store
+
+        users = user_store.list_users(path=capability_policy.canonical_users_path())
+    except Exception:
+        return ""
+    admins = {
+        str(user.get("username") or "").strip().lower()
+        for user in users
+        if user.get("role") == "admin"
+        and not user.get("disabled")
+        and str(user.get("username") or "").strip()
+    }
+    return next(iter(admins)) if len(admins) == 1 else ""
+
+
 def _set_session_context(
     session_key: str,
     cwd: str | None = None,
@@ -2924,18 +2949,47 @@ def _set_session_context(
         # fall back to the session_key (matching the id derivation used at
         # session-finalize), so an identified session is never left blank.
         session_id = session_key
+        bound_session = None
         with _sessions_lock:
             for sess in list(_sessions.values()):
                 if sess.get("session_key") == session_key:
+                    bound_session = sess
                     source = _session_source(sess)
                     session_id = (
                         getattr(sess.get("agent"), "session_id", None) or session_key
                     )
                     break
+
+        # BL-3905: only the in-process stdio transport is trusted as a local TUI.
+        # `source == "tui"` alone is insufficient because websocket clients share
+        # this gateway and can supply/derive that label.  Bind the sole canonical
+        # active admin to the durable session id; if the store is ambiguous or the
+        # identity write fails, keep user_id empty so personal tools fail closed.
+        user_id = ""
+        is_local_tui = (
+            source == "tui"
+            and bound_session is not None
+            and isinstance(bound_session.get("transport"), StdioTransport)
+        )
+        if is_local_tui:
+            candidate = _canonical_local_tui_admin()
+            if candidate:
+                try:
+                    from hermes_cli.dashboard_auth.session_identity import set_identity
+
+                    set_identity(str(session_id), candidate)
+                    user_id = candidate
+                except Exception:
+                    logger.warning(
+                        "BL-3905: local TUI identity binding failed; personal tools stay closed",
+                        exc_info=True,
+                    )
+
         return set_session_vars(
             session_key=session_key,
             session_id=session_id,
             source=source,
+            user_id=user_id,
             cwd=resolved,
             ui_session_id=ui_session_id,
         )
