@@ -125,3 +125,54 @@ def test_record_appends_a_complete_readback(tmp_path, monkeypatch):
     assert record["usable_for_principal"] == rb.usable
     assert record["read_this_turn"] == rb.read_this_turn
     assert record["budget_tokens"] == mr.DEFAULT_BUDGET_TOKENS
+
+
+def test_an_agent_principal_is_surface_mismatch_not_absence():
+    """Asking the User surface about a FleetAgent is a category error.
+
+    Reporting `no_principal` for it would dress that error up as a measurement:
+    it reads as "we looked, the layers are empty" when what happened is "we asked
+    a surface that cannot describe this kind of principal".
+    """
+    rb = mr.build_readback("faber", payload={}, principal_kind="fleet_agent")
+
+    assert len(rb.layers) == 20
+    assert all(l.substrate_state == "surface_mismatch" for l in rb.layers)
+    assert all(l.reason == "surface_mismatch" for l in rb.layers)
+    assert rb.usable == 0
+    record = rb.to_dict()
+    assert record["principal_kind"] == "fleet_agent"
+    assert record["surface_describes_principal"] is False
+
+
+def test_surface_mismatch_is_distinct_from_no_principal():
+    agent = mr.build_readback("faber", payload={}, principal_kind="fleet_agent")
+    missing_user = mr.build_readback(
+        "ukjent", payload=payload({k: "no_principal" for k in CANONICAL_MEMORY_LAYER_IDS})
+    )
+
+    agent_states = {l.substrate_state for l in agent.layers}
+    user_states = {l.substrate_state for l in missing_user.layers}
+
+    assert agent_states == {"surface_mismatch"}
+    assert user_states == {"no_principal"}
+    assert agent_states != user_states
+
+
+def test_a_user_principal_still_reports_measured_state():
+    """The fix must not turn every principal into a mismatch."""
+    rb = mr.build_readback("morten", payload=payload(ALL_MEASURED), principal_kind="user")
+
+    assert rb.usable == 20
+    assert rb.to_dict()["surface_describes_principal"] is True
+
+
+def test_record_does_not_call_the_wrong_surface_for_an_agent(tmp_path, monkeypatch):
+    """A mismatch must not cost a pointless multi-second API round trip."""
+    called = []
+    monkeypatch.setattr(mr, "fetch_layer_state", lambda p, **kw: called.append(p) or ({}, ""))
+
+    rb = mr.record("faber", log=tmp_path / "r.jsonl", principal_kind="fleet_agent")
+
+    assert called == [], "the User surface must not be queried for a FleetAgent"
+    assert rb.usable == 0
