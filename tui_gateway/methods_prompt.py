@@ -126,6 +126,35 @@ def _(rid, params: dict) -> dict:
     session, err = _sess_nowait(params, rid)
     if err:
         return err
+    # BL-3964: TO NOKLER, EN FIL. Registreringen over bruker `sid` =
+    # params["session_id"] (KLIENTENS id, `_sessions`-nokkelen). Verktoylaget
+    # slar opp med en ANNEN: `agent/tool_executor.py` sender
+    # `session_id=agent.session_id` inn i `handle_function_call`, altsa den
+    # DURABLE sesjons-id-en (`20260805_...`-formen, samme som `sessions.id`).
+    # MAALT 2026-08-05: av 134 nokler i session_identity.json traff 1 en
+    # faktisk sesjon - de 130 klient-formede traff 0. Derfor svarte
+    # `mine_fakta` `no_identity` til EIEREN pa hver eneste tur, og derfor har
+    # `_symbiose_role_gate` sin default-deny for ikke-admin aldri fyrt: et
+    # bom-oppslag leses som "legacy/admin-aera" og gir full verktoyflate.
+    # BL-3905s stdio-gren var det eneste stedet som registrerte under den
+    # durable id-en, og dermed den eneste stien som noen gang virket.
+    #
+    # Registrer derfor BEGGE. Dette utvider ingen tillit: `_uid` er alt
+    # verifisert av den autentiserte proxyen for NOYAKTIG denne sesjonen -
+    # ingen ny kilde, ingen klient-assertert verdi, ingen eier-default.
+    # Agenten kan vaere ubygd pa aller forste tur; da finnes ingen durabel id
+    # a binde, og vi lar det staa (personlige verktoy feiler lukket som for)
+    # heller enn a gjette en nokkel.
+    if isinstance(_uid, str) and _uid.strip():
+        _durable = str(getattr(session.get("agent"), "session_id", "") or "")
+        if _durable and _durable != sid:
+            try:
+                from hermes_cli.dashboard_auth.session_identity import set_identity
+                set_identity(_durable, _uid)
+            except Exception as exc:
+                # Samme fail-lukkede kontrakt som registreringen over: kan en
+                # assertert identitet ikke registreres, kjores ikke turnen.
+                return _err(rid, 5033, f"identitetsregistrering (durabel) feilet: {exc}")
     if (limit_message := _ensure_active_session_slot(sid, session)) is not None:
         return _err(rid, 4090, limit_message)
     if truncate_user_ordinal is not None and isinstance(text, str):
@@ -338,6 +367,28 @@ def _(rid, params: dict) -> dict:
                     },
                 )
                 return
+        # BL-3965: FORSTE-TUR-LUKEN. Bindingen etter `_sess_nowait` treffer bare
+        # nar agenten ALT er bygd; pa aller forste tur i en ny sesjon er den
+        # ikke det, saa det fantes ingen durabel id a binde og turnen brukte
+        # `mine_fakta` for identiteten var registrert. Malt: hver nye samtale
+        # kostet ett bomskudd for den virket. HER er agenten ferdig bygd
+        # (`_wait_agent_for_prompt` over), avbrytelses-sjekkene passert, og
+        # INGEN verktoy har kjort enda - `_run_prompt_submit` er neste linje.
+        # Samme fail-lukkede kontrakt: ingen eier-default, ingen gjetting.
+        if isinstance(_uid, str) and _uid.strip():
+            _dur = str(getattr(session.get("agent"), "session_id", "") or "")
+            if _dur and _dur != sid:
+                try:
+                    from hermes_cli.dashboard_auth.session_identity import set_identity
+                    set_identity(_dur, _uid)
+                except Exception:
+                    # Her kan vi ikke returnere en JSON-RPC-feil (vi er i
+                    # turn-traaden). Logg hoyt; personlige verktoy feiler
+                    # lukket nedstroms, som de skal.
+                    logger.warning(
+                        "BL-3965: durabel identitetsbinding feilet for sid=%s", sid,
+                        exc_info=True,
+                    )
         _run_prompt_submit(rid, sid, session, text)
 
     run_thread = threading.Thread(target=run_after_agent_ready, daemon=True)
