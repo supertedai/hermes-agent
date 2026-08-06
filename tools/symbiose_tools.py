@@ -446,17 +446,42 @@ registry.register(
 # WP7 (BL-2814): consent-bevisst personlig-fakta-verktoy. Kaller det consent-gatede
 # .12-endepunktet (apply_consent=true) -> domener brukeren har merket «privat»
 # utelates automatisk fra recall. Per bruker via _caller_uid (BL-2790-identitet).
+_MINE_FAKTA_DOMAINS = frozenset(('IDENTITY', 'FAMILY', 'WORK', 'PROJECTS', 'SKILLS', 'HEALTH', 'OWNERSHIP', 'LOCATION', 'FINANCE', 'ENVIRONMENT', 'AGENTS', 'THEORIES', 'IOT'))
+
+
 def _mine_fakta(args, **kw):
-    # WP7 (BL-2814): FAIL-CLOSED — personlige fakta krever en identifisert sesjon.
-    # Uten identitet returneres feil (ikke eier-default), sa en uregistrert ikke-eier-
-    # sesjon aldri kan fa eierens fakta. Eier-sesjoner ER registrert (session_identity),
-    # sa dette braker ikke eier-tilgang.
+    # WP7 (BL-2814): FAIL-CLOSED - personlige fakta krever en identifisert sesjon.
+    # Uten identitet returneres feil (ikke eier-default), sa en uregistrert
+    # ikke-eier-sesjon aldri kan fa eierens fakta. BL-3964/BL-3965 sorger for at
+    # eier-sesjoner FAKTISK er registrert under den durable id-en verktoylaget
+    # slar opp med - for dem svarte denne grenen alltid, ogsa for eieren selv.
     uid = _caller_uid(kw)
     if not uid:
         return json.dumps({"error": "no_identity",
                            "detail": "Personlige Life Contract-fakta krever en identifisert sesjon."})
-    return _get("/life-contract/facts?" + urllib.parse.urlencode(
-        {"user_id": uid, "apply_consent": "true"}), user_id=uid)
+    # BL-3965: 160 fakta over 10 domener sprengte max_result_size_chars, sa
+    # svaret ble kuttet midt i og resten var usynlig for modellen - den sa
+    # PROJECTS og meldte det som "minst disse". `.12`-endepunktet stotter
+    # `domain`, sa be om ett domene av gangen nar fullstendighet trengs.
+    # Utelatt domain = samme fulle oppslag som for, na med hoyere takhoyde.
+    q = {"user_id": uid, "apply_consent": "true"}
+    dom = (args or {}).get("domain")
+    if isinstance(dom, str) and dom.strip():
+        dom = dom.strip().upper()
+        # BL-3965 reviewer-funn: uten enum tar skjemaet enhver streng.
+        # Malt: domain="PROJECT" (entall-skrivefeil for "PROJECTS") gir 100
+        # tomme UNKNOWN-poster (predicate=None, value=None) meldt som 100
+        # fakta - en konfabulasjonsvektor, ikke bare et tomt svar. Avvis her,
+        # for kallet nar .12, i stedet for a la et gjettet domenenavn stille
+        # produsere skygge-data.
+        if dom not in _MINE_FAKTA_DOMAINS:
+            return json.dumps({
+                "error": "unknown_domain",
+                "detail": f"Ukjent domene {dom!r}. Gyldige: "
+                          + ", ".join(sorted(_MINE_FAKTA_DOMAINS)),
+            }, ensure_ascii=False)
+        q["domain"] = dom
+    return _get("/life-contract/facts?" + urllib.parse.urlencode(q), user_id=uid)
 
 
 registry.register(
@@ -469,11 +494,17 @@ registry.register(
             "prosjekter osv.), gruppert per domene. Respekterer personvern: domener "
             "brukeren selv har merket «privat» utelates automatisk. Bruk nar brukeren "
             "spor om hva du vet om dem, eller trenger deres egne kanoniske fakta."),
-        "parameters": {"type": "object", "properties": {}, "required": []},
+        "parameters": {"type": "object", "properties": {
+            "domain": {"type": "string",
+                       "enum": sorted(_MINE_FAKTA_DOMAINS),
+                       "description": "Valgfritt: hent KUN ett domene. Utelat for alle - "
+                                      "men et fullt oppslag kan naerme seg takhoyden, sa be "
+                                      "per domene nar du trenger fullstendighet."},
+        }, "required": []},
     },
     handler=_mine_fakta,
     emoji="\U0001F4CB",
-    max_result_size_chars=8000,
+    max_result_size_chars=60000,
 )
 
 
