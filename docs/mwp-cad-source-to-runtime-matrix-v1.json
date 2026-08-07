@@ -5,6 +5,8 @@
   "mode": "read-only-source-mapper",
   "source_index": "/home/agent/agent-layer/symbiose-workspace/ASI_CAD_V0.1/README.md",
   "roadmap": "/home/agent/agent-layer/symbiose-workspace/ASI_CAD_ROADMAP_V0.1.md",
+  "source_markdown_file_count": 36,
+  "cad_component_id_count": 30,
   "status_chain": ["DECLARED","REGISTERED","IMPLEMENTED","EXPOSED","REACHABLE","INSTANTIATED","READABLE","MEASURED","VALIDATED","GATED","PROMOTED"],
   "records": [
     ["CAD-0","CAD-kontrakt"],["CAD-A","Agent identity og autoritet"],["CAD-B","Basismodell og inferens"],["CAD-C","Context og arbeidsminne"],["CAD-D","Data og kunnskapslivssyklus"],["CAD-E","Episodisk og erfaringsbasert minne"],["CAD-F","Fakta, semantikk og verdensmodell"],["CAD-G","Governance og normativt system"],["CAD-H","Hypotese og vitenskapelig metode"],["CAD-I","Introspeksjon og selvmodell"],["CAD-J","Judgment, beslutning og utility"],["CAD-K","Kausalitet og intervensjon"],["CAD-L","Læring og feedback"],["CAD-M","Minnearkitektur: 20 lag"],["CAD-N","Normer, preferanser og menneskelig hånd"],["CAD-O","Orkestrering og agentkollektiv"],["CAD-P","Planlegging og prospektiv kontroll"],["CAD-Q","Quality, kalibrering og evalueringskvalitet"],["CAD-R","Retrieval og relevans"],["CAD-S","Sikkerhet, sandbox og stopp"],["CAD-T","Temporalitet, tilstand og prognose"],["CAD-U","Utility, verdier og måloptimalisering"],["CAD-V","Verktøy og affordance"],["CAD-W","World state og miljøinteraksjon"],["CAD-X","eXperimenter, execution og forskningssløyfe"],["CAD-Y","Ytelse, ressurser og skalering"],["CAD-Z","Zero-trust, kvalitetssikring og supply chain"],["CAD-Æ","Ærlighet, usikkerhet og epistemisk hygiene"],["CAD-Ø","Økosystem, drift og recovery"],["CAD-Å","Åpen ASI-målarkitektur"]
