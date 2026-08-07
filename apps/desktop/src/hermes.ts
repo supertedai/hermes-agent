@@ -410,12 +410,31 @@ export async function listAllProfileSessions(
     ? `&exclude_sources=${encodeURIComponent(filter.excludeSources.join(','))}`
     : ''
 
-  const result = await window.hermesDesktop.api<PaginatedSessions>({
-    path:
-      `/api/profiles/sessions?limit=${limit}&offset=0&min_messages=${Math.max(0, minMessages)}` +
-      `&archived=${archived}&order=${order}&profile=${encodeURIComponent(profile)}${sourceParam}${excludeParam}`,
-    timeoutMs: SESSION_LIST_REQUEST_TIMEOUT_MS
-  })
+  let result: PaginatedSessions
+
+  try {
+    result = await window.hermesDesktop.api<PaginatedSessions>({
+      path:
+        `/api/profiles/sessions?limit=${limit}&offset=0&min_messages=${Math.max(0, minMessages)}` +
+        `&archived=${archived}&order=${order}&profile=${encodeURIComponent(profile)}${sourceParam}${excludeParam}`,
+      timeoutMs: SESSION_LIST_REQUEST_TIMEOUT_MS
+    })
+  } catch (error) {
+    // Older remote backends expose the proven single-profile route but not the
+    // newer cross-profile aggregator. A 404 here is a capability mismatch, not
+    // a lost session; retry against /api/sessions so a new Desktop remains
+    // compatible with the established ai.byopus.com backend.
+    if (!isEndpointMissingError(error)) {
+      throw error
+    }
+
+    result = await window.hermesDesktop.api<PaginatedSessions>({
+      path:
+        `/api/sessions?limit=${limit}&offset=0&min_messages=${Math.max(0, minMessages)}` +
+        `&archived=${archived}&order=${order}${sourceParam}${excludeParam}`,
+      timeoutMs: SESSION_LIST_REQUEST_TIMEOUT_MS
+    })
+  }
 
   return {
     ...result,
