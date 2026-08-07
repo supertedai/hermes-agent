@@ -1,0 +1,43 @@
+{
+  "gate": "cad-adr-bl-intent-registry",
+  "artifact_id": "mwp-cad-adr-bl-intent-gate-readback-v11",
+  "mwp_id": "MWP-UOSH-001",
+  "status": "BLOCKED_SUPERVISOR_RECEIPT_INTEGRATION_AND_FULL_MAPPING_PENDING",
+  "mode": "metadata-only-source-runtime-verification",
+  "fresh_runtime": {
+    "topology_tick": {
+      "status": "OPEN",
+      "inventory_hash": "93d13016aba69ebf4194a7dc83e7325de8fc7930bbf067bf8316ebbfd9ed4171",
+      "item_count": 65,
+      "delta": {"added": [], "removed": [], "changed": []},
+      "gap_reported": "missing receipts: git, graph, obsidian",
+      "event_id": "EVT-a3bbe58ad897"
+    },
+    "closeout_tick": {
+      "status": "OPEN",
+      "registry_open_rows": 8,
+      "blocker_count": 10,
+      "receipt_statuses": ["VERIFIED","BLOCKED","BLOCKED"]
+    }
+  },
+  "destination_evidence": {
+    "git": {"status":"VERIFIED_REMOTE","ref":"origin/mwp/uosh-automation-01","head":"4abe5d7094c4f8194d1c663c80a7db79e6852fba","note":"supervisor does not yet consume current Git receipt"},
+    "obsidian": {"status":"VERIFIED_READ_AFTER_WRITE","target":"/Users/morpheus/Documents/Obsidian/Brain/90-Meta/MWP/","files":4,"note":"supervisor does not yet consume current Obsidian receipt"},
+    "graph": {"status":"VERIFIED_BOUNDED_ONLY","scope":"Morten AUTHORED relation","full_projection":"BLOCKED"}
+  },
+  "source_mapping": {
+    "cad": {"status":"SOURCE_INDEXED_RUNTIME_MAPPING_PENDING","count":36},
+    "adr": {"status":"REFERENCES_INDEXED_OWNER_AUTHORITY_PENDING","count":7},
+    "bl": {"status":"REFERENCES_INDEXED_OWNER_AUTHORITY_PENDING","count":16}
+  },
+  "blockers": [
+    "supervisor/closeout evaluator does not consume the new Git/Obsidian receipt artifacts",
+    "full CAD→ADR→BL→MWP task mapping is not closed",
+    "full graph projection is not authorized or verified",
+    "continuous reconciler and freshness/drift monitor are not implemented"
+  ],
+  "owner": "Morten / authorized source-of-truth and runtime owners",
+  "next_action": "Integrate receipt adapters into the existing closeout supervisor, then rerun the gate; keep full CAD/ADR/BL mapping and graph projection blocked until each record has authority, freshness, projection and read-after-write evidence.",
+  "mutation": {"source_write":false,"graph_write":false,"obsidian_write":false,"runtime_activation":false},
+  "raw_payload_included": false
+}
