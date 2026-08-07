@@ -1,0 +1,25 @@
+{
+  "artifact_id": "mwp-adr-bl-source-matrix-v1",
+  "mwp_id": "MWP-UOSH-001",
+  "status": "SOURCE_REFERENCES_INDEXED_OWNER_ADOPTION_RECONCILIATION_PENDING",
+  "mode": "read-only-source-mapper",
+  "source_evidence": ["docs/mwp-uosh-full-reconciliation-checkpoint.md","docs/ADR-TRUTH-001-cross-surface-canonical-truth.md","docs/mwp-standard-stack-adoption.md"],
+  "adr_records": [
+    {"id":"ADR-H10-SEMANTIC-BOUNDARY-001","source":"docs/ADR-H10-SEMANTIC-BOUNDARY-001.md","status":"SOURCE_VERIFIED_MAPPING_PENDING"},
+    {"id":"ADR-TRUTH-001","source":"docs/ADR-TRUTH-001-cross-surface-canonical-truth.md","status":"ACCEPTED_ARCHITECTURE_RUNTIME_ROLLOUT_GATED"},
+    {"id":"ADR-022","status":"TEXTUAL_REFERENCE_REGISTRY_PENDING"},
+    {"id":"ADR-035","status":"TEXTUAL_REFERENCE_REGISTRY_PENDING"},
+    {"id":"ADR-038","status":"TEXTUAL_REFERENCE_REGISTRY_PENDING"},
+    {"id":"ADR-045","status":"TEXTUAL_REFERENCE_REGISTRY_PENDING"},
+    {"id":"ADR-046","status":"TEXTUAL_REFERENCE_REGISTRY_PENDING"}
+  ],
+  "bl_records": [
+    "BL-2290","BL-2363","BL-2653","BL-2783","BL-2786","BL-2789","BL-2790","BL-3254","BL-3404","BL-3428","BL-3432","BL-3621","BL-3664","BL-3684","BL-3923","BL-3935"
+  ],
+  "bl_default_state": "TEXTUAL_REFERENCE_OWNER_ADOPTION_FRESHNESS_CLOSEOUT_PENDING",
+  "record_schema": ["source_id","source_path_or_remote_ref","mwp_id","case_id","parent_task_id","child_task_id","owner","authority","canonical_version","source_hash","projection_targets","projection_receipts","rollback_ref","status"],
+  "projection_targets": ["git","obsidian","graph","runtime_receipt"],
+  "non_claims": ["A textual reference is not a canonical registry record.","No owner, adoption, freshness or closeout is inferred.","No projection write is performed by this matrix.","No new ADR or BL identifier is created."],
+  "next_action": "Resolve canonical source locations and owner/authority for every listed ADR/BL, map to CAD/MWP parent-child tasks, then generate typed projection plans and receipts.",
+  "raw_payload_included": false
+}
