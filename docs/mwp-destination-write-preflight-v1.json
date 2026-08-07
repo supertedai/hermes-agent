@@ -24,11 +24,28 @@
     "unsafe_default": "do not commit all 225 worktree entries without owner-selected scope and review"
   },
   "obsidian": {
-    "target_status": "MISSING",
-    "vault_path": null,
-    "canonical_note_path": null,
-    "writer_authority": "NOT_VERIFIED",
-    "write_status": "BLOCKED_TARGET_AND_AUTHORITY_MISSING"
+    "target_status": "OBSIDIAN_WRITE_READBACK_COMPLETE",
+    "vault_path": "/Users/morpheus/Desktop/backups/Transfere backup/Brain",
+    "canonical_target_path": "/Users/morpheus/Documents/Obsidian/Brain",
+    "canonical_note_path": "90-Meta/MWP/",
+    "proposed_note_map": ["90-Meta/MWP/MWP-UOSH-001.md", "90-Meta/MWP/Identity and Surfaces.md", "90-Meta/MWP/Receipts and Gates.md", "90-Meta/MWP/Destination Status.md"],
+    "vault_size_readback": "692K",
+    "parity_status": "PASS",
+    "write_receipt": {
+      "status": "PASS",
+      "mode": "metadata-only-new-namespace",
+      "files_written": 4,
+      "files_overwritten": 0,
+      "read_after_write": "PASS",
+      "hashes": {
+        "Destination Status.md": "472294ddd8ba1c03d1a5261bc128aa83fbab002eb9b1460571547fc9623e3767",
+        "Identity and Surfaces.md": "c473673a78649f6ab9f1b2465ea67057a0f504a5a3e1fe6befd6a1a339e0fc40",
+        "MWP-UOSH-001.md": "b79b7bc967ab4967d4e9bbe88f8eeb3318bc71ed3e54be65079a78e6ed9e871a",
+        "Receipts and Gates.md": "886c9bd423dc6ec718acf878d4555bb44bd7c771dc608697fef69c7ab0303cea"
+      }
+    },
+    "writer_authority": "OWNER_APPROVED_METADATA_ONLY_PACKAGE",
+    "write_status": "COMPLETE_READ_AFTER_WRITE_PASS"
   },
   "destination_gate": {
     "required_before_git": ["owner-selected file scope", "diff review", "commit receipt", "remote/push authority if requested"],
