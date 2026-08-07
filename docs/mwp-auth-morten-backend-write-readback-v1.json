@@ -1,0 +1,92 @@
+{
+  "gate": "GAP-AUTH-MORTEN-BACKEND-WRITE-001",
+  "status": "COMPLETE_BOUNDED_AUTHORED_WRITE_READBACK_PROBE_SIDE_EFFECT_AUDITED",
+  "mode": "metadata-only",
+  "scope": {
+    "principal_expected": "morten",
+    "installation_id": "mwp-status-quo",
+    "login_surface_local": "http://localhost:9119",
+    "login_surface_canonical": "https://ai.byopus.com",
+    "agent_id": "opus"
+  },
+  "live_readback": {
+    "localhost_status": {
+      "http_status": 200,
+      "auth_required": false,
+      "interpretation": "loopback trusted-operator mode; dashboard snapshot token is not a canonical Morten cookie session"
+    },
+    "localhost_auth_me_with_snapshot_token": {
+      "http_status": 401,
+      "interpretation": "expected because /api/auth/me reads request.state.session in gated cookie mode"
+    },
+    "localhost_symbiose_read": {
+      "http_status": 200,
+      "interpretation": "snapshot/read surface reachable; does not prove write authority"
+    },
+    "canonical_login": {
+      "url": "https://ai.byopus.com/auth/login",
+      "http_status": 200,
+      "provider": "basic",
+      "display_name": "Opus 2FA login",
+      "supports_password": true
+    },
+    "broker_14": {
+      "host": "192.168.40.14",
+      "port": 9120,
+      "health_http_status": 401,
+      "mwp_identity_http_status": 401,
+      "interpretation": "broker runtime reachable and auth boundary active; canonical session/native handoff not verified"
+    },
+    "canonical_auth_me_without_cookie": {
+      "http_status": 401,
+      "interpretation": "expected before owner login"
+    },
+    "auth_only_provider_probe": {
+      "gateway_pid": 3715257,
+      "route": "http://localhost:9119/auth/login?provider=nous",
+      "http_status": 404,
+      "response": "Unknown provider: 'nous'",
+      "provider_contract_source": "plugins/dashboard_auth/nous/__init__.py",
+      "interpretation": "pre-change gateway runtime; plugin was not registered before config activation"
+    },
+    "nous_plugin_config": {
+      "plugin": "nous",
+      "status": "disabled",
+      "activation": "current runtime",
+      "runtime_provider_registry": "not applicable for canonical ai.byopus.com path",
+      "interpretation": "Nous Portal path was an incorrect local-plugin route for this architecture; plugin disabled and gateway restarted"
+    },
+    "canonical_surface_correction": {
+      "canonical_login_surface": "https://ai.byopus.com",
+      "broker_target": "192.168.40.14:9120",
+      "status": "COMPLETE_BOUNDED_AUTHORED_WRITE_READBACK_PROBE_SIDE_EFFECT_AUDITED",
+      "session_census": {"canonical_home":"/home/agent/.hermes","canonical_sessions":3802,"gui_backup":"/home/agent/.hermes-gui","gui_backup_sessions":412},
+      "owner_confirmation": "Morten reports historical threads are visible in Desktop after canonical Home/remote reconnect",
+      "principal_readback": {"status":"LIVE","authenticated_user_id":"morten","login_surface_id":"ai.byopus.com","transport":"cloud→agent→ssh","ssh_hop_ref":"box14→.15:9119","freshness":"live","provenance":"box14-hermes-ws-proxy","durable_session_ids_observed":5},
+      "graph_pre_read": {"user_count":1,"theory_count":1,"authored_count_before":0,"user_sha256":"108db7630b9eb6935ed35cba28eda3c349dae401eaa5bd282f8ae1bc2ca77059","theory_sha256":"6717d601cd81f2370459aebcb0a7d31e8a6dec03a3070ee74cb7a2ab9cea0197","authored_sha256":"a883606d4f75d5c1efd39def93ae550eb28038b256ccdda35f2af43baac3f910"},
+      "write_receipt": {"route":"/api/v1/autonomy/execute","action_type":"neo4j.write","relationship_type":"AUTHORED","relationship_id":"5:85f7c59f-8de6-4f26-a3de-4ccf9c14d1c8:1161957291163910253","principal_id":"morten","post_read_sha256":"8271d82ac0852cd4191056062f4fed548e6a863510cbe326cb2131d2e23555f9","rollback_ref":"exact relationship id only; no node deletion"},
+      "implementation": {"desktop_auth_readback": "implemented in apps/desktop/electron/main.ts", "packaged_artifact": "release/linux-unpacked/resources/app.asar updated", "launcher_flag": "HERMES_DESKTOP_AUTH_READBACK=1"},
+      "evidence": ["authenticated /api/me: auth=true, mode=2fa, kind=legacy, username=morten@magnusson.as", "authenticated /api/mwp/identity: status=LIVE", "box14 broker reports live desktop bindings over cloud→agent→ssh", "localhost dashboard Home is /home/agent/.hermes and overall=ok", "official autonomy neo4j.write receipt and read-after-write PASS"],
+      "interpretation": "bounded AUTHORED relationship write completed and was read back; generic write probe side-effect remains separately audited"
+    },
+    "nous_auth_add_attempt": {
+      "commands": ["hermes auth add nous --type oauth", "hermes auth add nous --type oauth --no-browser"],
+      "result": "TIMEOUT_WAITING_FOR_OAUTH_CALLBACK",
+      "matching_env_key_names": [],
+      "interpretation": "no verified client_id provisioning or completed OAuth session readback"
+    }
+  },
+  "missing": [
+    "optional rollback only if separately owner-approved"
+  ],
+  "owner_action_required": "No further owner action for completed bounded relationship; rollback remains owner-gated",
+  "next_agent_action": "retain receipts; do not perform additional graph/Obsidian writes without a new bounded preflight and owner approval",
+  "mutation": {
+    "auth_write": false,
+    "graph_write": true,
+    "authored_relationship_write": true,
+    "generic_write_probe_side_effect_audited": true,
+    "obsidian_write": false,
+    "runtime_activation": false
+  }
+}

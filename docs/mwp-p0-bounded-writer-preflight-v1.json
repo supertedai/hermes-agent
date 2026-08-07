@@ -1,0 +1,92 @@
+{
+  "gate": "GAP-AUTH-MORTEN-BACKEND-WRITE-001",
+  "status": "COMPLETE_BOUNDED_AUTHORED_WRITE_READBACK_PROBE_SIDE_EFFECT_AUDITED",
+  "mode": "metadata-only",
+  "artifact": "docs/mwp-p0-bounded-writer-preflight-v1.json",
+  "schema_source": "/home/agent/agent-layer/symbiose-workspace/repo/schema/neo4j_schema.cypher",
+  "owner": "morten",
+  "canonical_login": "https://ai.byopus.com",
+  "proposed_target": {
+    "user_match": {"label": "User", "property": "id", "value": "morten"},
+    "theory_match": {"label": "Theory", "property": "name", "value": "Energy-Flow Cosmology"},
+    "relationship": "AUTHORED",
+    "source": "H10 theory-cosmos EFC package/public provenance",
+    "claim_status": "ARCHITECTURE_INTENT",
+    "projection_status": "PROPOSED_NOT_WRITTEN"
+  },
+  "why_bounded": [
+    "one User match",
+    "one Theory match",
+    "one AUTHORED relationship",
+    "no destructive update",
+    "no overwrite of existing Theory properties",
+    "idempotent match/merge required",
+    "receipt required before any further projection"
+  ],
+  "preconditions": [
+    "authenticated /api/me returns user_id=morten",
+    "/api/mwp/identity returns authority scope including this target",
+    "canonical graph endpoint and tenant are read back",
+    "writer capability is explicitly granted for this target",
+    "rollback reference is issued",
+    "owner approval reference is present",
+    "existing User and Theory state is read before write"
+  ],
+  "pre_read": {
+    "status": "PASS",
+    "endpoint": "http://192.168.40.12:8010/graph/query",
+    "user_query_result_count": 1,
+    "theory_query_result_count": 1,
+    "authored_query_result_count": 0,
+    "user_sha256": "108db7630b9eb6935ed35cba28eda3c349dae401eaa5bd282f8ae1bc2ca77059",
+    "theory_sha256": "6717d601cd81f2370459aebcb0a7d31e8a6dec03a3070ee74cb7a2ab9cea0197",
+    "authored_sha256": "a883606d4f75d5c1efd39def93ae550eb28038b256ccdda35f2af43baac3f910",
+    "interpretation": "User(morten) and Theory(Energy-Flow Cosmology) exist; AUTHORED relationship does not currently exist"
+  },
+  "write_shape_proposal": {
+    "operation": "MERGE relationship only after existing-node readback",
+    "cypher_shape": "MATCH (u:User {id:$user_id}), (t:Theory {name:$theory_name}) MERGE (u)-[r:AUTHORED]->(t) ON CREATE SET r.source=$source, r.confidence=$confidence, r.status=$status RETURN u.id, t.name, type(r), r",
+    "parameters": {"user_id":"morten","theory_name":"Energy-Flow Cosmology","source":"mwp-h10","confidence":"declared","status":"active"},
+    "not_allowed": ["CREATE duplicate nodes", "delete existing relationships", "overwrite existing Theory properties", "promote claim status", "activate steward", "write Obsidian"]
+  },
+  "receipt_required": ["pipeline_run_id","principal_id","owner_approval_ref","tenant_id","graph_endpoint_ref","pre_read_hash","cypher_shape_hash","created_or_existing","node_ids","relationship_id","post_read_hash","rollback_ref","timestamp","partial_failures","next_action"],
+  "rollback": {"allowed":"only the exact relationship created by this run and only with receipt/owner approval","not_allowed":"delete pre-existing User/Theory nodes or relationships"},
+  "route_discovery_probe": {
+    "route": "/api/v1/unified",
+    "intent": "write",
+    "payload": "empty/relationship_add-shape probe",
+    "result": "routed_to=write_router; success=true; no new node created",
+    "returned_document_id": "953fd4c3-2606-4f3e-3c20-b2e1401dc5a2",
+    "post_probe_read": {"label":"Document","count":1,"archived":true,"archived_reason":"duplicate","collection":"routing_quarantine","text_length":0,"created_at":"2026-07-23T01:24:12.382000000+00:00","outgoing_relations":[{"type":"HAS_INGEST_SOURCE","count":1}],"incoming_relations":[{"type":"CREATED","count":1}],"chunk_relations":0,"audit_endpoint_id_mentions":0},
+    "interpretation": "generic write router returned an existing archived quarantine document; no new node, chunks, semantic content or additional relationships were observed",
+    "rollback": "NO_ROLLBACK_REQUIRED_FOR_SEMANTIC_CONTENT; exact historical metadata diff unavailable, so the pre-existing archived node is not deleted"
+  },
+  "write_receipt": {
+    "status": "SUCCESS",
+    "route": "/api/v1/autonomy/execute",
+    "action_type": "neo4j.write",
+    "grant_scope": "neo4j.write",
+    "principal_id": "morten",
+    "owner_approval": "clarify response: approve one bounded MERGE",
+    "user_id": "morten",
+    "theory_name": "Energy-Flow Cosmology",
+    "relationship_type": "AUTHORED",
+    "relationship_id": "5:85f7c59f-8de6-4f26-a3de-4ccf9c14d1c8:1161957291163910253",
+    "relationship_properties": {"source":"owner-approved-p0-bounded-merge","status":"CONFIRMED","confidence":1.0},
+    "post_read_status": "PASS",
+    "post_read_result_count": 1,
+    "post_read_sha256": "8271d82ac0852cd4191056062f4fed548e6a863510cbe326cb2131d2e23555f9",
+    "rollback_ref": "MATCH (u:User {id:\"morten\"})-[r:AUTHORED]->(t:Theory {name:\"Energy-Flow Cosmology\"}) WHERE elementId(r)=\"5:85f7c59f-8de6-4f26-a3de-4ccf9c14d1c8:1161957291163910253\" DELETE r",
+    "rollback_scope": "exact relationship created by this run only; no node deletion"
+  },
+  "writer_gate": {
+    "route": "/api/v1/autonomy/grant",
+    "scope": "neo4j.write",
+    "required_header": "X-Autonomy-Token",
+    "ttl_max_seconds": 3600,
+    "status": "USED_SHORT_LIVED_GRANT_RECEIPTED"
+  },
+  "current_result": "COMPLETE_BOUNDED_AUTHORED_WRITE_READBACK_PROBE_SIDE_EFFECT_AUDITED",
+  "next_action": "no further mutation; retain receipt and rollback reference; any rollback requires separate owner approval",
+  "mutation": {"graph_write": true,"authored_relationship_write": true,"generic_write_probe": true,"new_node_created": false,"existing_archived_document_returned": true,"obsidian_write": false,"steward_activation": false}
+}

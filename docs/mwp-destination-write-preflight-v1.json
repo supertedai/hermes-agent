@@ -1,0 +1,36 @@
+{
+  "artifact_id": "mwp-destination-write-preflight-v1",
+  "mwp_id": "MWP-UOSH-001",
+  "version": 1,
+  "status": "BLOCKED_DESTINATION_SCOPE_TARGET_MISSING",
+  "mode": "read-only-preflight",
+  "git": {
+    "branch": "mwp/uosh-automation-01",
+    "tracked_changed": 12,
+    "untracked": 213,
+    "total_status_entries": 225,
+    "write_status": "BLOCKED_UNTIL_SCOPE_SELECTION",
+    "safe_candidate_package": [
+      "docs/mwp-auth-morten-backend-write-readback-v1.json",
+      "docs/mwp-p0-bounded-writer-preflight-v1.json",
+      "docs/mwp-uosh-gap-register-v1.json",
+      "docs/mwp-identity-multi-user-multi-surface-contract-v1.json",
+      "docs/mwp-identity-joakim-onboarding-preflight-v1.json"
+    ],
+    "unsafe_default": "do not commit all 225 worktree entries without owner-selected scope and review"
+  },
+  "obsidian": {
+    "target_status": "MISSING",
+    "vault_path": null,
+    "canonical_note_path": null,
+    "writer_authority": "NOT_VERIFIED",
+    "write_status": "BLOCKED_TARGET_AND_AUTHORITY_MISSING"
+  },
+  "destination_gate": {
+    "required_before_git": ["owner-selected file scope", "diff review", "commit receipt", "remote/push authority if requested"],
+    "required_before_obsidian": ["vault/target path", "canonical note mapping", "writer authority", "pre-read hash", "rollback reference", "read-after-write"],
+    "no_write_executed": true
+  },
+  "next_action": "choose canonical MWP package scope for Git; separately provide/verify Obsidian vault target before any Obsidian write",
+  "owner_decision": "pending"
+}

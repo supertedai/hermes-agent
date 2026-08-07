@@ -1,0 +1,93 @@
+{
+  "artifact_id": "mwp-identity-multi-user-multi-surface-contract-v1",
+  "mwp_id": "MWP-UOSH-001",
+  "version": 1,
+  "status": "CONTRACT_DEFINED_MORTEN_VERIFIED_SIDE_EFFECT_AUDIT_CLOSED_JOAKIM_AND_MOBILE_PENDING",
+  "epistemic_status": {
+    "contract": "DEFINED",
+    "morten_instance": "VERIFIED",
+    "joakim_instance": "NOT_ONBOARDED",
+    "native_mobile_runtime": "NOT_VERIFIED",
+    "cross_surface_generalization": "NOT_YET_CLOSED"
+  },
+  "purpose": "Generic contract for canonical identity, per-user authority, per-device session binding and safe cross-surface operation across Desktop, browser, laptop and mobile.",
+  "canonical_control_plane": {
+    "login_surface": "https://ai.byopus.com",
+    "provider": "basic/2fa",
+    "rule": "All surfaces use the canonical server-side auth session and short-lived surface/device handoff; no direct token or cookie extraction."
+  },
+  "identity_invariants": [
+    "Every request resolves to exactly one authenticated principal or is rejected.",
+    "Registry/declaration is not capability, liveness, authority or routability.",
+    "principal_id, tenant_id/domain_scope, surface_id and device binding are read back from the authoritative runtime.",
+    "A client-supplied user_id never overrides broker-derived identity.",
+    "User data, session stores, graph authority and writer grants are isolated per principal/tenant.",
+    "Legacy identity mapping is explicit and allowlisted; unknown subject forms fail closed."
+  ],
+  "surface_contract": {
+    "browser": {
+      "auth": "canonical ai.byopus.com browser session",
+      "readback": ["/api/me", "/api/mwp/identity"],
+      "status": "Morten verified; Joakim pending"
+    },
+    "desktop": {
+      "auth": "authenticated internal transport plus broker handoff",
+      "metadata_readback": "metadata-only /api/me and /api/mwp/identity receipt",
+      "session_binding": ["client_session_id", "durable_session_id", "device_id", "device_class", "login_surface_id", "transport", "provenance"],
+      "status": "Morten verified; implementation is in Hermes Desktop; multi-user onboarding pending"
+    },
+    "laptop": {
+      "model": "browser or Desktop contract; never a separate credential plane",
+      "status": "Morten browser/session path verified; device-specific onboarding pending"
+    },
+    "mobile": {
+      "model": "canonical browser session or a native client implementing the same handoff/readback contract",
+      "forbidden": ["shared Desktop cookies", "direct token extraction", "implicit shared Home", "unscoped graph writes"],
+      "status": "native mobile runtime not verified"
+    }
+  },
+  "user_onboarding_gate": [
+    "canonical 2FA login",
+    "/api/me positive readback",
+    "/api/mwp/identity LIVE readback with principal_id",
+    "tenant/domain and authority scope readback",
+    "per-user Home/session namespace allocation",
+    "per-device client/session binding",
+    "read-only cross-surface smoke test",
+    "writer capability grant only after owner approval and target pre-read",
+    "read-after-write and rollback receipt for every mutation"
+  ],
+  "user_profiles": {
+    "morten": {
+      "principal_id": "morten",
+      "canonical_home": "/home/agent/.hermes",
+      "graph_scope": "User(morten) and owner-approved bounded writes",
+      "verification": "mwp-auth-morten-backend-write-readback-v1 and mwp-p0-bounded-writer-preflight-v1"
+    },
+    "joakim": {
+      "principal_id": "joakim",
+      "canonical_home": "ALLOCATE_PER_USER",
+      "graph_scope": "ALLOCATE_PER_TENANT_AND_OWNER",
+      "verification": "NOT_ONBOARDED"
+    }
+  },
+  "runtime_layers": {
+    "mwp": "gate, provenance, owner approval, pre-read, receipt, rollback and closeout contract",
+    "hermes_desktop": "authenticated transport and metadata-only readback implementation",
+    "box14_broker": "2FA/session verification, subject mapping, surface/device bindings and provenance",
+    "box15_dashboard": "user-scoped Home/session runtime",
+    "box12_unified_api": "authority-gated deterministic actions and Neo4j writer",
+    "neo4j": "canonical graph authority/data"
+  },
+  "write_policy": {
+    "default": "BLOCKED",
+    "required": ["authenticated principal", "authority scope", "target pre-read", "owner approval", "short-lived writer grant", "write receipt", "read-after-write", "rollback reference"],
+    "scope": "No graph, Symbiose, Obsidian or steward write is generalized merely because a user is logged in."
+  },
+  "evidence": {
+    "morten_live_identity": "ai.byopus.com /api/me and /api/mwp/identity: LIVE, authenticated_user_id=morten",
+    "morten_graph_receipt": "bounded User(morten)-AUTHORED-Theory(Energy-Flow Cosmology) write and read-after-write PASS",
+    "generic_runtime": "contract defined; Joakim and native mobile require separate runtime receipts"
+  },
+  "next_action": "Onboard Joakim through this gate and run read-only Desktop/browser/mobile surface smoke tests; do not reuse Morten Home, sessions, cookies or writer authority."
+}

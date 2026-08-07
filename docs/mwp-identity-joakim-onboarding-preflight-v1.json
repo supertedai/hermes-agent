@@ -1,0 +1,45 @@
+{
+  "artifact_id": "mwp-identity-joakim-onboarding-preflight-v1",
+  "mwp_id": "MWP-UOSH-001",
+  "version": 1,
+  "status": "EXISTING_STORE_ENTRY_LIVE_READBACK_PENDING",
+  "principal_expected": "joakim",
+  "scope": "new principal only; no reuse of Morten Home, sessions, cookies, graph authority or writer grants",
+  "canonical_login_surface": "https://ai.byopus.com",
+  "admin_bootstrap": {
+    "allowed": true,
+    "purpose": "pre-provision an isolated pending principal and namespace for architecture/onboarding testing while Joakim is absent",
+    "requires": ["authenticated admin principal", "admin authority receipt", "reason", "audit event", "expiry/owner"],
+    "may_create": ["pending principal record", "isolated empty Home/session namespace", "invitation/onboarding state", "read-only test fixture"],
+    "may_not_create": ["active authenticated session", "2FA enrollment or recovery", "browser cookie", "bearer/refresh token", "Joakim-authoritative graph claim", "writer grant", "access to Morten data"],
+    "activation_gate": "Joakim self-authenticates at canonical ai.byopus.com and produces positive /api/me and /api/mwp/identity readback",
+    "state_before_self_auth": "PENDING_SELF_AUTH_NOT_A_USER_SESSION"
+  },
+  "preconditions": [
+    "Joakim has an authorized account/allowlist entry",
+    "Joakim completes canonical 2FA login",
+    "/api/me returns auth=true and Joakim identity",
+    "/api/mwp/identity returns LIVE with authenticated_user_id=joakim",
+    "tenant/domain scope and authority are read back",
+    "per-user Home/session namespace is allocated",
+    "per-device binding is read back"
+  ],
+  "read_only_smoke_tests": [
+    "browser /api/me",
+    "browser /api/mwp/identity",
+    "Desktop session-list read using Joakim transport",
+    "mobile/browser session read without shared cookies",
+    "cross-user isolation: Joakim cannot read Morten sessions",
+    "cross-user graph read: Joakim scope does not expose Morten-owned data"
+  ],
+  "writer_policy": "all graph, Symbiose, Obsidian and steward writes remain blocked until Joakim has an independent principal/authority receipt, target pre-read, owner approval, grant, write receipt and read-after-write",
+  "current_evidence": {
+    "legacy_auth_allowlist": "Morten only; this is not the flerbruker store",
+    "joakim_store_entry": "owner reports existing; live admin/store readback pending",
+    "joakim_session": "not read back",
+    "joakim_home": "not read back",
+    "joakim_authority": "not verified"
+  },
+  "next_action": "read the existing Joakim store entry through an authenticated admin/browser context; do not create, alter or bootstrap an account until the live entry is confirmed",
+  "forbidden": ["request credentials in chat", "copy Morten cookies", "copy /home/agent/.hermes", "reuse Morten writer grant", "create graph nodes or relationships for Joakim before preflight"]
+}
