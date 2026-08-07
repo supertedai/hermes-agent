@@ -1,0 +1,18 @@
+{
+  "artifact_id": "mwp-cad-source-to-runtime-matrix-v1",
+  "mwp_id": "MWP-UOSH-001",
+  "status": "SOURCE_INDEX_COMPLETE_RUNTIME_MAPPING_PENDING",
+  "mode": "read-only-source-mapper",
+  "source_index": "/home/agent/agent-layer/symbiose-workspace/ASI_CAD_V0.1/README.md",
+  "roadmap": "/home/agent/agent-layer/symbiose-workspace/ASI_CAD_ROADMAP_V0.1.md",
+  "status_chain": ["DECLARED","REGISTERED","IMPLEMENTED","EXPOSED","REACHABLE","INSTANTIATED","READABLE","MEASURED","VALIDATED","GATED","PROMOTED"],
+  "records": [
+    ["CAD-0","CAD-kontrakt"],["CAD-A","Agent identity og autoritet"],["CAD-B","Basismodell og inferens"],["CAD-C","Context og arbeidsminne"],["CAD-D","Data og kunnskapslivssyklus"],["CAD-E","Episodisk og erfaringsbasert minne"],["CAD-F","Fakta, semantikk og verdensmodell"],["CAD-G","Governance og normativt system"],["CAD-H","Hypotese og vitenskapelig metode"],["CAD-I","Introspeksjon og selvmodell"],["CAD-J","Judgment, beslutning og utility"],["CAD-K","Kausalitet og intervensjon"],["CAD-L","Læring og feedback"],["CAD-M","Minnearkitektur: 20 lag"],["CAD-N","Normer, preferanser og menneskelig hånd"],["CAD-O","Orkestrering og agentkollektiv"],["CAD-P","Planlegging og prospektiv kontroll"],["CAD-Q","Quality, kalibrering og evalueringskvalitet"],["CAD-R","Retrieval og relevans"],["CAD-S","Sikkerhet, sandbox og stopp"],["CAD-T","Temporalitet, tilstand og prognose"],["CAD-U","Utility, verdier og måloptimalisering"],["CAD-V","Verktøy og affordance"],["CAD-W","World state og miljøinteraksjon"],["CAD-X","eXperimenter, execution og forskningssløyfe"],["CAD-Y","Ytelse, ressurser og skalering"],["CAD-Z","Zero-trust, kvalitetssikring og supply chain"],["CAD-Æ","Ærlighet, usikkerhet og epistemisk hygiene"],["CAD-Ø","Økosystem, drift og recovery"],["CAD-Å","Åpen ASI-målarkitektur"]
+  ],
+  "record_schema": ["cad_id","name","source_path","mwp_id","case_id","parent_task_id","child_task_id","owner","authority","storage","writer","reader","scope","gate","api_symbol","runtime_status","test_status","provenance","risk","gap","projection_targets","source_hash","projection_receipts","rollback_ref"],
+  "default_record_state": "SOURCE_VERIFIED_MAPPING_PENDING",
+  "projection_targets": ["git","obsidian","graph","runtime_receipt"],
+  "explicit_non_claims": ["No runtime state is inferred from CAD text.","No owner, authority, adoption, freshness or closeout is invented.","No CAD identifier is minted.","No projection write is performed by this matrix."],
+  "next_action": "For each CAD record, resolve source hash, MWP task mapping, owner/authority, runtime evidence and typed projection plan; then reconcile relevant ADR/BL references.",
+  "raw_payload_included": false
+}
