@@ -1,0 +1,42 @@
+{
+  "artifact_id": "mwp-cross-surface-sync-manifest-v1",
+  "mwp_id": "MWP-UOSH-001",
+  "version": 1,
+  "status": "MANIFEST_DEFINED_PARTIAL_COVERAGE_RUNTIME_SYNC_PENDING",
+  "purpose": "Track every relevant MWP/CAD/ADR/BL source artifact and its typed projections without flattening source, human notes, graph data or runtime truth.",
+  "canonicality": {
+    "source_rule": "Each artifact keeps its own authoritative source/authority; MWP stores mapping and receipts, not an invented universal source.",
+    "single_writer": "One writer per canonical key and destination.",
+    "idempotency": "Every projection uses canonical_key + idempotency_key + expected_version.",
+    "divergence_rule": "STALE, DIVERGED, CONFLICT, UNKNOWN and BLOCKED stop promotion until owner-approved repair."
+  },
+  "destinations": {
+    "git": {"status":"PUSHED_SCOPED_PACKAGE","branch":"mwp/uosh-automation-01","head":"85c3c54a7e8d087a822397a84ad6ec8a9fac4d90","scope":"canonical MWP package; full repo reconciliation still pending"},
+    "obsidian": {"status":"VERIFIED_CURATED_NAMESPACE","target":"/Users/morpheus/Documents/Obsidian/Brain/90-Meta/MWP/","files":4,"read_after_write":"PASS"},
+    "graph": {"status":"VERIFIED_BOUNDED_LANE","scope":"User(morten)-AUTHORED-Theory(Energy-Flow Cosmology)","full_projection":"PENDING"},
+    "runtime": {"status":"PARTIAL_RECEIPTS_VERIFIED","full_continuous_monitor":"PENDING"}
+  },
+  "artifact_classes": {
+    "mwp_contracts": {"git":"source+receipt","obsidian":"curated note","graph":"typed projection when applicable","runtime":"receipt only"},
+    "cad": {"git":"canonical source/reference","obsidian":"architecture/MOC projection","graph":"typed entity/relationship projection when applicable","runtime":"authority/readback only"},
+    "adr": {"git":"canonical decision record","obsidian":"linked decision note","graph":"decision/provenance projection when applicable","runtime":"receipt only"},
+    "bl": {"git":"canonical issue/work record","obsidian":"MOC/status projection","graph":"work/gate projection when applicable","runtime":"task/authority receipt only"},
+    "code_tests_runtime": {"git":"source/test authority","obsidian":"not raw dump","graph":"not raw dump","runtime":"metadata/evidence only"}
+  },
+  "mapping_record_schema": ["source_id","source_path_or_remote_ref","mwp_id","case_id","parent_task_id","child_task_id","owner","authority","canonical_version","projection_targets","source_hash","projection_receipts","rollback_ref","status"],
+  "current_verified_records": [
+    {"source_id":"GAP-AUTH-MORTEN-BACKEND-WRITE-001","mwp_id":"MWP-UOSH-001","projection_targets":["git","obsidian","graph","runtime"],"status":"COMPLETE_FOR_BOUNDED_MORTEN_LANE","evidence":["mwp-auth-morten-backend-write-readback-v1.json","mwp-p0-bounded-writer-preflight-v1.json","mwp-destination-write-preflight-v1.json"]},
+    {"source_id":"GAP-IDENTITY-MULTIUSER-SURFACE-001","mwp_id":"MWP-UOSH-001","projection_targets":["git","obsidian","runtime"],"status":"CONTRACT_DEFINED_JOAKIM_PENDING","evidence":["mwp-identity-multi-user-multi-surface-contract-v1.json","mwp-identity-joakim-onboarding-preflight-v1.json"]}
+  ],
+  "coverage_status": {
+    "full_cad_inventory": "PENDING",
+    "full_adr_inventory": "PENDING",
+    "full_bl_inventory": "PENDING",
+    "source_to_destination_mapping": "PARTIAL",
+    "continuous_reconciler": "NOT_IMPLEMENTED",
+    "freshness_drift_monitor": "NOT_VERIFIED"
+  },
+  "next_action": "Build read-only source inventory and mapping records for every relevant CAD/ADR/BL, then process one destination projection lane at a time with receipts and drift monitoring.",
+  "promotion_rule": "Do not claim all-surfaces synchronization until every in-scope mapping record has required destination receipts and freshness status FRESH.",
+  "raw_payload_included": false
+}
