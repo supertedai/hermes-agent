@@ -7,6 +7,7 @@ It never writes graph, Obsidian, GitHub or runtime state.
 from __future__ import annotations
 
 import json
+import subprocess
 from pathlib import Path
 from typing import Any
 
@@ -22,6 +23,23 @@ def load(name: str) -> dict[str, Any]:
         return {}
 
 
+def git_ref_readback() -> dict[str, str]:
+    branch = "mwp/uosh-automation-01"
+    try:
+        local = subprocess.check_output(["git", "rev-parse", "HEAD"], cwd=ROOT, text=True, timeout=10).strip()
+    except (OSError, subprocess.SubprocessError):
+        local = "UNKNOWN"
+    try:
+        remote_line = subprocess.check_output(
+            ["git", "ls-remote", "https://github.com/supertedai/hermes-agent.git", f"refs/heads/{branch}"],
+            cwd=ROOT, text=True, timeout=20,
+        ).strip()
+        remote = remote_line.split()[0] if remote_line else "UNKNOWN"
+    except (OSError, subprocess.SubprocessError):
+        remote = "UNKNOWN"
+    return {"branch": branch, "local_head": local, "remote_head": remote, "match": str(local == remote and local != "UNKNOWN")}
+
+
 def main() -> int:
     sync = load("mwp-cross-surface-sync-manifest-v1.json")
     preflight = load("mwp-destination-write-preflight-v1.json")
@@ -33,10 +51,11 @@ def main() -> int:
 
     obs = preflight.get("obsidian", {})
     obs_receipt = obs.get("write_receipt", {})
+    git_readback = git_ref_readback()
     destinations = {
         "git": {
-            "status": "VERIFIED" if sync.get("destinations", {}).get("git", {}).get("status", "").startswith("PUSHED") else "UNKNOWN",
-            "evidence": sync.get("destinations", {}).get("git", {}).get("head"),
+            "status": "VERIFIED" if git_readback["match"] == "True" else "DIVERGED",
+            "evidence": git_readback,
         },
         "obsidian": {
             "status": "VERIFIED" if obs_receipt.get("status") == "PASS" and obs_receipt.get("read_after_write") == "PASS" else "BLOCKED",
@@ -59,6 +78,8 @@ def main() -> int:
         "bl": adrb.get("status", "UNKNOWN"),
     }
     blockers = []
+    if destinations["git"]["status"] != "VERIFIED":
+        blockers.append("Git local/remote ref divergence or readback unavailable")
     if any(v != "VERIFIED" for v in (destinations["git"]["status"], destinations["obsidian"]["status"])):
         blockers.append("required Git/Obsidian receipt missing")
     blockers.extend(["full CAD→ADR→BL→MWP task mapping pending", "continuous freshness/drift monitor not live"])
