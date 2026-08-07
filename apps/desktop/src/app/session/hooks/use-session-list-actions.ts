@@ -13,6 +13,7 @@ import { $pinnedSessionIds, $sessionsLimit, bumpSessionsLimit, SIDEBAR_SESSIONS_
 import { ALL_PROFILES, normalizeProfileKey } from '@/store/profile'
 import { $removedSessionIds } from '@/store/projects'
 import {
+  $connection,
   $messagingSessions,
   $selectedStoredSessionId,
   $sessions,
@@ -75,6 +76,10 @@ interface UseSessionListActionsArgs {
  *  wires into the sidebar and refresh effects. */
 export function useSessionListActions({ profileScope }: UseSessionListActionsArgs) {
   const refreshSessionsRequestRef = useRef(0)
+  // A transient empty page must not clobber a populated list after refresh.
+  // Profile/connection changes intentionally change this context key, so a real
+  // re-home may still render an empty list without leaking the old context.
+  const lastSuccessfulSessionContextRef = useRef<string | null>(null)
 
   // Messaging-platform sessions as their own slice, fetched separately from
   // local recents so each platform renders a self-managed section and never
@@ -139,6 +144,13 @@ export function useSessionListActions({ profileScope }: UseSessionListActionsArg
   }, [profileScope])
 
   const refreshSessions = useCallback(async () => {
+    const connection = $connection.get()
+    const sessionContext = [
+      connection?.mode ?? 'unknown',
+      connection?.baseUrl ?? '',
+      normalizeProfileKey(connection?.profile || profileScope)
+    ].join('|')
+    const sameSessionContext = lastSuccessfulSessionContextRef.current === sessionContext
     const requestId = refreshSessionsRequestRef.current + 1
     refreshSessionsRequestRef.current = requestId
     // The loading flag exists to drive the initial skeletons (they only render
@@ -193,28 +205,34 @@ export function useSessionListActions({ profileScope }: UseSessionListActionsArg
             )
           : recents.sessions
 
-        // Signature-gate the swap (same pattern as cron/messaging): a refresh
-        // that returns content-identical rows must keep the previous array
-        // identity, or every sidebar memo keyed on $sessions recomputes and the
-        // whole list re-renders once per turn/broadcast for nothing.
-        setSessions(prev => {
-          const next = mergeSessionPage(prev, incoming, sessionsToKeep())
+        const preserveEmptyRecents =
+          sameSessionContext && $sessions.get().length > 0 && incoming.length === 0 && tombstones.size === 0
 
-          return sameCronSignature(prev, next) ? prev : next
-        })
-        // "Is there another page?" instead of an exact total: the backend
-        // reports which profiles filled their window, which costs nothing on
-        // top of the rows it already read (the old exact totals ran a COUNT(*)
-        // per profile DB on every refresh). Reference-stable when unchanged so
-        // the sidebar's group memos don't recompute per refresh.
-        setSessionProfilesTruncated(prev => {
-          const next = recents.profiles_truncated ?? {}
-          const prevKeys = Object.keys(prev)
+        // A transient empty response from the same backend/profile must not
+        // erase a populated sidebar. A real profile/connection re-home changes
+        // sessionContext and may legitimately render empty; explicit deletes
+        // carry tombstones and are allowed through.
+        if (!preserveEmptyRecents) {
+          setSessions(prev => {
+            const next = mergeSessionPage(prev, incoming, sessionsToKeep())
 
-          return prevKeys.length === Object.keys(next).length && prevKeys.every(key => prev[key] === next[key])
-            ? prev
-            : next
-        })
+            return sameCronSignature(prev, next) ? prev : next
+          })
+          // "Is there another page?" instead of an exact total: the backend
+          // reports which profiles filled their window, which costs nothing on
+          // top of the rows it already read (the old exact totals ran a COUNT(*)
+          // per profile DB on every refresh). Reference-stable when unchanged so
+          // the sidebar's group memos don't recompute per refresh.
+          setSessionProfilesTruncated(prev => {
+            const next = recents.profiles_truncated ?? {}
+            const prevKeys = Object.keys(prev)
+
+            return prevKeys.length === Object.keys(next).length && prevKeys.every(key => prev[key] === next[key])
+              ? prev
+              : next
+          })
+        }
+        lastSuccessfulSessionContextRef.current = sessionContext
 
         // Cron section: latest N cron sessions (kept so a pinned cron run still
         // resolves via sessionByAnyId), signature-gated like above.
