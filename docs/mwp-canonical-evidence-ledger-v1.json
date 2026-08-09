@@ -1,0 +1,14 @@
+{
+  "mwp_id": "MWP-UOSH-001",
+  "artifact_id": "mwp-canonical-evidence-ledger-v1",
+  "adr_ref": "ADR-MWP-CANONICAL-EVIDENCE-LEDGER-001",
+  "bl_ref": "BL-MWP-CANONICAL-EVIDENCE-LEDGER-001",
+  "status": "OPEN_RUNTIME_WIRING_PENDING",
+  "authority": "MWP governed metadata-only ledger",
+  "raw_payload_included": false,
+  "event_classes": ["turn_start","turn_complete","turn_timeout","identity_resolve","role_provider_select","memory_prefetch","memory_recall","memory_use","memory_effect","memory_promote","memory_rollback","lease_acquire","lease_heartbeat","lease_expire","workflow_preflight","scoped_commit","remote_readback","graph_write","graph_read_after_write","obsidian_projection","obsidian_readback","reconciler_attempt","reconciler_retry","reconciler_dead_letter","drift_detected","deployment_source_hash","deployment_runtime_hash","health_transition"],
+  "required_fields": ["receipt_id","event_id","correlation_id","causation_id","recorded_at","freshness_seconds","principal_id","tenant_id","system_scope","surface_id","device_id","session_id","conversation_id","role_id","agent_id","provider_ref","declared_model_ref","selected_model_ref","memory_layer_id","canonical_authority_ref","lease_ref","operation","target","source_ref","content_hash","source_hash","runtime_hash","status","error_class","retry_count","read_after_write","runtime_effect_ref","rollback_ref","provenance_ref"],
+  "terminal_statuses": ["COMPLETED","DEFERRED","TURN_TIMEOUT","ABORTED","DEAD_LETTER","ROLLED_BACK","BLOCKED"],
+  "promotion": "BLOCKED_UNTIL_LIVE_END_TO_END_CANARY",
+  "current_gaps": ["runtime route drift", "Cortex receipt", "graph read-after-write", "Obsidian readback", "reconciler durability"]
+}
