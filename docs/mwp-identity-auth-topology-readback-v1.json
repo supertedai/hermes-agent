@@ -2,20 +2,20 @@
   "mwp_id": "MWP-UOSH-001",
   "artifact_id": "mwp-identity-auth-topology-readback-v1",
   "mode": "owner-corrected-topology-readback",
-  "status": "AUTH_SOURCE_PRESENT_READBACK_PENDING",
+  "status": "AUTHENTICATED_CANONICAL_ANCHOR_READBACK",
   "topology": {
     "box13": {"role": "Mac Desktop/browser origin", "login_surface": "https://ai.byopus.com", "authenticated": "owner_asserted"},
     "box15": {"role": "auth source/session authority", "shared_auth": "owner_asserted"},
-    "box14": {"role": "webserver/broker", "shared_auth_with_box15": "owner_asserted", "routes": ["/api/auth/ws-ticket", "/api/ws", "/api/mwp/identity"]}
+    "box14": {"role": "webserver/broker", "shared_auth_with_box15": "owner_asserted", "routes": ["/api/auth/ws-ticket", "/api/ws", "/identity/anchor/whoami", "/identity/anchor/resolve/{user_id}"]}
   },
   "correction": "prior missing-login interpretation applied to local runtime was not applicable to the logged-in .13 Desktop session",
   "current_gate": {
     "auth_architecture": "PRESENT",
-    "authenticated_readback": "PENDING",
+    "authenticated_readback": "VERIFIED /identity/anchor/whoami and /identity/anchor/resolve/morten HTTP 200",
     "credentials_requested": false,
     "new_login_required": false,
     "identity_write": false
   },
-  "next_action": "attach/probe the existing shared auth session through the .13 Desktop→.14 broker path and read /api/mwp/identity metadata-only",
+  "next_action": "use the verified canonical anchor identity route as the metadata-only identity source; keep identity writes closed until tenant/scope/device parity is proven",
   "raw_payload_included": false
 }
