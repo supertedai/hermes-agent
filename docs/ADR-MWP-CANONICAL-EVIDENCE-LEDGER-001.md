@@ -25,15 +25,49 @@ intent
 → promotion or rollback
 ```
 
-No event is treated as complete from logs, health or source presence alone.
+```text
+source pre-read/hash
+→ MWP/CAD/ADR/BL governance preflight
+→ lease
+→ scoped Git commit
+→ artifact/image build + hash
+→ test + compile
+→ deploy/restart
+→ source/container hash parity
+→ route/health readback
+→ graph receipt/read-after-write
+→ Obsidian projection/readback
+→ rollback receipt if any gate fails
+```
 
-## Mandatory event classes
+A build is not complete because an image built or a container is healthy. Source/image/runtime parity and downstream receipts are mandatory.
 
 ```text
 turn_start
 turn_complete
 turn_timeout
 turn_abort
+build_job_open
+build_source_preread
+build_source_hash
+build_governance_preflight
+build_lease_acquire
+build_scoped_commit
+build_artifact_build
+build_artifact_hash
+build_test
+build_compile
+build_deploy
+build_restart
+build_runtime_source_hash
+build_container_hash
+build_route_readback
+build_health_readback
+build_graph_receipt
+build_graph_read_after_write
+build_obsidian_projection
+build_obsidian_readback
+build_rollback
 identity_resolve
 role_provider_select
 memory_prefetch

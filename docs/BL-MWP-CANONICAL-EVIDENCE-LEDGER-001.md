@@ -9,6 +9,7 @@
 | Gate | Requirement | Status |
 |---|---|---|
 | E1 | Canonical receipt schema and redaction policy | `COMPLETE_CONTRACT` |
+| E1b | Build/deploy evidence chain from source hash through graph and Obsidian readback | `OPEN` |
 | E2 | Hermes Desktop/GPT Luna turn receipts | `PARTIAL` |
 | E3 | MemoryManager prefetch/recall/use/effect receipts | `OPEN` |
 | E4 | Cortex/world-model and role/provider receipts | `BLOCKED` |
@@ -19,6 +20,27 @@
 | E9 | Reconciler retry/dead-letter/drift receipts | `OPEN` |
 | E10 | Source→image→runtime hash parity after recreate | `BLOCKED` |
 | E11 | Ledger durability, query and alerting | `OPEN` |
+
+## Build/deploy closeout
+
+Every source or runtime build is itself a governed MWP job:
+
+```text
+source pre-read/hash
+→ MWP/CAD/ADR/BL preflight
+→ lease
+→ scoped Git commit
+→ artifact/image hash
+→ tests/compile
+→ deploy/restart
+→ source/container parity
+→ route/health readback
+→ graph receipt/read-after-write
+→ Obsidian projection/readback
+→ rollback on failed gate
+```
+
+A green image build or healthy container is insufficient. Missing source/container parity or downstream readback is `BLOCKED`.
 
 ## Hard rules
 
