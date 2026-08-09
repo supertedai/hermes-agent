@@ -1,0 +1,18 @@
+{
+  "schema": "mwp.asi.critical_path.v1",
+  "status": "OPEN",
+  "main_goal": "governed ASI-oriented Opus/Symbiose system with Hermes runtime engine",
+  "phases": [
+    {"id":"P0","name":"baseline-topology-rollback","status":"OPEN","blocks":["destructive-migration"]},
+    {"id":"P1","name":"canonical-auth-session-thread-parity","status":"BLOCKED_UNTIL_LIVE_READBACK","blocks":["scoped-memory","durable-crud","surface-migration"]},
+    {"id":"P2","name":"canonical-crud-truth-authority","status":"BLOCKED_UNTIL_AUTHORITY","blocks":["durable-memory-writes","learning-promotion","graph-writers"]},
+    {"id":"P3","name":"hermes-ingest-four-plane-memory","status":"IMPLEMENTED_CONTRACT_UNVERIFIED_RUNTIME","blocks":["promotion-projection"]},
+    {"id":"P4","name":"learning-loop-census-promotion-rollback","status":"OPEN","blocks":["global-learning"]},
+    {"id":"P5","name":"cortex-agent-jetstream-roundtrips","status":"UNVERIFIED","blocks":["broad-agent-autonomy"]},
+    {"id":"P6","name":"surface-parity-desktop-front-web-migration","status":"BLOCKED_BY_P1","blocks":["web-replacement"]},
+    {"id":"P7","name":"graph-qdrant-gnn-obsidian-governed-writers","status":"BLOCKED_BY_P2","blocks":["production-writers"]},
+    {"id":"P8","name":"bounded-autonomy-asi-evaluation","status":"BLOCKED_BY_P1_P2_P4_P5","blocks":["asi-claims"]}
+  ],
+  "sidequest_policy": "map-to-phase-or-park",
+  "update_policy": "baseline-preflight-canary-readback-rollback"
+}

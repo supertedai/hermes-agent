@@ -1,0 +1,85 @@
+{
+  "mwp_id": "MWP-UOSH-001",
+  "artifact_id": "mwp-hermes-opus-surface-status-readback-v1",
+  "recorded_at": "2026-08-06",
+  "mode": "metadata-only",
+  "scope": {
+    "user_id": "morten",
+    "installation_id": "mwp-status-quo",
+    "login_surface_id": "current-hermes-chat",
+    "agent_id": "opus"
+  },
+  "status": "OPEN_BLOCKED_NOT_COMPLETE",
+  "projection": {
+    "hermes_as_opus_surface": {
+      "status": "PARTIAL",
+      "meaning": "Hermes is an Opus interaction/execution surface, but full Opus topology authority is not proven",
+      "evidence": ["docs/mwp-final-closeout-readback.json", "docs/mwp-uosh-master-closeout-readback-v1.json"]
+    },
+    "mwp_read_only_topology_bootstrap": {
+      "status": "CONNECTED_READ_ONLY",
+      "meaning": "per-user installation/login-surface topology readback exists without canonical graph/vector/scheduler mutation",
+      "evidence": ["tools/mwp_user_topology_startup.py", "docs/mwp-final-closeout-readback.json"]
+    },
+    "symbiose_native_tools": {
+      "status": "AVAILABLE_DECLARED",
+      "meaning": "native Symbiose tool surface is available to the Hermes runtime; each live call still requires its own provenance/readback",
+      "evidence": ["tools/symbiose_tools.py", "~/.hermes/config.yaml"]
+    },
+    "provider_binding": {
+      "status": "LOCAL_CONFIG_AND_PARITY_VERIFIED_RUNTIME_RECEIPT_MISSING",
+      "meaning": "default model/provider correction is present locally and resolution/parity tests pass, but an authenticated runtime receipt for the active turn is not proven",
+      "declared_pair": {"model": "gpt-5.6-luna", "provider": "openai-api"},
+      "evidence": ["docs/mwp-role-provider-runtime-gate-v2.json", "tests/hermes_cli/test_runtime_provider_resolution.py", "tests/hermes_cli/test_provider_parity.py"]
+    },
+    "full_opus_mwp_runtime_roundtrip": {
+      "status": "BLOCKED",
+      "meaning": "ConversationWorkingModel, OpusWorkingMemory, Cortex and per-user identity have no verified metadata-only round-trip",
+      "evidence": ["docs/mwp-chat-cortex-roundtrip-readback.json", "docs/mwp-user-cortex-goals-readback.json"]
+    },
+    "mutating_mwp_work": {
+      "status": "NOT_ACTIVATED",
+      "mutation": {
+        "mwp_task_state": false,
+        "graph": false,
+        "qdrant": false,
+        "gnn": false,
+        "scheduler": false,
+        "production_activation": false
+      },
+      "evidence": ["docs/mwp-uosh-master-closeout-readback-v1.json"]
+    }
+  },
+  "gaps": [
+    {
+      "key": "active_conversation_identity_readback",
+      "status": "BLOCKED",
+      "next_action": "expose metadata-only readback for conversation_id, authenticated user_id, client_session_id and durable_session_id"
+    },
+    {
+      "key": "cortex_working_model_roundtrip",
+      "status": "UNVERIFIED",
+      "next_action": "expose working_model_ref, cortex_ref, recorded_at, freshness and provenance without raw content"
+    },
+    {
+      "key": "active_llm_runtime_identity",
+      "status": "UNVERIFIED",
+      "next_action": "stamp provider_id, model_id, route, api_mode and llm_instance_id on the active runtime turn"
+    },
+    {
+      "key": "origin_device_identity",
+      "status": "UNVERIFIED",
+      "next_action": "propagate authenticated device_id/device_class through Desktop/mobile/SSH gateway surface"
+    },
+    {
+      "key": "iot_steward_binding",
+      "status": "BLOCKED",
+      "next_action": "resolve the Morten IOT steward binding and verify writer/provisioner round-trip"
+    }
+  ],
+  "closeout": {
+    "parent_mwp_closeout_allowed": false,
+    "reason": "full topology/runtime identity and Cortex round-trip remain unverified"
+  },
+  "raw_payload_included": false
+}

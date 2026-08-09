@@ -1,0 +1,426 @@
+{
+  "recorded_at": "2026-08-09T17:00:15Z",
+  "inventory_hash": "da72cfa2c022baffcc58e412401e9feef7976f77e80ecb75fb656fcab1511aae",
+  "item_count": 69,
+  "items": [
+    {
+      "source": "listeners",
+      "key": "LISTEN 0      128            [::1]:18000    [::]:*",
+      "status": "LIVE",
+      "detail": "present"
+    },
+    {
+      "source": "listeners",
+      "key": "LISTEN 0      128            [::1]:18210    [::]:*",
+      "status": "LIVE",
+      "detail": "present"
+    },
+    {
+      "source": "listeners",
+      "key": "LISTEN 0      128        127.0.0.1:18000 0.0.0.0:*",
+      "status": "LIVE",
+      "detail": "present"
+    },
+    {
+      "source": "listeners",
+      "key": "LISTEN 0      128        127.0.0.1:18210 0.0.0.0:*",
+      "status": "LIVE",
+      "detail": "present"
+    },
+    {
+      "source": "listeners",
+      "key": "LISTEN 0      128        127.0.0.1:8643  0.0.0.0:*",
+      "status": "LIVE",
+      "detail": "present"
+    },
+    {
+      "source": "listeners",
+      "key": "LISTEN 0      128    192.168.40.15:8642  0.0.0.0:*",
+      "status": "LIVE",
+      "detail": "present"
+    },
+    {
+      "source": "listeners",
+      "key": "LISTEN 0      2048       127.0.0.1:41361 0.0.0.0:*",
+      "status": "LIVE",
+      "detail": "present"
+    },
+    {
+      "source": "listeners",
+      "key": "LISTEN 0      2048       127.0.0.1:42895 0.0.0.0:*",
+      "status": "LIVE",
+      "detail": "present"
+    },
+    {
+      "source": "listeners",
+      "key": "LISTEN 0      2048       127.0.0.1:9119  0.0.0.0:*",
+      "status": "LIVE",
+      "detail": "present"
+    },
+    {
+      "source": "listeners",
+      "key": "LISTEN 0      4096            [::]:22       [::]:*",
+      "status": "LIVE",
+      "detail": "present"
+    },
+    {
+      "source": "listeners",
+      "key": "LISTEN 0      4096           [::1]:631      [::]:*",
+      "status": "LIVE",
+      "detail": "present"
+    },
+    {
+      "source": "listeners",
+      "key": "LISTEN 0      4096         0.0.0.0:22    0.0.0.0:*",
+      "status": "LIVE",
+      "detail": "present"
+    },
+    {
+      "source": "listeners",
+      "key": "LISTEN 0      4096       127.0.0.1:631   0.0.0.0:*",
+      "status": "LIVE",
+      "detail": "present"
+    },
+    {
+      "source": "listeners",
+      "key": "LISTEN 0      4096      127.0.0.54:53    0.0.0.0:*",
+      "status": "LIVE",
+      "detail": "present"
+    },
+    {
+      "source": "listeners",
+      "key": "LISTEN 0      4096   127.0.0.53%lo:53    0.0.0.0:*",
+      "status": "LIVE",
+      "detail": "present"
+    },
+    {
+      "source": "listeners",
+      "key": "LISTEN 0      5            0.0.0.0:9101  0.0.0.0:*",
+      "status": "LIVE",
+      "detail": "present"
+    },
+    {
+      "source": "listeners",
+      "key": "LISTEN 0      5      192.168.40.15:8210  0.0.0.0:*",
+      "status": "LIVE",
+      "detail": "present"
+    },
+    {
+      "source": "process",
+      "key": "Hermes",
+      "status": "LIVE",
+      "detail": "matched topology process"
+    },
+    {
+      "source": "process",
+      "key": "NetworkManager",
+      "status": "LIVE",
+      "detail": "matched topology process"
+    },
+    {
+      "source": "process",
+      "key": "accounts-daemon",
+      "status": "LIVE",
+      "detail": "matched topology process"
+    },
+    {
+      "source": "process",
+      "key": "avahi-daemon",
+      "status": "LIVE",
+      "detail": "matched topology process"
+    },
+    {
+      "source": "process",
+      "key": "bash",
+      "status": "LIVE",
+      "detail": "matched topology process"
+    },
+    {
+      "source": "process",
+      "key": "dbus-daemon",
+      "status": "LIVE",
+      "detail": "matched topology process"
+    },
+    {
+      "source": "process",
+      "key": "gnome-keyring-d",
+      "status": "LIVE",
+      "detail": "matched topology process"
+    },
+    {
+      "source": "process",
+      "key": "goa-daemon",
+      "status": "LIVE",
+      "detail": "matched topology process"
+    },
+    {
+      "source": "process",
+      "key": "gpg-agent",
+      "status": "LIVE",
+      "detail": "matched topology process"
+    },
+    {
+      "source": "process",
+      "key": "hermes",
+      "status": "LIVE",
+      "detail": "matched topology process"
+    },
+    {
+      "source": "process",
+      "key": "ibus-daemon",
+      "status": "LIVE",
+      "detail": "matched topology process"
+    },
+    {
+      "source": "process",
+      "key": "power-profiles-",
+      "status": "LIVE",
+      "detail": "matched topology process"
+    },
+    {
+      "source": "process",
+      "key": "python",
+      "status": "LIVE",
+      "detail": "matched topology process"
+    },
+    {
+      "source": "process",
+      "key": "rtkit-daemon",
+      "status": "LIVE",
+      "detail": "matched topology process"
+    },
+    {
+      "source": "process",
+      "key": "ssh",
+      "status": "LIVE",
+      "detail": "matched topology process"
+    },
+    {
+      "source": "process",
+      "key": "uv",
+      "status": "LIVE",
+      "detail": "matched topology process"
+    },
+    {
+      "source": "systemd",
+      "key": "ModemManager.service          loaded active running Modem Manager",
+      "status": "LIVE",
+      "detail": "present"
+    },
+    {
+      "source": "systemd",
+      "key": "NetworkManager.service        loaded active running Network Manager",
+      "status": "LIVE",
+      "detail": "present"
+    },
+    {
+      "source": "systemd",
+      "key": "accounts-daemon.service       loaded active running Accounts Service",
+      "status": "LIVE",
+      "detail": "present"
+    },
+    {
+      "source": "systemd",
+      "key": "agent-node-exporter.service   loaded active running Symbiose agent15 node exporter (:9101/metrics)",
+      "status": "LIVE",
+      "detail": "present"
+    },
+    {
+      "source": "systemd",
+      "key": "auditd.service                loaded active running Security Audit Logging Service",
+      "status": "LIVE",
+      "detail": "present"
+    },
+    {
+      "source": "systemd",
+      "key": "avahi-daemon.service          loaded active running Avahi mDNS/DNS-SD Stack",
+      "status": "LIVE",
+      "detail": "present"
+    },
+    {
+      "source": "systemd",
+      "key": "bluetooth.service             loaded active running Bluetooth service",
+      "status": "LIVE",
+      "detail": "present"
+    },
+    {
+      "source": "systemd",
+      "key": "chrony.service                loaded active running chrony, an NTP client/server",
+      "status": "LIVE",
+      "detail": "present"
+    },
+    {
+      "source": "systemd",
+      "key": "colord.service                loaded active running Manage, Install and Generate Color Profiles",
+      "status": "LIVE",
+      "detail": "present"
+    },
+    {
+      "source": "systemd",
+      "key": "cron.service                  loaded active running Regular background program processing daemon",
+      "status": "LIVE",
+      "detail": "present"
+    },
+    {
+      "source": "systemd",
+      "key": "cups-browsed.service          loaded active running Make remote CUPS printers available locally",
+      "status": "LIVE",
+      "detail": "present"
+    },
+    {
+      "source": "systemd",
+      "key": "cups.service                  loaded active running CUPS Scheduler",
+      "status": "LIVE",
+      "detail": "present"
+    },
+    {
+      "source": "systemd",
+      "key": "dbus.service                  loaded active running D-Bus System Message Bus",
+      "status": "LIVE",
+      "detail": "present"
+    },
+    {
+      "source": "systemd",
+      "key": "fwupd.service                 loaded active running Firmware update daemon",
+      "status": "LIVE",
+      "detail": "present"
+    },
+    {
+      "source": "systemd",
+      "key": "gdm.service                   loaded active running GNOME Display Manager",
+      "status": "LIVE",
+      "detail": "present"
+    },
+    {
+      "source": "systemd",
+      "key": "geoclue.service               loaded active running Location Lookup Service",
+      "status": "LIVE",
+      "detail": "present"
+    },
+    {
+      "source": "systemd",
+      "key": "hermes-dashboard.service      loaded active running Hermes Agent web dashboard (loopback :9119, BL-2217 agent-lag)",
+      "status": "LIVE",
+      "detail": "present"
+    },
+    {
+      "source": "systemd",
+      "key": "networkd-dispatcher.service   loaded active running Dispatcher daemon for systemd-networkd",
+      "status": "LIVE",
+      "detail": "present"
+    },
+    {
+      "source": "systemd",
+      "key": "polkit.service                loaded active running Authorization Manager",
+      "status": "LIVE",
+      "detail": "present"
+    },
+    {
+      "source": "systemd",
+      "key": "power-profiles-daemon.service loaded active running Power Profiles daemon",
+      "status": "LIVE",
+      "detail": "present"
+    },
+    {
+      "source": "systemd",
+      "key": "rsyslog.service               loaded active running System Logging Service",
+      "status": "LIVE",
+      "detail": "present"
+    },
+    {
+      "source": "systemd",
+      "key": "rtkit-daemon.service          loaded active running RealtimeKit Scheduling Policy Service",
+      "status": "LIVE",
+      "detail": "present"
+    },
+    {
+      "source": "systemd",
+      "key": "snapd.service                 loaded active running Snap Daemon",
+      "status": "LIVE",
+      "detail": "present"
+    },
+    {
+      "source": "systemd",
+      "key": "ssh.service                   loaded active running OpenBSD Secure Shell server",
+      "status": "LIVE",
+      "detail": "present"
+    },
+    {
+      "source": "systemd",
+      "key": "switcheroo-control.service    loaded active running Switcheroo Control Proxy service",
+      "status": "LIVE",
+      "detail": "present"
+    },
+    {
+      "source": "systemd",
+      "key": "systemd-journald.service      loaded active running Journal Service",
+      "status": "LIVE",
+      "detail": "present"
+    },
+    {
+      "source": "systemd",
+      "key": "systemd-logind.service        loaded active running User Login Management",
+      "status": "LIVE",
+      "detail": "present"
+    },
+    {
+      "source": "systemd",
+      "key": "systemd-oomd.service          loaded active running Userspace Out-Of-Memory (OOM) Killer",
+      "status": "LIVE",
+      "detail": "present"
+    },
+    {
+      "source": "systemd",
+      "key": "systemd-resolved.service      loaded active running Network Name Resolution",
+      "status": "LIVE",
+      "detail": "present"
+    },
+    {
+      "source": "systemd",
+      "key": "systemd-udevd.service         loaded active running Rule-based Manager for Device Events and Files",
+      "status": "LIVE",
+      "detail": "present"
+    },
+    {
+      "source": "systemd",
+      "key": "thermald.service              loaded active running Thermal Daemon Service",
+      "status": "LIVE",
+      "detail": "present"
+    },
+    {
+      "source": "systemd",
+      "key": "udisks2.service               loaded active running Disk Manager",
+      "status": "LIVE",
+      "detail": "present"
+    },
+    {
+      "source": "systemd",
+      "key": "upower.service                loaded active running Daemon for power management",
+      "status": "LIVE",
+      "detail": "present"
+    },
+    {
+      "source": "systemd",
+      "key": "user@1000.service             loaded active running User Manager for UID 1000",
+      "status": "LIVE",
+      "detail": "present"
+    },
+    {
+      "source": "systemd",
+      "key": "wazuh-agent.service           loaded active running Wazuh agent",
+      "status": "LIVE",
+      "detail": "present"
+    },
+    {
+      "source": "systemd",
+      "key": "wpa_supplicant.service        loaded active running WPA supplicant",
+      "status": "LIVE",
+      "detail": "present"
+    }
+  ],
+  "drift": {
+    "added": [],
+    "removed": [],
+    "changed": []
+  }
+}

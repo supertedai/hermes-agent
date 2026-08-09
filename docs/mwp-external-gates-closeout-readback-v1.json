@@ -1,0 +1,62 @@
+{
+  "artifact_id": "mwp-external-gates-closeout-readback-v1",
+  "mwp_id": "MWP-UOSH-001",
+  "status": "OPEN_IDENTITY_SURFACE_BLOCKS_DOWNSTREAM_GATES",
+  "mode": "metadata-only-fail-closed-readback",
+  "canonical_destination": "https://github.com/supertedai/AGI.git branch mwp/uosh-automation-01",
+  "gates": [
+    {
+      "gate": "live-identity",
+      "status": "BLOCKED_AUTHENTICATED_SURFACE_UNAVAILABLE",
+      "owner": "identity/surface authority",
+      "evidence": ["historical /api/me and /api/mwp/identity readback exists", "fresh local Hermes Desktop capture returned 0x0/unavailable"],
+      "required_evidence": ["fresh authenticated /api/me", "fresh authenticated /api/mwp/identity", "principal", "device_class", "login_surface_id", "transport/provenance", "freshness timestamp"],
+      "next_action": "Open authenticated Desktop/browser surface and capture fresh metadata-only identity receipt.",
+      "writes_allowed": false
+    },
+    {
+      "gate": "active-role-provider",
+      "status": "BLOCKED_DOWNSTREAM_IDENTITY_AND_RUNTIME_RECEIPT_MISSING",
+      "owner": "runtime/provider authority",
+      "evidence": ["local configuration is not runtime authority evidence", "active-turn receipt missing role_id/provider_id/model_id/api_mode/llm_instance_id/fallback-health"],
+      "required_evidence": ["active-turn receipt", "role_id", "provider_id", "model_id", "api_mode", "llm_instance_id", "fallback transition/health", "freshness timestamp"],
+      "next_action": "After live identity receipt, read active-turn metadata through authenticated runtime transport.",
+      "writes_allowed": false
+    },
+    {
+      "gate": "kanban-child-lease",
+      "status": "BLOCKED_IDENTITY_ROLE_PROVIDER_PREREQUISITES",
+      "owner": "owner/orchestrator",
+      "evidence": ["canonical parent exists", "child/lease/heartbeat not verified", "worker activation false"],
+      "required_evidence": ["positive identity", "positive role/provider", "child preflight", "lease receipt", "heartbeat receipt"],
+      "next_action": "Do not create child or lease until upstream receipts are live and fresh.",
+      "writes_allowed": false
+    },
+    {
+      "gate": "full-graph-projection",
+      "status": "BLOCKED_FULL_AUTHORITY_AND_PROJECTION_RECEIPTS",
+      "owner": "graph/data authority",
+      "evidence": ["bounded Morten AUTHORED relation is verified", "full CAD/ADR/BL/MWP projection not executed"],
+      "required_evidence": ["schema/key pre-read", "owner approval", "short-lived graph grant", "execute receipt", "read-after-write", "rollback reference"],
+      "next_action": "Keep full projection blocked until identity, role/provider, source coverage and graph authority converge.",
+      "writes_allowed": false
+    }
+  ],
+  "cross_surface_baseline": {
+    "AGI_Git": "VERIFIED_MAC_PUSH",
+    "MWP_source_mapping": "COMPLETE_PARTIAL_AUTHORITY",
+    "CAD": "INDEXED_IMPORTED",
+    "ADR": "INDEXED_MAPPED",
+    "BL": "16_REFERENCES_MAPPED_CANONICAL_REGISTRY_MISSING",
+    "Obsidian": "BOUNDED_VERIFIED",
+    "Graph": "BOUNDED_VERIFIED",
+    "Hermes_current_tree_cleanup": "COMPLETE",
+    "Hermes_history_purge": "PENDING_OWNER"
+  },
+  "invariants": [
+    "No downstream gate is promoted from historical or local-config evidence.",
+    "No Kanban child, lease, worker activation or full graph write is performed in this readback.",
+    "No secret, token, cookie or raw authenticated payload is stored."
+  ],
+  "raw_payload_included": false
+}

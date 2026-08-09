@@ -1,0 +1,27 @@
+{
+  "mwp_id": "MWP-UOSH-001",
+  "artifact_id": "mwp-role-provider-live-discovery-readback-v1",
+  "mode": "metadata-only-local-runtime-discovery",
+  "status": "RUNTIME_PRESENT_RESOLVER_UNVERIFIED",
+  "runtime": {
+    "hermes_serve_processes": 2,
+    "dashboard_processes": 2,
+    "gateway_processes": 1,
+    "model_runtime_processes": 0,
+    "config_sections_present": ["model", "agent", "fallback_providers"]
+  },
+  "catalog_sources": [
+    "/home/agent/.hermes/cache/model_catalog.json",
+    "/home/agent/.hermes/provider_models_cache.json",
+    "/home/agent/.hermes/models_dev_cache.json"
+  ],
+  "missing": [
+    "active-turn role_id",
+    "model_id/provider_id route receipt",
+    "api_mode",
+    "llm_instance_id",
+    "fallback health/transition"
+  ],
+  "gate": {"task_routing": "BLOCKED", "config_write": false, "restart": false, "raw_payload_included": false},
+  "next_action": "obtain authenticated metadata-only active-turn role/provider receipt"
+}

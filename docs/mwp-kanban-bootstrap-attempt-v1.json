@@ -1,0 +1,17 @@
+{
+  "mwp_id": "MWP-UOSH-001",
+  "case_id": "AUTOMATION-01",
+  "artifact_id": "mwp-kanban-bootstrap-attempt-v1",
+  "mode": "canonical-cli-write-attempt",
+  "status": "BLOCKED_BY_RUNTIME_AUTHORITY_GUARD",
+  "board": "default",
+  "requested_action": "create one blocked canonical MWP parent authority task",
+  "idempotency_key": "mwp-uosh-001-parent-authority-gate-v1",
+  "result": "no task created",
+  "error_class": "delegate_task_child_context_mutation_guard",
+  "error_summary": "delegate_task child contexts cannot mutate Kanban tasks via the CLI",
+  "fallback_used": false,
+  "direct_sqlite_mutation": false,
+  "next_permitted_action": "run canonical Kanban bootstrap from a non-delegated owner/orchestrator context",
+  "raw_payload_included": false
+}

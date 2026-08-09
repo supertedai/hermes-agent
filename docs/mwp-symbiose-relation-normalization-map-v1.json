@@ -1,0 +1,37 @@
+{
+  "mwp_id": "MWP-UOSH-001",
+  "case_id": "CASE-SYMBIOSE-02",
+  "work_package": "SYMBIOSE-02B",
+  "artifact_id": "symbiose-relation-normalization-map-v1",
+  "mode": "shadow-only",
+  "source": "docs/mwp-symbiose-canonicalization-decisions-v1.json",
+  "observed_drift": {
+    "SUPPORTS": 124,
+    "Supports": 12,
+    "normalization_conflict": true
+  },
+  "map": [
+    {
+      "from": "Supports",
+      "to": "SUPPORTS",
+      "preserve_original_history": true,
+      "confidence": "high",
+      "live_write_authorized": false
+    }
+  ],
+  "provenance_paths": {
+    "AUTHORED_BY": 5,
+    "SUPPORTED_BY": 3,
+    "requires_node_level_target_readback": true,
+    "owner_verified": false
+  },
+  "gates": {
+    "canonical_id_map": "OPEN",
+    "provenance": "OPEN",
+    "owner_review": "BLOCKED",
+    "rollback": "MISSING",
+    "promotion": "BLOCKED"
+  },
+  "next_permitted_action": "review shadow diff and attach owner/provenance/rollback evidence before any promotion",
+  "raw_payload_included": false
+}

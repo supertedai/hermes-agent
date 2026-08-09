@@ -1,0 +1,47 @@
+{
+  "artifact_id": "mwp-rollback-integrity-sample-v3",
+  "mwp_id": "MWP-UOSH-001",
+  "status": "SAMPLE_INTEGRITY_VERIFIED_FULL_RESTORE_STILL_BLOCKED",
+  "mode": "read-only-integrity-sample",
+  "full_snapshot": {
+    "path": "/home/byopus/AGI/backups/proton/20260807/symbiose_stack_12/full-snapshot-2026-08-07-00-38-51.snapshot",
+    "bytes": 88254563328,
+    "mtime": "2026-08-07 09:22:29.327156673 +0200",
+    "sha256": "NOT_COMPUTED",
+    "status": "PHYSICAL_METADATA_VERIFIED_ONLY"
+  },
+  "qdrant_samples": [
+    {
+      "path": "/home/byopus/AGI/restore/qdrant/private_chunk_v1.snapshot",
+      "sha256": "f46941e1d322dc473f9051c64978c01d9adf68750228008a32eb40a460202496",
+      "status": "HASH_VERIFIED_IN_LIVE_READ_ONLY_TICK"
+    },
+    {
+      "path": "/home/byopus/AGI/restore/qdrant/canonical_facts.snapshot",
+      "sha256": "38c5a1ad0890d98471ed524d3dfe23c0ebf8556129fce1b1684d5a3f7417df31",
+      "status": "HASH_VERIFIED_IN_LIVE_READ_ONLY_TICK"
+    }
+  ],
+  "gnn_samples": [
+    {
+      "path": "/home/byopus/AGI/symbiose_gnn_output/v2/model.pt",
+      "sha256": "f88fa41d49a3c6a78460e3028f195ea46b3bff6a1dba69dc54951fcc6290fa87",
+      "status": "HASH_VERIFIED_IN_LIVE_READ_ONLY_TICK"
+    },
+    {
+      "path": "/home/byopus/AGI/symbiose_gnn_output/v2/graph.pt",
+      "sha256": "f226cbf87bff38ba777be8ffbe79839ddd62f2a8683cec8794e2e57896230d4b",
+      "status": "HASH_VERIFIED_IN_LIVE_READ_ONLY_TICK"
+    }
+  ],
+  "sidecar_manifest": "NOT_FOUND",
+  "restore_test": "NOT_EXECUTED",
+  "rollback_ref": null,
+  "promotion_gate": "BLOCKED",
+  "non_claims": [
+    "Sample hashes do not prove full archive integrity.",
+    "Physical artifacts are not restore-ready without destination/manifest and isolated restore proof.",
+    "No restore, graph write, Qdrant write or GNN activation was performed."
+  ],
+  "provenance": "authenticated SSH read-only inventory on .12"
+}

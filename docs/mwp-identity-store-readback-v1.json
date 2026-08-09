@@ -1,0 +1,37 @@
+{
+  "mwp_id": "MWP-UOSH-001",
+  "case_id": "CASE-IDENTITY-01",
+  "artifact_id": "mwp-identity-store-readback-v1",
+  "mode": "metadata-only",
+  "status": "CANONICAL_STORE_PRESENT_ACTIVE_SESSION_UNVERIFIED",
+  "surfaces": {
+    "/brukere": {"http_status": 200, "reachable": true},
+    "/symbiose": {"http_status": 200, "reachable": true}
+  },
+  "canonical_store": {
+    "users_path": "/home/agent/.hermes-gui/users.json",
+    "users_exists": true,
+    "users_entry_count": 5,
+    "users_mode": "0600",
+    "session_identity_path": "/home/agent/.hermes-gui/session_identity.json",
+    "session_identity_exists": true,
+    "session_identity_entry_count": 188,
+    "session_identity_mode": "0600",
+    "local_hermes_home_users_path_exists": false,
+    "local_hermes_home_session_identity_path_exists": false
+  },
+  "gate": {
+    "canonical_store_integrity": "PASS",
+    "active_desktop_session_binding": "BLOCKED",
+    "observed_recent_session_ids_bound": false,
+    "owner_inference_used": false,
+    "gateway_wiring": {
+      "prompt_submit_set_identity_path_present": true,
+      "client_and_durable_ids_supported": true,
+      "active_authenticated_user_id_readback": false
+    }
+  },
+  "next_permitted_action": "obtain scoped active Desktop session ID and verify session_identity principal readback",
+  "mutation": {"users_write": false, "session_identity_write": false, "desktop_restart": false},
+  "raw_payload_included": false
+}

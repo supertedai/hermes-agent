@@ -1,0 +1,34 @@
+{
+  "mwp_id": "MWP-UOSH-001",
+  "case_id": "CASE-SYMBIOSE-02",
+  "work_package": "SYMBIOSE-02A",
+  "recorded_at": "2026-08-06T11:40:29Z",
+  "scope": {
+    "installation_id": "install-75a3263329938d45",
+    "login_surface_id": "surface-209f0a629a90bd81",
+    "principal_id": "morten",
+    "agent_id": "opus-hermes",
+    "system_scope": "symbiose-graph-qdrant-gnn"
+  },
+  "mode": "metadata-only-readback",
+  "status": "AUDIT_COMPLETE_REPAIR_BLOCKED",
+  "evidence": {
+    "unified_api_health": {"http_status": 200, "status": "reachable"},
+    "graph_query": {"http_status": 200, "identity_search_result_count": 12, "status": "reachable"},
+    "graph_provenance_aggregate": {"http_status": 200, "status": "observed_not_promotion_ready"},
+    "qdrant_root": {"http_status": 200, "status": "reachable"},
+    "qdrant_collections": {"http_status": 200, "status": "reachable"},
+    "gnn_similarity": {"http_status": 200, "degraded": true, "status": "collapse_gate_open"},
+    "fleet_status": {"http_status": 200, "total": 362, "stale_problem_separation": true}
+  },
+  "mutation": {
+    "graph_write": false,
+    "qdrant_write": false,
+    "gnn_retrain_or_promotion": false,
+    "daemon_restart": false,
+    "scheduler_change": false
+  },
+  "next_permitted_action": "produce reviewed shadow canonicalization plan and versioned retrieval baseline",
+  "rollback_ref": "not_applicable_read_only_audit",
+  "raw_payload_included": false
+}

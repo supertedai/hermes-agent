@@ -1,0 +1,78 @@
+{
+  "artifact_id": "mwp-p1-auth-session-thread-parity-readback-v1",
+  "mwp_id": "MWP-UOSH-001",
+  "phase": "P1",
+  "status": "BLOCKED_BROKER_FORWARDING_THREAD_PARITY",
+  "mode": "metadata-only-readback",
+  "scope": {
+    "principal_id": "morten",
+    "login_surface_id": "ai.byopus.com",
+    "device_class": "desktop",
+    "transport": "cloud→agent→ssh",
+    "ssh_hop_ref": "box14→.15:9119"
+  },
+  "identity_evidence": {
+    "authenticated": true,
+    "two_factor": true,
+    "durable_session_binding_present": true,
+    "device_id_binding_present": true,
+    "provenance": "box14-hermes-ws-proxy",
+    "freshness": "live",
+    "source": "mwp-live-identity-receipt-v2",
+    "status": "PASS_LIVE_AUTHENTICATED_IDENTITY"
+  },
+  "desktop_route_evidence": {
+    "primary": "/api/profiles/sessions/sidebar",
+    "fallback": "per-slice listAllProfileSessions routes",
+    "transport": "Electron window.hermesDesktop.api",
+    "profile_routing": "explicit profile on remote reads/mutations",
+    "backend_authority": "backend session store; renderer is cache",
+    "runtime_identity_note": "stored_session_id and runtime session id are distinct and translated at navigation boundary"
+  },
+  "web_route_evidence": {
+    "canonical_public": "https://ai.byopus.com",
+    "observed_broker": "192.168.40.14:9120",
+    "broker_source": "/Users/hermes/symbiose-chat-prototype/hermes_ws_proxy.py",
+    "public_route_status": "separate aiohttp/ngrok broker observed",
+    "api_identity_route": "/api/mwp/identity",
+    "api_identity_readback": "PENDING_AUTHENTICATED_BROKER",
+    "authenticated_forwarding": false,
+    "canonical_dot12_runtime": "192.168.40.12:8010",
+    "public_to_dot12_forwarding": false
+  },
+  "web_application_evidence": {
+    "session_list_route": "/api/sessions?limit=<n>&offset=<n>&order=<created|recent>",
+    "session_messages_route": "/api/sessions/{id}/messages",
+    "session_detail_route": "/api/sessions/{id}",
+    "auth_transport": "X-Hermes-Session-Token or cookie credentials",
+    "chat_transport": "/api/pty and /api/ws",
+    "surface_code_source": "web/src/pages/SessionsPage.tsx + web/src/lib/api.ts",
+    "parity_status": "different client route from Desktop; backend authority not proven shared"
+  },
+  "thread_parity": {
+    "ai_byopus_web": "BROKER_AUTH_READBACK_PENDING",
+    "desktop": "IDENTITY_BOUND_THREAD_READBACK_PENDING",
+    "backend_session_store": "PUBLIC_BROKER_SEPARATE_FROM_DOT12_AUTHORITY_NOT_READ_BACK",
+    "status": "BLOCKED_THREAD_PARITY"
+  },
+  "latest_public_probe": {
+    "recorded_at": "2026-08-09T13:58:46+02:00",
+    "source": "Linux read-only curl",
+    "server": "Python/3.9 aiohttp/3.13.5",
+    "routes": {
+      "/api/health": 401,
+      "/api/mwp/identity": 401,
+      "/api/profiles/sessions/sidebar": 401
+    },
+    "interpretation": "broker reachable; authenticated session attachment unavailable; no thread readback",
+    "writes_performed": false
+  },
+  "non_claims": [
+    "identity PASS does not prove web/Desktop thread parity",
+    "login success does not prove shared conversation projection",
+    "SSH visibility does not prove browser surface parity"
+  ],
+  "next_action": "read canonical conversation/thread metadata through the authenticated broker/session attachment without changing auth, Desktop or session state",
+  "writes_allowed": false,
+  "raw_payload_included": false
+}

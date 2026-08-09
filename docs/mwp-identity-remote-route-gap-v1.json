@@ -1,0 +1,36 @@
+{
+  "mwp_id": "MWP-UOSH-001",
+  "case_id": "CASE-IDENTITY-01",
+  "artifact_id": "mwp-identity-remote-route-gap-v1",
+  "mode": "source-and-test-readback",
+  "status": "REMOTE_IDENTITY_ROUTE_GAP_BLOCKED",
+  "evidence": {
+    "prompt_submit": {
+      "set_identity_path": true,
+      "requires_authenticated_user_id": true,
+      "supports_client_and_durable_ids": true
+    },
+    "local_stdio_path": {
+      "durable_admin_binding_test": "test_bl3905_stdio_tui_binds_durable_admin_identity",
+      "status": "covered"
+    },
+    "remote_path": {
+      "non_stdio_identity_write": "intentionally_not_bound_by_current_context_path",
+      "test": "test_bl3905_non_stdio_or_identity_write_failure_stays_closed",
+      "status": "no owner identity bound"
+    }
+  },
+  "interpretation": {
+    "canonical_store": "present",
+    "local_stdio_identity": "implemented/tested",
+    "desktop_remote_identity": "missing_or_not_proven",
+    "owner_default_fallback": "not authorized"
+  },
+  "gate": {
+    "status": "BLOCKED_OWNER_ARCHITECTURE",
+    "required_decision": "define authenticated Desktop remote user_id propagation and durable session readback"
+  },
+  "mutation": {"auth_write": false, "session_identity_write": false, "desktop_change": false},
+  "next_permitted_action": "owner-approved remote identity propagation design plus negative/read-after-write tests",
+  "raw_payload_included": false
+}

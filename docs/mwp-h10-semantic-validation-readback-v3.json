@@ -1,0 +1,16 @@
+{
+  "mwp_id": "MWP-UOSH-001",
+  "artifact_id": "mwp-h10-semantic-validation-readback-v3",
+  "gate": "GAP-H10-ASI-SEMANTIC-BOUNDARY-001",
+  "mode": "proposal-only-review-group-validation",
+  "status": "THEORY_PACKAGE_PROPOSALS_HUMAN_REVIEW_PENDING",
+  "group": "foundational_and_theory_packages",
+  "records": 6,
+  "proposed_record_layer": "THEORY",
+  "proposed_claim_status_counts": {"PREDICTION": 2, "VALIDATION_PENDING": 1, "UNCLASSIFIED": 3},
+  "validator": {"schema_valid_proposals": 6, "blocked": 0, "automatic_promotions": 0},
+  "review_required": ["confirm theory-vs-methodology boundary", "review UNCLASSIFIED white-paper parts", "confirm prediction/evaluation provenance", "attach source commit/DOI and evaluation receipts"],
+  "remaining_quarantine": 44,
+  "mutation": {"theory_record_write": false, "graph_write": false, "steward_activation": false, "public_publish": false},
+  "next_action": "human review six theory-package proposals, then process methodology group"
+}

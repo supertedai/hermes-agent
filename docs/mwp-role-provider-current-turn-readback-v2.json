@@ -1,0 +1,67 @@
+{
+  "artifact_id": "mwp-role-provider-current-turn-readback-v2",
+  "mwp_id": "MWP-UOSH-001",
+  "gate_id": "GAP-ROLE-PROVIDER-001",
+  "status": "BLOCKED",
+  "mode": "metadata-only-source-runtime-verification",
+  "scope": {
+    "principal": "morten",
+    "installation_id": "mwp-status-quo",
+    "login_surface_id": "current-hermes-chat",
+    "agent_id": "opus"
+  },
+  "fresh_evidence": {
+    "topology_readback": "docs/mwp-local-topology-readback.json",
+    "topology_inventory_hash": "64019c19dfe1ffb3cb16e9b292c4c17007915a90d6cff0e28d57c904f4cff24b",
+    "topology_item_count": 66,
+    "source": {
+      "git_head": "96b51c4bcff981e1088be0f52cfb3e13fd79a94c",
+      "working_tree": "dirty",
+      "hermes_dashboard_service": "active"
+    },
+    "observed_current_turn": {
+      "model_id": "gpt-5.6-luna",
+      "provider_id": "openai-api",
+      "role_id": null,
+      "api_mode": null,
+      "llm_instance_id": null,
+      "fallback_health": null,
+      "timestamp_freshness": "current-turn-observed"
+    },
+    "runtime_route_probe": {
+      "listener": "127.0.0.1:41343",
+      "health": "UNAVAILABLE",
+      "models": "UNAVAILABLE",
+      "v1_models": "UNAVAILABLE",
+      "qualification": "no authoritative resolver receipt"
+    },
+    "local_tests": {
+      "command": "scripts/run_tests.sh tests/test_mwp_role_provider.py tests/hermes_cli/test_runtime_provider_resolution.py tests/hermes_cli/test_provider_parity.py -q",
+      "result": "63 passed, 0 failed"
+    }
+  },
+  "blocker": "No authoritative authenticated active-turn resolver receipt exists; catalog consistency and observed model/provider metadata are not live runtime proof. The discovered local runtime listener is unavailable and exposes no verified resolver route.",
+  "owner": "Morten / authorized runtime configuration owner",
+  "evidence": [
+    "agent/mwp_role_provider.py",
+    "docs/mwp-role-provider-runtime-gate-v3.json",
+    "docs/mwp-role-provider-runtime-endpoint-readback-v1.json",
+    "docs/mwp-role-provider-route-gap-readback-v1.json",
+    "docs/mwp-local-topology-readback.json",
+    "tests/test_mwp_role_provider.py",
+    "tests/hermes_cli/test_runtime_provider_resolution.py",
+    "tests/hermes_cli/test_provider_parity.py"
+  ],
+  "next_action": "Owner provides an authenticated metadata-only active-turn resolver receipt containing role_id, provider_id, model_id, api_mode, llm_instance_id, fallback health/transition, and freshness timestamp; rerun this gate before any downstream Kanban, worker, graph, or production activation.",
+  "promotion_rule": "Do not promote DECLARED, REACHABLE, collection presence, catalog consistency, or local runtime presence to LIVE_VERIFIED.",
+  "mutation": {
+    "config_write": false,
+    "restart": false,
+    "task_write": false,
+    "lease_claim": false,
+    "graph_write": false,
+    "production_activation": false
+  },
+  "ledger_status": "OPEN",
+  "raw_payload_included": false
+}

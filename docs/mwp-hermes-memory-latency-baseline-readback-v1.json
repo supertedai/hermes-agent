@@ -1,0 +1,50 @@
+{
+  "artifact_id": "mwp-hermes-memory-latency-baseline-readback-v1",
+  "mwp_id": "MWP-UOSH-001",
+  "phase": "P3",
+  "status": "LOCAL_BASELINE_MEASURED_PROVIDER_COMPARISON_OPEN",
+  "mode": "read-only-local-hermes-sqlite-fts5-benchmark",
+  "source": "agent/memory_provider.py",
+  "database": "/home/agent/.hermes/state.db",
+  "confirmed_hooks": {
+    "prefetch": "called before each API call; implementations should be fast and return cached results",
+    "queue_prefetch": "background recall for next turn",
+    "sync_turn": "called after each turn; should be non-blocking and queue background processing",
+    "on_session_end": "optional end-of-session extraction",
+    "on_memory_write": "mirror built-in memory writes"
+  },
+  "measured_fixture": {
+    "hermes_state_db_found": true,
+    "live_provider_attached": false,
+    "query_only": true,
+    "sessions": 5144,
+    "messages": 52602,
+    "fts_rows": 52602,
+    "db_size_bytes": 1373417472,
+    "iterations_per_probe": 40,
+    "raw_content_returned": false
+  },
+  "local_baseline_ms": {
+    "sessions_list_limit_50": {"p50": 0.081, "p95": 0.089, "p99": 0.096, "max": 0.599},
+    "session_messages_limit_100": {"p50": 0.049, "p95": 0.059, "p99": 0.059, "max": 0.162},
+    "fts5_memory": {"p50": 0.038, "p95": 0.046, "p99": 0.053, "max": 0.393},
+    "fts5_hermes": {"p50": 0.038, "p95": 0.044, "p99": 0.081, "max": 0.126},
+    "fts5_mwp": {"p50": 0.040, "p95": 0.047, "p99": 0.047, "max": 0.076},
+    "fts5_session": {"p50": 0.039, "p95": 0.045, "p99": 0.065, "max": 0.346}
+  },
+  "evidence": [
+    "Hermes MemoryProvider lifecycle contract directly supports implicit lifecycle",
+    "local state.db was opened read-only with PRAGMA query_only=ON",
+    "session listing, session-message lookup and FTS5 probes were measured over 40 iterations",
+    "no raw message content was emitted"
+  ],
+  "not_measured": [
+    "external provider path",
+    "Opus Memory Fabric path",
+    "graph/Qdrant/GNN enrichment",
+    "context assembly end-to-end",
+    "cache hit/stale/fallback behavior"
+  ],
+  "writes_allowed": false,
+  "next_action": "compare provider shadow path against this measured local baseline with bounded deadlines; retain local Hermes path as hot-path fallback"
+}

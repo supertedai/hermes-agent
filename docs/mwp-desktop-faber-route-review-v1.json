@@ -1,0 +1,41 @@
+{
+  "mwp_id": "MWP-UOSH-001",
+  "case_id": "CASE-DESKTOP-01",
+  "artifact_id": "mwp-desktop-faber-route-review-v1",
+  "mode": "shadow-review",
+  "status": "REVIEW_COMPLETE_WIRING_BLOCKED",
+  "compatibility": {
+    "existing_gateway_convention": "JSON-RPC @method registry with typed params and structured _ok/_err responses",
+    "existing_mwp_convention": "metadata-only control task, explicit identity snapshot, dependency/gate verdict, evidence and rollback refs",
+    "route_contract_fit": "compatible as a new governed handler; no parallel authority required"
+  },
+  "required_adapters": [
+    "gateway @method registration",
+    "canonical IdentitySnapshot",
+    "Kanban task lease/readback",
+    "RoleBinding model/provider receipt",
+    "FaberGoalRegistry lookup",
+    "reviewer/evidence receipt",
+    "rollback reference"
+  ],
+  "rejections": [
+    "direct renderer-to-relay call",
+    "legacy owner fallback for remote Desktop",
+    "execution without Kanban lease",
+    "execution with unverified role/provider",
+    "promotion without reviewer PASS and rollback"
+  ],
+  "gates": {
+    "contract_fit": "PASS",
+    "identity": "BLOCKED",
+    "kanban": "BLOCKED",
+    "role_provider": "BLOCKED",
+    "faber_registry": "UNVERIFIED",
+    "reviewer_evidence": "OPEN",
+    "rollback": "BLOCKED",
+    "live_wiring": "NOT_AUTHORIZED"
+  },
+  "next_permitted_action": "resolve identity/Kanban/role-provider gates before implementing handler",
+  "live_route_created": false,
+  "raw_payload_included": false
+}

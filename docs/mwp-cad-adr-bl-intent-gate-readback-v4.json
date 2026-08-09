@@ -1,0 +1,48 @@
+{
+  "gate": "cad-adr-bl-intent-registry",
+  "status": "BLOCKED",
+  "mode": "metadata-only",
+  "scope": {
+    "principal": "morten",
+    "installation_id": "mwp-status-quo",
+    "login_surface_id": "current-hermes-chat",
+    "agent_id": "opus"
+  },
+  "source_evidence": {
+    "implementation": "agent/mwp_asi_alignment_registry.py",
+    "closeout_evaluator": "agent/mwp_asi_closeout.py",
+    "fresh_registry_snapshot": "docs/mwp-final-closeout-readback.json",
+    "fresh_topology": "docs/mwp-local-topology-readback.json",
+    "topology_inventory_hash": "929a0ef5fd9c5fee1f5406aa0e29b9795873cd563c03d5bfaf5cf2e3d375ea6f",
+    "topology_item_count": 66,
+    "topology_delta": "added: process:python3; removed: process:tar; changed: none",
+    "git_head": "12d613b582fdec9166c36ba011bacba264856bd9",
+    "git_worktree": "dirty; no source mutation performed for this gate",
+    "runtime_observation": "fresh metadata-only topology reports Hermes/dashboard-related services and listeners present; this does not prove CAD/ADR/BL runtime alignment",
+    "registry_observation": "cad-adr-bl-intent-registry remains BLOCKED; no authoritative live CAD-to-runtime alignment spine",
+    "test_observation": "scripts/run_tests.sh tests/test_mwp_asi_alignment_registry.py tests/test_mwp_asi_closeout.py tests/test_mwp_receipt_adapters.py tests/test_mwp_receipt_coordinator.py -q: 14 passed, 0 failed",
+    "receipt_observation": "git VERIFIED; graph BLOCKED because Neo4j write authority is not configured; Obsidian BLOCKED because canonical vault is not configured"
+  },
+  "blocker": "Authoritative live CAD/ADR/BL source reconciliation and destination write/read-after-write receipts are unavailable.",
+  "owner": "Morten / authorized source-of-truth and runtime owners",
+  "evidence_required": [
+    "authenticated metadata-only CAD/ADR/BL-to-runtime reconciliation",
+    "authorized graph receipt with write/read-after-write verification",
+    "canonical Obsidian receipt with write/read-after-write verification"
+  ],
+  "next_action": "Owner provides the required authenticated reconciliation and authorized destinations; rerun this gate and verify read-after-write before promotion.",
+  "mutation": {
+    "source_write": false,
+    "graph_write": false,
+    "obsidian_write": false,
+    "production_activation": false
+  },
+  "ledger_event": "EVT-70fbc6edb3b9",
+  "provisional_ids": {
+    "cad": "CAD-EVT-2c5bb9c19757",
+    "adr": "ADR-EVT-2c5bb9c19757",
+    "bl": "BL-EVT-2c5bb9c19757"
+  },
+  "ledger_status": "OPEN",
+  "raw_payload_included": false
+}

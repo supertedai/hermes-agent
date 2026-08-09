@@ -1,0 +1,44 @@
+{
+  "gate": "cad-adr-bl-intent-registry",
+  "status": "BLOCKED",
+  "mode": "metadata-only",
+  "scope": {
+    "principal": "morten",
+    "installation_id": "mwp-status-quo",
+    "login_surface_id": "current-hermes-chat",
+    "agent_id": "opus"
+  },
+  "source_evidence": {
+    "implementation": "agent/mwp_asi_alignment_registry.py",
+    "registry_snapshot": "docs/mwp-final-closeout-readback.json",
+    "fresh_topology": "docs/mwp-local-topology-readback.json",
+    "topology_inventory_hash": "6021ad417dca73b022e21e009a8ba5a48c6463257a0606808b3fc40915a41ff8",
+    "topology_delta": "removed: process:python3; added: none; changed: none",
+    "git_head": "96b51c4bcff981e1088be0f52cfb3e13fd79a94c",
+    "git_worktree": "dirty (tracked and untracked local changes present)",
+    "registry_observation": "CAD/ADR/BL inventory remains a local projection with no authoritative live CAD-to-runtime alignment spine",
+    "runtime_observation": "fresh metadata-only topology readback is available; hermes-dashboard.service is active and listeners 8642, 8643, 9119 are present; this does not prove CAD/ADR/BL runtime alignment",
+    "receipt_observation": "git VERIFIED; graph BLOCKED because Neo4j write authority is not configured; Obsidian BLOCKED because canonical vault is not configured"
+  },
+  "tests": {
+    "command": "scripts/run_tests.sh tests/test_mwp_asi_alignment_registry.py tests/test_mwp_asi_closeout.py tests/test_mwp_receipt_adapters.py tests/test_mwp_receipt_coordinator.py -q",
+    "result": "14 passed, 0 failed"
+  },
+  "blocker": "Local registry construction, conservative status projection, and fail-closed receipt evaluation are verified, but authoritative live CAD/ADR/BL source reconciliation and graph/Obsidian runtime receipts are unavailable in this installation.",
+  "owner": "Morten / authorized source-of-truth and runtime owners",
+  "evidence_required": [
+    "authenticated metadata-only CAD/ADR/BL-to-runtime reconciliation",
+    "authorized graph receipt with write/read-after-write verification",
+    "canonical Obsidian receipt with write/read-after-write verification"
+  ],
+  "next_action": "Owner provides the required authenticated reconciliation and authorized destinations; rerun this gate and verify read-after-write before any promotion.",
+  "mutation": {
+    "source_write": false,
+    "graph_write": false,
+    "obsidian_write": false,
+    "production_activation": false
+  },
+  "ledger_event": "EVT-6f86ec5dd14f",
+  "ledger_status": "OPEN",
+  "raw_payload_included": false
+}

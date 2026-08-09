@@ -1,0 +1,50 @@
+{
+  "artifact_id": "mwp-gnn-system-wide-asi-role-decision-v1",
+  "mwp_id": "MWP-UOSH-001",
+  "phase": "P7/P4/P8",
+  "decision": "GNN_IS_SYSTEM_WIDE_DERIVED_ASI_CAPABILITY_NOT_RESEARCH_ONLY",
+  "current_gate": "PROMOTION_BLOCKED_BY_LIVE_COLLAPSE_HEALTH",
+  "principle": "A failed GNN health gate blocks unsafe serving, not the capability or its system-wide target role.",
+  "target_roles": [
+    "graph structural embeddings",
+    "entity resolution and duplicate candidate ranking",
+    "temporal/causal neighborhood scoring",
+    "hybrid graph-vector retrieval reranking",
+    "memory relevance and consolidation ranking",
+    "anomaly/drift detection",
+    "agent/domain coordination and handoff ranking",
+    "world-model relationship discovery",
+    "planning/state-transition prioritization",
+    "learning-candidate and experiment prioritization",
+    "cross-domain/energy/health/project graph analytics"
+  ],
+  "planes": ["Neo4j/graph", "Qdrant/vector", "Hermes memory", "Cortex/world model", "agents/stewards", "learning/evaluation", "surfaces"],
+  "non_authority_rule": "GNN output remains derived evidence/ranking signal; it never becomes canonical truth or sole action authority.",
+  "promotion_lanes": {
+    "research_shadow": "allowed with provenance and no production influence",
+    "bounded_runtime_shadow": "allowed after scope/latency/abstention readback",
+    "production_reranking": "blocked until non-collapse, quality, leakage, freshness and rollback evidence",
+    "autonomous_action": "blocked until owner-gated multi-signal policy and rollback evidence"
+  },
+  "required_health_gates": [
+    "non-collapsed embedding geometry",
+    "explicit abstention threshold and fail-safe behavior",
+    "feature/label/checkpoint/schema parity",
+    "leakage and temporal split tests",
+    "per-scope/per-tenant isolation",
+    "utility and ablation benchmark",
+    "drift/freshness monitoring",
+    "versioned checkpoint and rollback",
+    "cross-plane identity/provenance parity"
+  ],
+  "current_live_evidence": {
+    "active_version": "v2.0.0",
+    "computable": true,
+    "collapsed": true,
+    "would_abstain": true,
+    "mean_pairwise_cosine": 0.8670,
+    "threshold": 0.85
+  },
+  "writes_allowed": false,
+  "next_action": "repair/retrain/evaluate GNN as a bounded system-wide derived capability; do not reduce it to research-only and do not promote current collapsed output"
+}

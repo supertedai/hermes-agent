@@ -27,17 +27,22 @@
       "reason": "runtime/source access available; GitHub landing still needs .13 CLI handoff"
     },
     "graph": {
-      "status": "READ_VERIFIED_ORCHESTRATOR_CANARY_ROLLBACK_VERIFIED",
+      "status": "READ_VERIFIED_CANONICAL_CANARY_ROLLBACK_VERIFIED",
       "evidence": "http://127.0.0.1:8010/neo4j/status -> 200 connected",
-      "orchestrator_canary": {"write": 200, "rollback": 200, "read_after_delete_remaining": 0},
-      "canonical_writer_audit_receipts": 0,
+      "orchestrator_canary": {"write": 200, "rollback": 200, "read_after_delete_remaining": 0, "audit_receipts": 2},
+      "canonical_writer_canary": {"write": 200, "retraction": 200, "read_after_retraction": 200, "audit_receipts": 2},
+      "canonical_writer_audit_receipts": 2,
       "write_authority": "UNVERIFIED",
       "graph_write": false
     },
     "lateral_bus_http": {
-      "status": "NOT_LIVE",
-      "evidence": "fresh /lateral-bus/status -> 404",
-      "source_artifacts": "present on box12 but live route wiring absent",
+      "status": "LIVE_READ_ONLY_PRINCIPAL_SCOPED",
+      "evidence": "fresh /lateral-bus/status and /lateral-bus/read with X-User-ID=morten -> 200; missing principal -> 401",
+      "substrate": "neo4j-daemonmesh",
+      "total_daemons": 363,
+      "mesh_edges": 374360,
+      "metadata_only": true,
+      "read_only": true,
       "write_authority": "UNVERIFIED"
     },
     "obsidian": {

@@ -1,0 +1,29 @@
+{
+  "artifact_id": "mwp-holistic-preflight-runtime-wiring-readback-v1",
+  "mwp_id": "MWP-UOSH-001",
+  "phase": "P3/P7",
+  "status": "CANONICAL_PREFLIGHT_WIRING_TEST_CONFIRMED_RUNTIME_AUTHORITY_OPEN",
+  "canonical_workflow": "agent/code_workflow.py::PreflightGate",
+  "wiring": {
+    "input_fields": ["holistic_verdict", "holistic_ref"],
+    "partial_behavior": "PreflightStatus.BLOCK",
+    "blocked_behavior": "PreflightStatus.BLOCK",
+    "complete_behavior": "PreflightStatus.PASS",
+    "legacy_without_field": "backward_compatible",
+    "writes_performed": false
+  },
+  "evidence": {
+    "test_ref": "tests/test_code_workflow.py",
+    "test_cases": ["test_preflight_blocks_partial_holistic_gate", "test_preflight_accepts_complete_holistic_gate"],
+    "test_result": "PASS",
+    "suite_result": "10 files / 51 tests passed"
+  },
+  "remaining_gates": [
+    "populate verdict from authenticated live authority rather than local fixture",
+    "invoke preflight automatically for every production workflow step",
+    "Neo4j read-only schema/data channel",
+    "P1/P2 canonical authority"
+  ],
+  "writes_allowed": false,
+  "next_action": "keep workflow preflight mandatory and attach live evidence when authority becomes available"
+}

@@ -1,0 +1,19 @@
+{
+  "artifact_id": "mwp-live-readonly-runtime-route-probe-v1",
+  "mwp_id": "MWP-UOSH-001",
+  "status": "PARTIAL_LIVE_READONLY_RUNTIME_EVIDENCE_AUTHORITY_OPEN",
+  "mode": "read-only-http-get",
+  "routes": {
+    "/api/v1/lifecycle/tasks/statuses": {"status": 200, "runtime": "live", "writes": false, "evidence": "statuses/transitions/priorities"},
+    "/identity/anchor/health": {"status": 200, "runtime": "live", "source": "neo4j", "uri": "bolt://192.168.40.12:7687", "writes": false},
+    "/api/v1/lifecycle/llm/identify-gaps": {"status": 200, "runtime": "live", "writes": false, "evidence": "identified_gaps/patterns/priority_domains"},
+    "/api/v1/memory/layers": {"status": 400, "runtime": "route_reachable_principal_input_required", "writes": false}
+  },
+  "interpretation": [
+    "live read-only route reachability is confirmed for selected endpoints",
+    "this does not prove producer lifecycle receipts, canonical writer authority, per-user scope or read-after-write",
+    "memory layers route requires user/principal context and remains unverified under authenticated scope"
+  ],
+  "writes_allowed": false,
+  "next_action": "obtain authenticated principal-scoped readback for memory layers and one metadata-only receipt per producer; no mutation"
+}

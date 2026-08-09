@@ -1,0 +1,28 @@
+{
+  "gate": "canonical-lateral-agent-bus",
+  "status": "BLOCKED",
+  "scope": {
+    "user_id": "morten",
+    "installation_id": "mwp-status-quo",
+    "login_surface_id": "current-hermes-chat",
+    "agent_id": "opus"
+  },
+  "measured": {
+    "api": ".12:8010",
+    "openapi_http_status": 200,
+    "openapi_body_bytes": 537552,
+    "matched_agent_peer_bus_lateral_message_routes": 0,
+    "agent_route_matches": [
+      "/life-contract/deploy-domain-agent",
+      "/life-contract/decommission-domain-agent"
+    ]
+  },
+  "not_proven": [
+    "canonical lateral-bus owner",
+    "agent-local world-model route",
+    "agent-to-agent read/write",
+    "provenance/freshness round-trip"
+  ],
+  "owner": "canonical multi-agent runtime owner on .12/.13",
+  "next_action": "publish authenticated metadata-only lateral-bus health/read route with source_agent_id, target_agent_id, user/install/login scope, message_ref, recorded_at, freshness and provenance"
+}

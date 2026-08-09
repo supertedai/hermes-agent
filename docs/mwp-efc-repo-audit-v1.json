@@ -1,0 +1,29 @@
+{
+  "artifact_id":"mwp-efc-repo-audit-v1",
+  "mwp_id":"MWP-UOSH-001",
+  "target":"supertedai/EFC@main",
+  "status":"AUDITED_OPEN_LANES_RECORDED",
+  "read_at":"2026-08-07T12:00:00Z",
+  "verified_green":[
+    {"id":"EFC-REPO-GREEN-001","claim":"repository public and active","evidence":"GitHub API repo readback; default branch main; archived=false"},
+    {"id":"EFC-REPO-GREEN-002","claim":"latest GitHub Pages deploy succeeded","evidence":"pages build and deployment run 31169306678, success"},
+    {"id":"EFC-REPO-GREEN-003","claim":"public DOI coverage complete","evidence":"docs/public/DOI_Coverage_Report.md; 165 canonical works, 165 covered, 0 missing, 8 verified external refs, 1 anomaly"},
+    {"id":"EFC-REPO-GREEN-004","claim":"evidence-layer and language rules are declared","evidence":"AGENTS.md and OPERATING_MODEL.md; own DOI/arXiv/working-note separation; no confirms-EFC language; preregistration discipline"},
+    {"id":"EFC-REPO-GREEN-005","claim":"sealed prediction manifest exists","evidence":".seal-manifest.json with frozen benchmark hashes and re-seal policy"}
+  ],
+  "open_lanes":[
+    {"id":"EFC-REPO-GAP-001","category":"ci-repo-verify","status":"BLOCKED_CI","evidence":"EFC repo verify runs 30207024435, 30206668368, 30206260353 failed at 'Fail on uncommitted changes'","next_action":"inspect generated/uncommitted artifacts and restore clean reproducible verify; attach green run receipt"},
+    {"id":"EFC-REPO-GAP-002","category":"ai-council-audit","status":"BLOCKED_DISABLED_AND_PRIOR_FAILURES","evidence":".github/workflows/efc-ai-audit.yml disabled_manually; recent runs 30207300830, 30207292548, 30207085135 failed","next_action":"identify failure root cause, re-enable only after green audit and owner gate"},
+    {"id":"EFC-REPO-GAP-003","category":"workflow-activation","status":"BLOCKED_DISABLED_WORKFLOWS","evidence":"Atlas auto-sync, AI monitor, main auto-sync, auto-sync, system health and Figshare presence workflows disabled_manually","next_action":"classify each disabled workflow as intentional/retired/blocked; restore only with owner-approved activation and live tick receipt"},
+    {"id":"EFC-REPO-GAP-004","category":"branch-protection-provenance","status":"OPEN_GOVERNANCE","evidence":"main branch protection false; required status checks off; latest main commit unsigned","next_action":"owner decision on branch protection, required checks and signing policy"},
+    {"id":"EFC-REPO-GAP-005","category":"cross-surface-count-parity","status":"DRIFT_OPEN","evidence":"README/AGENTS report 169 AI packages; layer.yaml 165; llms.txt 137; public DOI report 165 canonical works","next_action":"choose canonical count definitions and regenerate README/AGENTS/layer/llms/public receipts from one source"},
+    {"id":"EFC-REPO-GAP-006","category":"model-comparison-runtime","status":"DECLARED_NOT_EXECUTED","evidence":"EFC_Model_Comparison.html: protocol frozen, model registry seeded, zero runs executed","next_action":"execute same-dataset/same-likelihood/same-nuisance comparison and attach chi2/AIC/BIC/lnK receipt"},
+    {"id":"EFC-REPO-GAP-007","category":"evaluation-ledger-live-aggregation","status":"DECLARED_PIPELINE_PENDING","evidence":"EFC_Evaluation_Ledger.html: thresholds/formula defined; live current_state after Likelihood Ledger pipelines execute","next_action":"execute likelihood inputs and produce current_state readback"},
+    {"id":"EFC-REPO-GAP-008","category":"efc-stage-iv-compute","status":"BLOCKED_CAPABILITY","evidence":"external research ledger identifies hi_class/Boltzmann capability as binding for high-precision CMB-lensing tests","next_action":"production-grade solver integration or explicit owner-approved scope reduction"},
+    {"id":"EFC-REPO-GAP-009","category":"public-to-graph-evidence-parity","status":"DRIFT_OPEN","evidence":"public pages contain validation/prediction/ledger status while BL-141 DOI graph readback has evidence_count=0 for all 167 DOI nodes","next_action":"project public evidence receipts into canonical graph with source layer and epistemic status; no automatic promotion"},
+    {"id":"EFC-REPO-GAP-010","category":"public-repo-runtime-parity","status":"UNVERIFIED","evidence":"GitHub/public Pages/source workflows verified; production Symbiose runtime projection and Cortex/world-model consumption not proven by this repo audit","next_action":"cross-surface read-after-write and runtime consumer receipt"},
+    {"id":"EFC-REPO-GAP-011","category":"public-policy-calibration","status":"OPEN_POLICY","evidence":"EFC public/AGENTS rules are strong, but EFC meta-model/ASI-OS promotion is not yet benchmarked against a baseline","next_action":"EFC-as-metamodel/ASI-routing ablation with independent evaluator"}
+  ],
+  "non_claims":["GitHub Pages success is not production runtime proof.","165 DOI coverage is not 165 independent scientific confirmations.","Workflow presence is not workflow liveness.","Declared evaluation protocols are not executed model comparisons."],
+  "next_action":"close EFC-REPO-GAP-001/002/005 first, then reconcile public ledger→graph→Cortex and execute model-comparison/evaluation gates"
+}

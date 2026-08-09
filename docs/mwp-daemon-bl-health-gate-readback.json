@@ -1,0 +1,25 @@
+{
+  "gate_id": "daemon-bl-health-alignment",
+  "status": "BLOCKED",
+  "owner": "daemon/runtime health authority",
+  "scope": {
+    "user_id": "morten",
+    "installation_id": "mwp-status-quo",
+    "login_surface_id": "current-hermes-chat",
+    "agent_id": "opus"
+  },
+  "evidence": {
+    "static_source_inventory": "docs/mwp-uosh-dot12-daemon-inventory.json; target box12:/home/byopus/AGI; 342 candidate rows",
+    "local_runtime_probe": {
+      "daemon-health-orchestrator-daemon.service": "inactive",
+      "daemon-watchdog.service": "inactive",
+      "daemon-bl-integration-auditor.service": "inactive"
+    },
+    "topology_readback": "docs/mwp-local-topology-readback.json; metadata-only local inventory; no matching canonical daemon receipt",
+    "qualification": "source presence/static inventory is not runtime liveness"
+  },
+  "next_action": "daemon/runtime health authority must provide a live heartbeat/status receipt correlated to canonical daemon identity, source revision and owner; rerun closeout tick",
+  "promotion_rule": "do not promote static candidate inventory or inactive/local reachability to LIVE_VERIFIED",
+  "raw_payload_included": false,
+  "event_status": "OPEN"
+}

@@ -1,0 +1,32 @@
+{
+  "schema": "mwp.data_plane.quality_matrix.v1",
+  "status": "OPEN_BLOCKED_BY_P2_AUTHORITY",
+  "phase": "P7",
+  "canonical_authority": "MWP canonical entity/event authority",
+  "stores": {
+    "neo4j": {"role":"graph projection","status":"PARTIAL"},
+    "qdrant": {"role":"vector retrieval projection","collection_count_observed":110,"status":"PARTIAL"},
+    "gnn": {"role":"derived structural ranking","status":"OPEN"},
+    "hermes": {"role":"runtime retrieval/context consumer","status":"UNVERIFIED"}
+  },
+  "required_contracts": [
+    "schema_id/version/owner",
+    "canonical identity and content hash",
+    "tenant/principal/system scope",
+    "provenance/source/evidence",
+    "lifecycle/tombstone",
+    "migration/rollback",
+    "projection freshness and rebuild",
+    "retrieval quality baseline",
+    "checkpoint/restore proof"
+  ],
+  "evidence": {
+    "qdrant_one_collection_restore": "VERIFIED_BOUNDED",
+    "qdrant_full_restore": "OPEN",
+    "neo4j_restore": "OPEN",
+    "gnn_checkpoint_restore": "OPEN",
+    "cross_store_identity_parity": "OPEN",
+    "retrieval_baseline": "OPEN"
+  },
+  "promotion_rule": "no writer or derived score becomes canonical without authority, provenance, evaluation, read-after-write and rollback"
+}

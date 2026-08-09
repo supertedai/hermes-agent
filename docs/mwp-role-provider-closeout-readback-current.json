@@ -1,0 +1,53 @@
+{
+  "artifact_id": "mwp-role-provider-closeout-readback-current",
+  "mwp_id": "MWP-UOSH-001",
+  "gate_id": "GAP-ROLE-PROVIDER-001",
+  "recorded_at": "2026-08-09T08:00:43Z",
+  "mode": "metadata-only-source-runtime-verification",
+  "status": "BLOCKED",
+  "scope": {
+    "principal": "morten",
+    "installation_id": "mwp-status-quo",
+    "login_surface_id": "current-hermes-chat",
+    "agent_id": "opus",
+    "system_scope": "mwp-role-provider"
+  },
+  "source_evidence": {
+    "validator": "agent/mwp_role_provider.py",
+    "repo_head": "96b51c4bcff981e1088be0f52cfb3e13fd79a94c",
+    "working_tree": "dirty",
+    "dirty_file_count": 319,
+    "observed_model_id": "gpt-5.6-luna",
+    "observed_provider_id": "openai-api",
+    "role_id": null,
+    "api_mode": null,
+    "llm_instance_id": null,
+    "fallback_health_transition": null
+  },
+  "runtime_evidence": {
+    "resolver_endpoint": "127.0.0.1:41343/health",
+    "resolver_http_status": 0,
+    "resolver_probe": "connection refused",
+    "dashboard_endpoint": "127.0.0.1:9119/health",
+    "dashboard_http_status": 200,
+    "dashboard_qualification": "reachability only; not active-turn role/provider authority"
+  },
+  "verification": {
+    "command": "scripts/run_tests.sh tests/test_mwp_role_provider.py tests/hermes_cli/test_runtime_provider_resolution.py tests/hermes_cli/test_provider_parity.py -q",
+    "result": "63 passed, 0 failed"
+  },
+  "blocker": "Authenticated active-turn resolver evidence is unavailable: role_id, api_mode, llm_instance_id, fallback health/transition, and freshness-bound authority receipt are missing.",
+  "owner": "Morten / authorized runtime configuration owner",
+  "next_action": "Owner provides an authenticated metadata-only active-turn resolver receipt containing role_id, provider_id, model_id, api_mode, llm_instance_id, fallback health/transition, and freshness timestamp; rerun this gate before downstream activation.",
+  "promotion_rule": "Do not promote DECLARED, REACHABLE, collection presence, catalog consistency, or local runtime presence to LIVE_VERIFIED.",
+  "mutation": {
+    "config_write": false,
+    "restart": false,
+    "task_write": false,
+    "lease_claim": false,
+    "graph_write": false,
+    "production_activation": false
+  },
+  "ledger_status": "OPEN",
+  "raw_payload_included": false
+}

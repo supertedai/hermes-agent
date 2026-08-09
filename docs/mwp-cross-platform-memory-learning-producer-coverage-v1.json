@@ -1,0 +1,51 @@
+{
+  "artifact_id": "mwp-cross-platform-memory-learning-producer-coverage-v1",
+  "mwp_id": "MWP-UOSH-001",
+  "phase": "P3",
+  "status": "DECLARED_COVERAGE_RUNTIME_RECEIPTS_OPEN",
+  "mode": "metadata-only-producer-census",
+  "runtime_waist": "hermes-agent-engine",
+  "planes": ["chat", "user", "system", "agent"],
+  "producers": [
+    {"producer":"ai.byopus.com web","surface":"web","planes":["chat","user"],"expected_hooks":["turn_start_prefetch","sync_turn","session_end"],"status":"UNVERIFIED"},
+    {"producer":"Hermes Desktop","surface":"desktop","planes":["chat","user"],"expected_hooks":["turn_start_prefetch","sync_turn","session_switch"],"status":"UNVERIFIED"},
+    {"producer":"CLI/TUI","surface":"local","planes":["chat","user","system"],"expected_hooks":["turn_start_prefetch","sync_turn","compression","session_end"],"status":"UNVERIFIED"},
+    {"producer":"gateway/mobile/chat platforms","surface":"gateway","planes":["chat","user"],"expected_hooks":["turn_start_prefetch","sync_turn","session_expiry","session_switch"],"status":"UNVERIFIED"},
+    {"producer":"cron/scheduled execution","surface":"cron","planes":["system","agent"],"expected_hooks":["scoped_observation","outcome","no_user_profile_contamination"],"status":"UNVERIFIED"},
+    {"producer":"subagent/delegation","surface":"delegation","planes":["agent","system"],"expected_hooks":["parent_observation","child_outcome","correlation"],"status":"UNVERIFIED"},
+    {"producer":"Cortex/system","surface":"cortex","planes":["system"],"expected_hooks":["candidate","promote","correct","evaluation"],"status":"UNVERIFIED"},
+    {"producer":"agent/steward/domain","surface":"agent","planes":["agent","system"],"expected_hooks":["candidate","outcome","handoff","provenance"],"status":"UNVERIFIED"},
+    {"producer":"skills/procedures","surface":"learning","planes":["system","agent"],"expected_hooks":["observed_utility","promotion","rollback"],"status":"UNVERIFIED"},
+    {"producer":"Jetstream/external research","surface":"ingest","planes":["system","agent"],"expected_hooks":["source_provenance","candidate","dedupe","promotion_gate"],"status":"UNVERIFIED"}
+  ],
+  "local_state_db_evidence": {
+    "readback_ref": "docs/mwp-hermes-local-surface-source-readback-v1.json",
+    "query_only": true,
+    "observed_sources": {
+      "api_server": 3456,
+      "cli": 1198,
+      "cron": 398,
+      "desktop": 77,
+      "tui": 14,
+      "subagent": 7
+    },
+    "interpretation": "source activity confirmed; lifecycle receipt and cross-host parity remain open"
+  },
+  "required_receipt_fields": [
+    "event_id", "event_type", "schema_version", "runtime_path", "plane",
+    "principal_id", "tenant_id", "system_scope", "session_id", "conversation_id",
+    "correlation_id", "idempotency_key", "source_ref", "provenance_ref", "observed_at",
+    "operation", "status"
+  ],
+  "coverage_gates": [
+    "every producer enters hermes-agent-engine",
+    "every plane is principal/tenant/scope bound",
+    "every producer emits idempotent metadata envelope",
+    "every candidate has provenance and confidence",
+    "promotion is governed and reversible",
+    "runtime effect is measured on retrieval/context/learning",
+    "cross-platform parity is read back from canonical authority"
+  ],
+  "writes_allowed": false,
+  "next_action": "instrument or read back one metadata-only receipt per producer before any promotion or writer activation"
+}

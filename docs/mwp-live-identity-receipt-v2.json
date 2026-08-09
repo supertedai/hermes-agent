@@ -1,0 +1,42 @@
+{
+  "artifact_id": "mwp-live-identity-receipt-v2",
+  "mwp_id": "MWP-UOSH-001",
+  "status": "PASS_LIVE_AUTHENTICATED_IDENTITY",
+  "mode": "metadata-only-owner-provided-readback",
+  "evidence": {
+    "api_me": {
+      "auth": true,
+      "mode": "2fa",
+      "kind": "legacy",
+      "username": "morten@magnusson.as"
+    },
+    "api_mwp_identity": {
+      "status": "LIVE",
+      "authenticated_user_id": "morten",
+      "device_class": "desktop",
+      "login_surface_id": "ai.byopus.com",
+      "transport": "cloud→agent→ssh",
+      "ssh_hop_ref": "box14→.15:9119",
+      "freshness": "live",
+      "provenance": "box14-hermes-ws-proxy",
+      "binding_count": 10,
+      "durable_session_binding_present": true,
+      "device_id_binding_present": true
+    }
+  },
+  "secrets": {
+    "cookies": false,
+    "tokens": false,
+    "headers": false,
+    "raw_session_ids": false
+  },
+  "gate": {
+    "identity": "COMPLETE",
+    "role_provider": "NEXT_GATE",
+    "kanban": "BLOCKED_DOWNSTREAM",
+    "full_projection": "BLOCKED_DOWNSTREAM"
+  },
+  "next_action": "Obtain fresh active-turn role/provider receipt; do not create child, claim lease or write graph yet.",
+  "writes_allowed": false,
+  "raw_payload_included": false
+}

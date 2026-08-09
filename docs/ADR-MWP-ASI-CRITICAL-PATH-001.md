@@ -36,7 +36,7 @@ The current metadata-only access readback is recorded in `docs/mwp-cross-surface
 
 - MWP/Hermes Git trees are writable; a 102-artifact isolated allowlist exists, but commit/push requires the `.13` GitHub surface → runtime CLI handoff.
 - Neo4j graph read is live-verified (`/neo4j/status` → connected); the orchestrator canary has write/rollback/read-after-delete evidence, but canonical writer audit authority remains unverified (`0` receipts).
-- The live lateral-bus HTTP route currently returns `404`; source/runtime wiring remains open.
+- The lateral-bus HTTP route is now live as principal-scoped, metadata-only/read-only: `/lateral-bus/status` and `/lateral-bus/read` return 200 with `X-User-ID` and 401 without it.
 - The active Obsidian vault is `/Users/morpheus/Documents/Brain`; the metadata-only projection has been written and read back successfully.
 
 This delta is an access/readback record, not a blanket promotion or authority grant.

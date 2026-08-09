@@ -1,0 +1,45 @@
+{
+  "gate": "GAP-H10-PUBLIC-PUBLISH-WIRE-001",
+  "status": "DECLARED_PIPELINE_INTENT_RUNTIME_GATED",
+  "owner": "morten",
+  "operator": "opus + efc-asi-steward (PROPOSED_NOT_LIVE_VERIFIED)",
+  "artifact": "docs/mwp-h10-publication-pipeline-contract-v1.md",
+  "capability_matrix": "docs/mwp-h10-publication-pipeline-capability-matrix-v1.json",
+  "pipeline": [
+    "EFC canonical Git source",
+    "package/index/schema/manifest synchronization",
+    "pipeline regeneration and reproducibility",
+    "maintenance/drift/CI validation",
+    "Git commit/push/readback",
+    "Figshare deposit/update and DOI metadata readback",
+    "docs/public generation/publish",
+    "GitHub Pages readback",
+    "energyflow-cosmology.com sync/readback",
+    "magnusson.as sync/readback where configured",
+    "MWP/CAD publication receipt",
+    "Symbiose/graph typed projection after graph gate"
+  ],
+  "authority_rules": {
+    "morten": "owner and approval authority",
+    "opus": "orchestration/intelligence layer",
+    "efc_asi_steward": "propose-first maintenance and propagation steward",
+    "git": "source authority",
+    "figshare": "deposit/publication authority",
+    "docs_public": "public artifact source",
+    "websites": "narrative/rendered public surfaces",
+    "orcid": "author identity/provenance",
+    "graph": "typed projection only after authenticated write/readback"
+  },
+  "statuses": ["DRAFT","VALIDATION_RUNNING","VALIDATED","OWNER_APPROVAL_REQUIRED","PUBLISHING","PUBLISHED_PARTIAL","PUBLISHED","READBACK_VERIFIED","BLOCKED","ROLLBACK_REQUIRED"],
+  "mandatory_receipt_fields": ["pipeline_run_id","principal_id","owner_approval_ref","source_commit","validation_run_refs","claim_status","figshare_ref","git_status","public_urls","mwp_status","graph_status","freshness","provenance","rollback_ref","partial_failures","next_action"],
+  "current_gates": {
+    "pipeline_contract": "DECLARED",
+    "h10_steward_runtime": "NOT_LIVE_VERIFIED",
+    "figshare_write": "NOT_READBACK_VERIFIED",
+    "website_writers": "NOT_READBACK_VERIFIED",
+    "graph_write": "BLOCKED",
+    "parallel_public_update": "NOT_ACTIVATED"
+  },
+  "next_action": "Build a metadata-only pipeline capability matrix and dry-run one already-approved non-claim-changing artifact before enabling automatic propagation.",
+  "mutation": {"git_write": false,"figshare_write": false,"website_write": false,"graph_write": false,"agent_activation": false}
+}

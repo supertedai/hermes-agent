@@ -1,0 +1,36 @@
+{
+  "gate_id": "git-deploy-daemon-status",
+  "status": "BLOCKED",
+  "owner": "source/deploy runtime authority",
+  "scope": {
+    "user_id": "morten",
+    "installation_id": "mwp-status-quo",
+    "login_surface_id": "current-hermes-chat",
+    "agent_id": "opus"
+  },
+  "evidence": {
+    "repository": "/home/agent/agent-layer/mwp-uosh-automation-01",
+    "branch": "mwp/uosh-automation-01",
+    "head": "96b51c4bcff981e1088be0f52cfb3e13fd79a94c",
+    "working_tree": "dirty (320 metadata entries)",
+    "local_receipt": "git VERIFIED repository readback",
+    "fresh_topology": "docs/mwp-local-topology-readback.json; inventory_hash=93f4811431c3212db5930a0a717a80bb3cabed3c1186ef276386fbb4587d2469",
+    "runtime_service": "hermes-dashboard.service active/running",
+    "runtime_http": "127.0.0.1:9119 metadata-only response HTTP 200",
+    "runtime_tuple": "not correlated to source commit by an authoritative deployment receipt",
+    "container_or_deploy_receipt": "not available; no authoritative correlated deployment metadata observed",
+    "external_receipts": {
+      "graph": "BLOCKED: Neo4j write authority not configured",
+      "obsidian": "VERIFIED: metadata-only preflight read-after-write"
+    }
+  },
+  "blocker": "Local source and runtime are individually evidenced, but the correlated source-commit-container-runtime tuple is absent; local HTTP reachability and service presence are not deployment proof.",
+  "next_action": "Source/deploy runtime authority must provide one correlated source-commit-container-runtime receipt; rerun closeout tick and keep gate BLOCKED until independently verified.",
+  "promotion_rule": "Do not promote PARTIAL, DECLARED, REACHABLE, or local service presence to LIVE_VERIFIED.",
+  "change_event": {
+    "status": "OPEN",
+    "provisional": true,
+    "receipts_verified": false
+  },
+  "raw_payload_included": false
+}

@@ -1,0 +1,42 @@
+{
+  "mwp_id": "MWP-UOSH-001",
+  "case_id": "CASE-SYMBIOSE-02",
+  "artifact_id": "symbiose-rollback-discovery-receipt-v1",
+  "mode": "read-only-discovery",
+  "recorded_at": "2026-08-06",
+  "status": "BLOCKED_MISSING_VERIFIABLE_HANDLES",
+  "targets": {
+    "graph": {
+      "service_reachable": true,
+      "snapshot_handle": "UNVERIFIED",
+      "rollback_ref": "MISSING"
+    },
+    "qdrant": {
+      "service_reachable": true,
+      "collection_count_observed": 110,
+      "collection_is_snapshot": false,
+      "snapshot_handle": "UNVERIFIED",
+      "rollback_ref": "MISSING"
+    },
+    "gnn": {
+      "service_reachable": true,
+      "degraded": true,
+      "checkpoint_handle": "UNVERIFIED",
+      "rollback_ref": "MISSING"
+    }
+  },
+  "discovery_limits": {
+    "remote_ssh_alias": "UNRESOLVED",
+    "remote_ssh_public_key": "REJECTED",
+    "raw_remote_listing": false
+  },
+  "promotion_gate": "BLOCKED",
+  "next_permitted_action": "owner-authorized snapshot/checkpoint discovery with verifiable destination receipts",
+  "mutation": {
+    "graph_write": false,
+    "qdrant_write": false,
+    "gnn_write": false,
+    "daemon_restart": false
+  },
+  "raw_payload_included": false
+}

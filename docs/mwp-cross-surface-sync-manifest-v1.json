@@ -11,7 +11,7 @@
     "divergence_rule": "STALE, DIVERGED, CONFLICT, UNKNOWN and BLOCKED stop promotion until owner-approved repair."
   },
   "destinations": {
-    "git": {"status":"PUSHED_SCOPED_PACKAGE","branch":"mwp/uosh-automation-01","head":"85c3c54a7e8d087a822397a84ad6ec8a9fac4d90","scope":"canonical MWP package; full repo reconciliation still pending"},
+    "git": {"status":"LOCAL_SCOPED_PACKAGE_REMOTE_READBACK_PENDING","branch":"mwp/uosh-automation-01","head":"local-head-readback-required","scope":"canonical MWP package; full repo reconciliation and remote landing pending"},
     "obsidian": {"status":"VERIFIED_CURATED_NAMESPACE","target":"/Users/morpheus/Documents/Obsidian/Brain/90-Meta/MWP/","files":4,"read_after_write":"PASS"},
     "graph": {"status":"VERIFIED_BOUNDED_LANE","scope":"User(morten)-AUTHORED-Theory(Energy-Flow Cosmology)","full_projection":"PENDING"},
     "runtime": {"status":"PARTIAL_RECEIPTS_VERIFIED","full_continuous_monitor":"PENDING"}

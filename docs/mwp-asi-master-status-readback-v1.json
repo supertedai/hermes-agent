@@ -1,0 +1,46 @@
+{
+  "artifact_id": "mwp-asi-master-status-readback-v1",
+  "mwp_id": "MWP-UOSH-001",
+  "main_goal": "governed ASI-oriented Opus/Symbiose system with Hermes as runtime engine",
+  "status": "OPEN_CRITICAL_PATH",
+  "authority_mode": "metadata-only-no-production-writes",
+  "critical_path": [
+    {"phase":"P0","name":"baseline-topology-rollback","status":"OPEN","next_action":"preserve known-good Desktop/session and maintain rollback baseline"},
+    {"phase":"P1","name":"broker-auth-session-thread-parity","status":"BLOCKED_BROKER_FORWARDING_THREAD_PARITY","evidence":"docs/mwp-p1-auth-session-thread-parity-readback-v1.json","next_action":"authenticated .14 broker session attachment and canonical thread readback"},
+    {"phase":"P2","name":"canonical-crud-truth-authority","status":"BLOCKED_UNTIL_CANONICAL_AUTHORITY","evidence":"docs/mwp-p2-crud-truth-audit-v1.json","next_action":"activate strict preflight only after P1 authority and canonical writer readback"},
+    {"phase":"P3","name":"hermes-ingest-four-plane-memory","status":"IMPLEMENTED_CONTRACT_UNVERIFIED_RUNTIME","next_action":"wire actual producers after P1/P2"},
+    {"phase":"P4","name":"learning-loop-census-promotion-rollback","status":"OPEN","next_action":"census Hermes/Cortex/agent producers and effect receipts"},
+    {"phase":"P5","name":"cortex-agent-jetstream-roundtrips","status":"UNVERIFIED","next_action":"scoped live roundtrip receipts"},
+    {"phase":"P6","name":"surface-parity-desktop-front-web-migration","status":"BLOCKED_BY_P1","next_action":"keep existing web baseline; shadow/canary Desktop front later"},
+    {"phase":"P7","name":"schema-graph-qdrant-gnn-obsidian-governed-writers","status":"BLOCKED_BY_P2","next_action":"schema/collection/model conformance and restore evidence; no writers"},
+    {"phase":"P8","name":"bounded-autonomy-asi-evaluation","status":"BLOCKED_BY_P1_P2_P4_P5","next_action":"do not promote ASI/autonomy claims"}
+  ],
+  "sidequest_policy": "map-to-phase-or-park",
+  "current_sidequests_parked": [
+    "Jetstream source-label clarification",
+    "Desktop-front web migration",
+    "graph/Obsidian writers",
+    "Qdrant/GNN mass normalization",
+    "AGI remote landing until credential authority"
+  ],
+  "local_evidence": {
+    "mwp_targeted_tests": "33 passed",
+    "p2_targeted_tests": "22 passed",
+    "web_session_tests": "14 passed",
+    "desktop_session_tests": "20 passed",
+    "schemas": "validated",
+    "compileall": "PASS",
+    "diff_check": "PASS"
+  },
+  "authority_boundaries": {
+    "public_broker": "BLOCKED_AUTHENTICATED_FORWARDING",
+    "canonical_thread_store": "NOT_READ_BACK",
+    "canonical_crud_writer": "BLOCKED",
+    "graph_writer": "BLOCKED",
+    "obsidian_writer": "BLOCKED",
+    "agi_remote_git": "BLOCKED_CREDENTIAL",
+    "production_writes": false
+  },
+  "closeout_rule": "parent remains OPEN until predecessor gates have fresh authority/provenance/read-after-write/rollback evidence",
+  "raw_payload_included": false
+}

@@ -1,0 +1,22 @@
+{
+  "mwp_id": "MWP-UOSH-001",
+  "case_id": "CASE-IDENTITY-01",
+  "artifact_id": "mwp-identity-broker-discovery-readback-v1",
+  "mode": "read-only-source-discovery",
+  "status": "BROKER_ROUTE_NOT_DISCOVERED_IN_WORKSPACE",
+  "searched_scope": "/home/agent",
+  "searched_terms": ["hermes_ws_proxy.py", "REMOTE-BROKER-CLOSURE-PLAN", "box14", "broker", "/ws"],
+  "canonical_local_findings": {
+    "session_identity_store": "present",
+    "prompt_submit_set_identity": true,
+    "authenticated_remote_user_id": "required_but_unverified",
+    "remote_identity_write": "not proven"
+  },
+  "gate": {
+    "status": "BLOCKED_OWNER_ARCHITECTURE",
+    "reason": "authoritative box14 broker route/source is not available in workspace; endpoint cannot be guessed"
+  },
+  "next_action": "provide authoritative broker route/source or approve remote propagation design",
+  "mutation": {"network_write": false, "identity_write": false, "desktop_change": false},
+  "raw_payload_included": false
+}

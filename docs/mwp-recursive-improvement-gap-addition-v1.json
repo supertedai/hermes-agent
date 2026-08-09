@@ -1,0 +1,29 @@
+{
+  "artifact_id": "mwp-recursive-improvement-gap-addition-v1",
+  "mwp_id": "MWP-UOSH-001",
+  "status": "PROPOSED_GAPS_AND_AGENT_CONTRACT_PENDING_RUNTIME_PROMOTION",
+  "owner": "Morten / MWP control-plane authority",
+  "purpose": "Add holistic system-intelligence gaps and a bounded web-inspired recursive-improvement scout to the existing MWP/CAD/ADR/BL chain.",
+  "gaps": [
+    {"id":"GAP-CHAT-CORTEX-ROUNDTRIP-002","category":"chat-cortex-world-model","cad_lane":"CAD-I","adr_refs":["ADR-TRUTH-001"],"bl_id":"BL-RI-001","next_action":"prove live chat↔Cortex↔world-model round-trip with provenance and freshness"},
+    {"id":"GAP-MEMORY-OUTCOME-PROMOTION-002","category":"memory-learning-causal-promotion","cad_lane":"CAD-E","adr_refs":["ADR-TRUTH-001"],"bl_id":"BL-RI-002","next_action":"measure insight consumption, decision effect, outcome and scoped promotion/rollback"},
+    {"id":"GAP-RUNTIME-ROUTING-002","category":"model-provider-role-instance-routing","cad_lane":"CAD-B","adr_refs":["ADR-TRUTH-001"],"bl_id":"BL-RI-003","next_action":"capture active role/provider/model/api-mode/instance and fallback receipts"},
+    {"id":"GAP-FLEET-HANDOFF-002","category":"fleet-liveness-capacity-reassignment","cad_lane":"CAD-S","adr_refs":["ADR-TRUTH-001"],"bl_id":"BL-RI-004","next_action":"verify independent liveness, capacity, handoff and reassignment"},
+    {"id":"GAP-GOAL-OUTCOME-002","category":"goal-task-outcome-calibration","cad_lane":"CAD-Å","adr_refs":["ADR-TRUTH-001"],"bl_id":"BL-RI-005","next_action":"join goal, task, action, outcome and calibration receipts"},
+    {"id":"GAP-EXPERIMENT-PROMOTION-002","category":"experiment-evaluation-promotion-rollback","cad_lane":"CAD-Å","adr_refs":["ADR-TRUTH-001"],"bl_id":"BL-RI-006","next_action":"enforce baseline→experiment→eval→keep/discard→promotion gates"},
+    {"id":"GAP-SOURCE-RUNTIME-PARITY-002","category":"source-deploy-runtime-parity","cad_lane":"CAD-Z","adr_refs":["ADR-TRUTH-001"],"bl_id":"BL-RI-007","next_action":"require commit/runtime tuple, freshness and rollback receipt"},
+    {"id":"GAP-CAPABILITY-EVAL-002","category":"cross-domain-capability-evaluation","cad_lane":"CAD-Å","adr_refs":["ADR-TRUTH-001"],"bl_id":"BL-RI-008","next_action":"add transfer, novelty, long-horizon, robustness and calibration benchmarks"},
+    {"id":"GAP-COST-QUALITY-ROUTING-002","category":"compute-cost-latency-quality-routing","cad_lane":"CAD-B","adr_refs":["ADR-TRUTH-001"],"bl_id":"BL-RI-009","next_action":"measure cost, latency, quality and degradation policy per route"},
+    {"id":"GAP-CORRIGIBILITY-002","category":"goal-stability-correction-shutdown-rollback","cad_lane":"CAD-U","adr_refs":["ADR-H10-SEMANTIC-BOUNDARY-001","ADR-TRUTH-001"],"bl_id":"BL-RI-010","next_action":"test correction acceptance, shutdown, rollback and conflict behavior"},
+    {"id":"GAP-EXTERNAL-HORIZON-001","category":"internal-overoptimization-and-external-recursive-horizon","cad_lane":"CAD-RI","adr_refs":["ADR-RECURSIVE-IMPROVEMENT-001"],"bl_id":"BL-RI-011","next_action":"run continuous external horizon scanning, adversarial comparison and transfer analysis with source/eval receipts"}
+  ],
+  "new_agent": {
+    "agent_id":"recursive-improvement-scout",
+    "role":"web-informed bounded improvement discovery",
+    "authority":"proposal-only",
+    "writes":"none by default; evidence/proposal artifacts only",
+    "promotion":"human/owner plus independent eval and rollback receipt"
+  },
+  "non_claims":["These additions do not prove ASI capability.","Web inspiration is not evidence of correctness.","The scout cannot self-promote code, skills, graph records, scheduler policy or runtime authority."],
+  "raw_payload_included":false
+}

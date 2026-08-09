@@ -1,0 +1,16 @@
+{
+  "mwp_id": "MWP-UOSH-001",
+  "artifact_id": "mwp-h10-semantic-validation-readback-v4",
+  "gate": "GAP-H10-ASI-SEMANTIC-BOUNDARY-001",
+  "mode": "proposal-only-review-group-validation",
+  "status": "METHODOLOGY_PROPOSALS_HUMAN_REVIEW_PENDING",
+  "group": "methodology",
+  "records": 26,
+  "proposed_record_layer": "METHODOLOGY",
+  "proposed_claim_status_counts": {"METHODOLOGY": 10, "PREDICTION": 16},
+  "validator": {"schema_valid_proposals": 26, "blocked": 0, "automatic_promotions": 0},
+  "policy": "methodology is not validated evidence and prediction claims remain gated by evaluation receipts",
+  "remaining_quarantine": 18,
+  "mutation": {"theory_record_write": false, "graph_write": false, "steward_activation": false, "public_publish": false},
+  "next_action": "human review methodology proposals, then process sealed_prediction/empirical groups"
+}

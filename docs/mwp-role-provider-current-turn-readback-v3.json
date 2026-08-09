@@ -1,0 +1,57 @@
+{
+  "artifact_id": "mwp-role-provider-current-turn-readback-v3",
+  "mwp_id": "MWP-UOSH-001",
+  "gate_id": "GAP-ROLE-PROVIDER-001",
+  "status": "BLOCKED",
+  "mode": "metadata-only-source-runtime-verification",
+  "scope": {
+    "principal": "morten",
+    "installation_id": "mwp-status-quo",
+    "login_surface_id": "current-hermes-chat",
+    "agent_id": "opus"
+  },
+  "fresh_evidence": {
+    "topology": {
+      "readback": "docs/mwp-local-topology-readback.json",
+      "inventory_hash": "89f8e4b39b0a2a1f4c66c39de3e794f3a81bc7d76266570cc03ad6784e041e9f",
+      "item_count": 65,
+      "delta": {"added": [], "removed": [], "changed": []}
+    },
+    "source": {
+      "repo_head": "96b51c4bcff981e1088be0f52cfb3e13fd79a94c",
+      "working_tree": "dirty",
+      "qualification": "local metadata only"
+    },
+    "runtime": {
+      "hermes_dashboard_service": "active",
+      "listeners": ["192.168.40.15:8642", "127.0.0.1:8643", "127.0.0.1:9119"],
+      "qualification": "service/listener presence is not an authoritative resolver receipt"
+    },
+    "observed_current_turn": {
+      "model_id": "gpt-5.6-luna",
+      "provider_id": "openai-api",
+      "role_id": null,
+      "api_mode": null,
+      "llm_instance_id": null,
+      "fallback_health": null,
+      "timestamp_freshness": "current-turn-observed"
+    },
+    "runtime_resolver": {
+      "health": "UNAVAILABLE",
+      "models": "UNAVAILABLE",
+      "qualification": "no authoritative authenticated resolver receipt"
+    },
+    "tests": {
+      "command": "scripts/run_tests.sh tests/test_mwp_role_provider.py tests/hermes_cli/test_runtime_provider_resolution.py tests/hermes_cli/test_provider_parity.py -q",
+      "result": "63 passed, 0 failed"
+    }
+  },
+  "blocker": "Authenticated active-turn resolver evidence is missing; role_id, api_mode, llm_instance_id and fallback health/transition are unavailable. Local catalog consistency and service/listener presence do not prove LIVE_VERIFIED runtime binding.",
+  "owner": "Morten / authorized runtime configuration owner",
+  "evidence_required": ["authenticated metadata-only active-turn resolver receipt with role/provider/model/api_mode/llm_instance/fallback and freshness", "read-after-write evidence if configuration changes"],
+  "next_action": "Owner provides the authenticated metadata-only resolver receipt; rerun this gate before any downstream Kanban child, lease, graph, or production activation.",
+  "promotion_rule": "Do not promote DECLARED, REACHABLE, collection presence, catalog consistency, or local runtime presence to LIVE_VERIFIED.",
+  "mutation": {"config_write": false, "restart": false, "task_write": false, "lease_claim": false, "graph_write": false, "production_activation": false},
+  "ledger_status": "OPEN",
+  "raw_payload_included": false
+}

@@ -1,0 +1,23 @@
+{
+  "artifact_id": "mwp-cortex-router-protocol-compatibility-v1",
+  "mwp_id": "MWP-UOSH-001",
+  "status": "ISOLATED_PROTOCOL_COMPATIBILITY_PASS",
+  "mode": "fake-upstream-no-production-inference",
+  "router": "model_router_proxy.py",
+  "test_port": 18000,
+  "fake_upstream_port": 18001,
+  "assertions": {
+    "route_model": "glm-5.2",
+    "rewritten_served_model": "cogito-test",
+    "upstream_path": "/v1/completions",
+    "prompt_transform": true,
+    "response_transform": true,
+    "http_status": 200,
+    "response_text": "protocol-ok"
+  },
+  "production_inference": false,
+  "production_mutation": false,
+  "interpretation": "The .12 proxy transformation is protocol-compatible in isolation. The prior live cortex cutover was inconclusive because the old cortex loop remained concurrently active and the candidate had not completed a clean single-client timing test.",
+  "next_action": "If moving cortex is still required, run a bounded single-client live test with old loop parked, strict timeout, and automatic rollback.",
+  "provenance": "isolated .12 localhost fake-upstream test"
+}

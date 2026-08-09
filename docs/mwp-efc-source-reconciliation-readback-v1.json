@@ -1,0 +1,17 @@
+{
+  "mwp_id": "MWP-UOSH-001",
+  "artifact_id": "mwp-efc-source-reconciliation-readback-v1",
+  "gate": "GAP-EFC-SOURCE-DRIFT-001",
+  "mode": "metadata-only-git-provenance-readback",
+  "status": "OWNER_CANONICAL_SOURCE_DECISION_REQUIRED",
+  "repository": "https://github.com/supertedai/EFC",
+  "branch": "main",
+  "working_tree": "CLEAN",
+  "local_head": {"commit": "ea3d131202b563ea4cc787288a64bad5997d321f", "subject": "ci: add report-only public artifact governance"},
+  "origin_main": {"commit": "5aa57d8366c925692186f1e8220e3844461f7351", "subject": "chore(dashboard): hourly system-health refresh"},
+  "divergence": {"ahead": 1, "behind": 0},
+  "local_commit_scope": {"files": 5, "insertions": 318, "categories": ["CODEOWNERS proposal", "report-only workflow", "public artifact registry", "inventory script", "tests"]},
+  "recommendation": "retain local commit as candidate; do not reset, merge, push or publish until owner selects canonical source/branch and approves reconciliation",
+  "mutation": {"commit": false, "push": false, "merge": false, "reset": false, "public_publish": false},
+  "next_action": "owner decision: local HEAD canonical candidate, origin/main canonical, or explicit merge/reconciliation path"
+}

@@ -1,0 +1,42 @@
+{
+  "artifact_id": "mwp-data-plane-inventory-audit-v1",
+  "mwp_id": "MWP-UOSH-001",
+  "phase": "P7",
+  "status": "INVENTORY_CONSISTENT_CONFORMANCE_OPEN",
+  "mode": "read-only-static-summary-audit",
+  "source": "docs/mwp-uosh-dot12-graph-vector-gnn-summary.json",
+  "observed": {
+    "qdrant_http_status": 200,
+    "qdrant_version": "1.18.3",
+    "declared_collection_count": 110,
+    "listed_collection_count": 110,
+    "collection_count_parity": true,
+    "user_private_collection_count": 16,
+    "knowledge_collection_count": 10,
+    "schema_path_count": 32,
+    "neo4j_migration_file_count": 198,
+    "gnn_output_path_count": 49,
+    "qdrant_collection_path_count": 16280,
+    "migration_schema_file_count": 195
+  },
+  "bounded_green": [
+    "Qdrant declared/listed collection count parity",
+    "inventory artifact parse",
+    "metadata-only audit"
+  ],
+  "not_proven": [
+    "collection owner/schema/scope conformance",
+    "canonical identity parity across graph/vector",
+    "embedding model/dimension/metric parity",
+    "stable chunk/point identity and tombstone rebuild",
+    "full Qdrant restore",
+    "Neo4j restore",
+    "GNN checkpoint restore",
+    "retrieval quality baseline",
+    "runtime Hermes authority/readback"
+  ],
+  "phase_dependency": "P7 remains BLOCKED_BY_P2",
+  "writes_allowed": false,
+  "next_action": "build schema/owner/collection/model conformance matrix from authoritative manifests; do not mass-migrate or rewrite stores",
+  "raw_payload_included": false
+}

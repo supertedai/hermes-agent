@@ -1,0 +1,37 @@
+{
+  "mwp_id": "MWP-UOSH-001",
+  "case_id": "CASE-AUTONOMY-00",
+  "artifact_id": "mwp-role-provider-runtime-readback-v1",
+  "mode": "metadata-only",
+  "status": "DECLARED_PARTIAL_RUNTIME_UNVERIFIED",
+  "declared": {
+    "default_model": "gpt-5-6-luna",
+    "default_provider": "anthropic",
+    "delegation_model": "gpt-4o-mini",
+    "reference_models": [
+      {"provider": "openai-api", "model": "gpt-5.6-luna", "enabled": true},
+      {"provider": "anthropic", "model": "claude-sonnet-5", "enabled": true}
+    ],
+    "aggregator": {"provider": "openrouter", "model": "anthropic/claude-opus-4.8"}
+  },
+  "catalog": {
+    "gpt-5.6-luna_provider_families": ["openai-api", "openai-codex"],
+    "claude-sonnet-5_provider_families": ["anthropic", "openrouter"],
+    "default_pair_catalog_consistent": false
+  },
+  "runtime": {
+    "hermes_gateway_process_present": true,
+    "candidate_role_provider_receipt": "docs/mwp-candidate-role-provider-verdict-v2.json",
+    "validator": "agent/mwp_role_provider.py",
+    "validator_tests": "tests/test_mwp_role_provider.py",
+    "live_role_provider_binding": "UNVERIFIED",
+    "runtime_readback_route": "MISSING"
+  },
+  "gate": {
+    "status": "BLOCKED",
+    "reason": "declared default model/provider pair is inconsistent with catalog ownership and no live role-binding receipt exists"
+  },
+  "mutation": {"config_write": false, "restart": false, "task_write": false},
+  "next_permitted_action": "owner-authorized correction or live readback of role/provider mapping",
+  "raw_payload_included": false
+}

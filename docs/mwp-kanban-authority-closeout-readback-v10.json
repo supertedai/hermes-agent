@@ -1,0 +1,73 @@
+{
+  "mwp_id": "MWP-UOSH-001",
+  "gate_id": "GAP-KANBAN-AUTHORITY-001",
+  "artifact_id": "mwp-kanban-authority-closeout-readback-v10",
+  "recorded_at": "2026-08-07T06:35:03Z",
+  "mode": "metadata-only-source-runtime-verification",
+  "status": "BLOCKED",
+  "scope": {
+    "user_id": "morten",
+    "installation_id": "mwp-status-quo",
+    "login_surface_id": "current-hermes-chat",
+    "agent_id": "opus",
+    "system_scope": "mwp-kanban-authority"
+  },
+  "fresh_evidence": {
+    "topology": {
+      "readback": "docs/mwp-local-topology-readback.json",
+      "inventory_hash": "93d13016aba69ebf4194a7dc83e7325de8fc7930bbf067bf8316ebbfd9ed4171",
+      "item_count": 65,
+      "status": "OPEN",
+      "gap": "missing receipts: git, graph, obsidian"
+    },
+    "local_runtime": {
+      "path": "/home/agent/.hermes/kanban.db",
+      "read_mode": "sqlite-read-only",
+      "integrity": "ok",
+      "tasks": 1,
+      "task_runs": 0,
+      "task_events": 2,
+      "task_id": "t_fe6a5950",
+      "task_status": "ready",
+      "qualification": "local mirror only"
+    },
+    "canonical_gui_runtime": {
+      "path": "/home/agent/.hermes-gui/kanban.db",
+      "read_mode": "sqlite-read-only",
+      "integrity": "ok",
+      "tasks": 102,
+      "task_runs": 0,
+      "task_events": 28,
+      "canonical_parent_id": "mwp-uosh-001-parent-authority-gate-v1",
+      "canonical_parent_status": "blocked",
+      "children": 0,
+      "lease": null,
+      "heartbeat": null,
+      "worker_activation": false,
+      "qualification": "canonical collection present; child authority/lease not verified"
+    },
+    "tests": {
+      "command": "scripts/run_tests.sh tests/hermes_cli/test_kanban_db.py tests/hermes_cli/test_kanban_db_init.py tests/hermes_cli/test_kanban_write_guard.py tests/hermes_cli/test_kanban_core_functionality.py tests/hermes_cli/test_kanban_blocked_sticky.py tests/hermes_cli/test_kanban_promote.py -q",
+      "result": "64 passed, 0 failed"
+    }
+  },
+  "owner": "owner/orchestrator",
+  "blocker": "Canonical parent remains blocked and no dependency-scoped child, lease, heartbeat, or worker receipt exists. Local task presence and canonical collection presence cannot be promoted to LIVE_VERIFIED.",
+  "next_action": "After authenticated identity and role/provider receipts, create exactly one dependency-scoped child through the canonical .15 authority route; then independently verify child id, lease, heartbeat, and worker state before any activation or parent closeout.",
+  "promotion_rule": "Do not promote DECLARED, REACHABLE, collection presence, local schema integrity, or local task presence to LIVE_VERIFIED.",
+  "mutation": {
+    "sqlite_write": false,
+    "child_creation": false,
+    "lease_claim": false,
+    "worker_activation": false,
+    "production_activation": false
+  },
+  "ledger_event": {
+    "status": "OPEN",
+    "provisional": true,
+    "cad_id": "CAD-EVT-mwp-kanban-v10",
+    "adr_id": "ADR-EVT-mwp-kanban-v10",
+    "bl_id": "BL-EVT-mwp-kanban-v10"
+  },
+  "raw_payload_included": false
+}

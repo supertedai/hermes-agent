@@ -1,0 +1,12 @@
+{
+  "mwp_id": "MWP-UOSH-001",
+  "artifact_id": "mwp-fleet-runtime-mapping-readback-v2",
+  "mode": "metadata-only-registry-to-fleet-correlation",
+  "status": "BLOCKED_NAMESPACE_MAPPING",
+  "registry": {"agents": 69, "identity_fields": ["id", "runtime", "model", "kind", "host"], "runtime_ref_field": false, "fleet_id_field": false, "worker_id_field": false},
+  "fleet": {"http_status": 200, "total": 362, "returned_items": 117, "health": {"healthy": 100, "stopped": 12, "unknown": 4, "starting": 1}, "types": ["inferred_from_container", "auto_tracked", "prediction", "epistemic", "validation", "test", "healing", "energy_control", "regulation"]},
+  "candidate_match": {"registry_candidates": ["faber", "hermes-graphwrite"], "direct_id_matches": 0, "indirect_runtime_mapping": false},
+  "missing": ["canonical registry↔fleet namespace map", "per-agent liveness", "capacity/load", "handoff/reassignment", "role/provider receipt"],
+  "gate": {"routing": "BLOCKED", "task_claim": "NOT_ATTEMPTED", "raw_payload_included": false},
+  "next_action": "obtain authoritative runtime registry export with stable agent/fleet identity mapping"
+}

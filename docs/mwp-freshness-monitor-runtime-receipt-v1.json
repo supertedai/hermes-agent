@@ -1,0 +1,42 @@
+{
+  "artifact_id": "mwp-freshness-monitor-runtime-receipt-v1",
+  "mwp_id": "MWP-UOSH-001",
+  "status": "READ_ONLY_MONITOR_ACTIVE",
+  "mode": "systemd-user-timer-status-change-only",
+  "host_scope": ".15 Linux runtime",
+  "unit": {
+    "service": "mwp-reconcile-watchdog.service",
+    "timer": "mwp-reconcile-watchdog.timer",
+    "interval": "10 minutes",
+    "on_boot_delay": "2 minutes",
+    "enabled": true,
+    "active": true,
+    "last_tick_result": "success",
+    "last_tick_exit_code": 0
+  },
+  "script": "/home/agent/.hermes/scripts/mwp_reconcile_watchdog.py",
+  "reconciler": "/home/agent/agent-layer/mwp-uosh-automation-01/scripts/mwp_cross_surface_reconcile.py",
+  "writes": {
+    "graph": false,
+    "obsidian": false,
+    "github": false,
+    "kanban": false,
+    "worker_activation": false,
+    "local_status_cache_only": true,
+    "cache_path": "/home/agent/.hermes/mwp-reconcile-watchdog-state.json"
+  },
+  "verification": {
+    "python_compile": "PASS",
+    "targeted_mwp_tests": "25 passed",
+    "systemd_analyze_user_verify": "PASS",
+    "reconciler_invariants": {
+      "git": "REMOTE_READBACK_UNAVAILABLE",
+      "obsidian": "VERIFIED",
+      "graph": "BOUNDED_VERIFIED",
+      "overall": "BLOCKED_FULL_SYNC"
+    }
+  },
+  "promotion_rule": "This monitor detects status changes only; it cannot promote identity, role/provider, Kanban, graph projection or full sync.",
+  "next_action": "Keep monitoring; promote downstream gates only after fresh authenticated identity and active role/provider receipts.",
+  "raw_payload_included": false
+}

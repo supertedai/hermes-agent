@@ -1,0 +1,61 @@
+{
+  "artifact_id": "mwp-data-plane-conformance-matrix-v1",
+  "mwp_id": "MWP-UOSH-001",
+  "phase": "P7",
+  "status": "OPEN_BLOCKED_BY_P2",
+  "mode": "metadata-only-conformance-plan",
+  "source_inventory": "docs/mwp-data-plane-inventory-audit-v1.json",
+  "conformance_dimensions": [
+    "schema_id/version/owner",
+    "canonical authority",
+    "tenant/principal/system scope",
+    "stable identity/content hash",
+    "provenance/evidence",
+    "freshness/lifecycle/tombstone",
+    "migration/rollback",
+    "projection/rebuild",
+    "quality baseline",
+    "restore/checkpoint"
+  ],
+  "store_matrix": [
+    {
+      "store": "neo4j",
+      "role": "graph projection",
+      "observed_migration_files": 198,
+      "required_readbacks": ["constraints/indexes", "canonical id parity", "scope/provenance", "projection freshness", "snapshot/restore"],
+      "status": "OPEN"
+    },
+    {
+      "store": "qdrant",
+      "role": "vector retrieval projection",
+      "observed_collections": 110,
+      "required_readbacks": ["collection owner map", "schema/metric/dimension", "payload indexes", "point/chunk identity", "scope filters", "snapshot/restore", "retrieval baseline"],
+      "status": "PARTIAL_INVENTORY_ONLY"
+    },
+    {
+      "store": "gnn",
+      "role": "derived structural ranking",
+      "observed_output_paths": 49,
+      "required_readbacks": ["model/checkpoint registry", "feature schema", "leakage controls", "baseline/calibration", "drift", "checkpoint restore"],
+      "status": "OPEN"
+    },
+    {
+      "store": "hermes-memory-provider",
+      "role": "runtime retrieval/context consumer",
+      "required_readbacks": ["canonical authority", "scope/provenance envelope", "freshness", "runtime effect", "degraded mode"],
+      "status": "UNVERIFIED"
+    }
+  ],
+  "promotion_gates": [
+    "P2 canonical authority complete",
+    "schema/owner conformance readback",
+    "cross-store identity/scope parity",
+    "quality baseline and drift budget",
+    "restore/rebuild proof",
+    "Hermes runtime readback",
+    "rollback reference"
+  ],
+  "writes_allowed": false,
+  "next_action": "populate matrix from authoritative schema/collection/model manifests; do not infer owner or conformance from inventory counts",
+  "raw_payload_included": false
+}

@@ -1,0 +1,28 @@
+{
+  "artifact_id": "mwp-hermes-provider-capability-map-v1",
+  "mwp_id": "MWP-UOSH-001",
+  "phase": "P3",
+  "status": "SOURCE_MAPPED_RUNTIME_SELECTION_OPEN",
+  "source_root": "/home/agent/agent-layer/hermes-agent/plugins/memory",
+  "capability_map": [
+    {"provider":"honcho","prefetch":"source_confirmed","sync_turn":"source_confirmed_nonblocking","capture_mode":"automatic_turn_sync_plus_dialectic"},
+    {"provider":"openviking","prefetch":"source_confirmed","sync_turn":"source_confirmed","capture_mode":"provider_defined"},
+    {"provider":"mem0","prefetch":"source_confirmed_hot_path_wait","sync_turn":"source_confirmed_nonblocking","capture_mode":"server_side_fact_extraction"},
+    {"provider":"hindsight","prefetch":"source_confirmed_background","sync_turn":"source_confirmed_nonblocking","capture_mode":"async_retain"},
+    {"provider":"retaindb","prefetch":"source_confirmed_consumes_prefetched_results","sync_turn":"source_confirmed_async_queue","capture_mode":"async_ingest"},
+    {"provider":"byterover","prefetch":"source_confirmed_synchronous","sync_turn":"source_confirmed_background","capture_mode":"developer_code_memory"},
+    {"provider":"supermemory","prefetch":"source_confirmed_optional_auto_recall","sync_turn":"source_confirmed_optional_auto_capture","capture_mode":"config_gated"},
+    {"provider":"holographic","prefetch":"source_confirmed","sync_turn":"source_confirmed_no_auto_sync","capture_mode":"explicit_fact_tools"}
+  ],
+  "cross_provider_requirements": [
+    "normalize every capability into MWP ingest envelope",
+    "preserve provider-specific capture semantics",
+    "never infer automatic capture from prefetch capability",
+    "benchmark hot-path behavior per selected provider",
+    "compose provider signals without competing canonical writers",
+    "keep Hermes local memory as fallback"
+  ],
+  "runtime_status": "all providers active_runtime UNVERIFIED",
+  "writes_allowed": false,
+  "next_action": "select/map provider capabilities to maximal objective only after runtime authority and latency evidence"
+}

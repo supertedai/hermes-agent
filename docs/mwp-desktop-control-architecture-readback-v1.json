@@ -1,0 +1,54 @@
+{
+  "mwp_id": "MWP-UOSH-001",
+  "case_id": "CASE-DESKTOP-01",
+  "artifact_id": "mwp-desktop-control-architecture-readback-v1",
+  "mode": "metadata-only-reconciliation",
+  "status": "PARTIAL_CONNECTED_EXECUTION_BOUNDARY_BLOCKED",
+  "inventory_source": "docs/mwp-uosh-desktop-control-inventory.md",
+  "connected_groups": [
+    "profile/config/model settings",
+    "session model/reasoning controls",
+    "memory provider/OAuth/config",
+    "custom endpoints",
+    "profiles",
+    "cron",
+    "webhooks",
+    "gateway connection",
+    "Kanban UI routes",
+    "goals readback",
+    "maintenance",
+    "review/ship gated pane"
+  ],
+  "non_connected_or_gated": [
+    "Faber/Opus execution route",
+    "Faber goal control route",
+    "live Sol/Luna/Claude binding",
+    "full Desktop check baseline",
+    "external billing settlement"
+  ],
+  "required_execution_contract": [
+    "principal_id",
+    "profile",
+    "client_session_id",
+    "durable_session_id",
+    "mwp_id",
+    "case_id",
+    "kanban_task_id",
+    "faber_goal_id",
+    "requested_role",
+    "model_provider_receipt",
+    "scope",
+    "capability",
+    "owner_gate",
+    "reviewer_gate",
+    "rollback_ref",
+    "metadata_only_readback"
+  ],
+  "gate": {
+    "status": "BLOCKED_UNWIRED",
+    "reason": "no typed authenticated Desktop route for governed Faber/Opus execution"
+  },
+  "mutation": {"desktop_write": false, "faber_execution": false, "relay_call": false},
+  "next_permitted_action": "design and review typed route contract; do not wire renderer directly to internal relay",
+  "raw_payload_included": false
+}

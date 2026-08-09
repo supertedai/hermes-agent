@@ -1,0 +1,54 @@
+{
+  "gate": "mwp-cad-tenant-control-plane-and-surface-architecture",
+  "status": "DECLARED",
+  "mode": "architecture-intent-only",
+  "scope": {
+    "principal": "morten",
+    "installation_id": "mwp-status-quo",
+    "login_surface_id": "current-hermes-chat",
+    "agent_id": "opus",
+    "domains": [
+      "personal_life_contracts",
+      "opus_system_domains",
+      "company_tenants",
+      "portfolio_projections"
+    ]
+  },
+  "artifact": "docs/mwp-cad-tenant-control-plane-and-surface-architecture-v1.md",
+  "decisions": {
+    "opus": "single control plane and intelligence layer; not a flat shared data plane",
+    "personal": "LifeContract -> UserDomain -> DomainContract -> steward-agent",
+    "opus_internal": "Cyber/Sentinel is an Opus System/Security domain, not a personal LifeContract",
+    "companies": "separate tenant per legal/operational business with own agents, UI, connectors and policy",
+    "ui": "one canonical login with explicit Personal/System/Company context and separate cockpits",
+    "integration": "tenant-aware API/adapter gateway; LLM receives scoped tools, never unrestricted database access",
+    "portfolio": "metadata/KPI projections only by default; no global raw-data memory",
+    "authority": "Morten is top admin/authority-holder; agents steward scopes and do not become owners"
+  },
+  "evidence": {
+    "life_contract_contract": "docs/mwp-uosh-user-domain-agent-lifecycle.md",
+    "topology_contract": "docs/mwp-uosh-perfect-topology-contract.md",
+    "live_cyber_surface": "http://localhost:9119/api/symbiose/cyber",
+    "live_cyber_agent": "Sentinel / symbiose-cyber",
+    "live_cyber_bl": "BL-1808"
+  },
+  "gates": {
+    "personal_domain_agent_roundtrip": "BLOCKED_UNTIL_READBACK",
+    "company_tenant_owner_readback": "BLOCKED_UNTIL_READBACK",
+    "tenant_aware_company_api_gateway": "BLOCKED_UNTIL_READBACK",
+    "portfolio_projection_provenance": "BLOCKED_UNTIL_READBACK",
+    "gui_context_scope": "BLOCKED_UNTIL_READBACK",
+    "cyber_sentinel_authority_scope": "BLOCKED_UNTIL_READBACK",
+    "graph_write_read_after_write": "BLOCKED",
+    "canonical_obsidian_write_read_after_write": "BLOCKED",
+    "production_activation": "NOT_AUTHORIZED"
+  },
+  "owner": "morten",
+  "next_action": "Run authenticated metadata-only reconciliation for each tenant/domain projection, then promote only after graph/Obsidian read-after-write receipts exist.",
+  "mutation": {
+    "repo_artifact_write": true,
+    "graph_write": false,
+    "obsidian_write": false,
+    "runtime_activation": false
+  }
+}

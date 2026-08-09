@@ -1,0 +1,599 @@
+{
+  "qdrant": {
+    "status": 200,
+    "version": "1.18.3",
+    "collection_count": 110,
+    "collections": [
+      "ab_testing_metrics_morten",
+      "acquisition_event_v1",
+      "action_outcome_v1",
+      "anomaly_v1",
+      "architecture_task_v1",
+      "assumption_v1",
+      "atlas_entities",
+      "behavioral_invariants",
+      "biology",
+      "biology_framework_v1",
+      "biology_private",
+      "canonical_facts",
+      "causal_relation_v1",
+      "causal_variable_v1",
+      "change_proposal_v1",
+      "claim_v1",
+      "code_module_v1",
+      "coding",
+      "cognitive",
+      "cognitive_framework_v1",
+      "cognitive_private",
+      "company_v1",
+      "conversation_log_v1",
+      "country_v1",
+      "deprecated_concept_v1",
+      "doc_variable_v1",
+      "doi_v1",
+      "doubt_flag_v1",
+      "doubt_insight_v1",
+      "drift_alert_v1",
+      "dsmdisorder_v1",
+      "earth_framework_v1",
+      "earth_systems",
+      "earth_systems_private",
+      "economy",
+      "economy_framework_v1",
+      "economy_private",
+      "efc",
+      "efc_insight_v1",
+      "efc_validation_v1",
+      "entity_merge_proposal_v1",
+      "equation_v1",
+      "estate_asset_v1",
+      "evidence_legacy_signal_v1",
+      "evidence_v1",
+      "external_publication_v1",
+      "external_science",
+      "face_embeddings",
+      "family_member_v1",
+      "feedback_event_v1",
+      "finding_v1",
+      "food",
+      "food_class_v1",
+      "food_framework_v1",
+      "food_private",
+      "frameworks_content",
+      "gene_v1",
+      "go_term_v1",
+      "gpu_daemon_heartbeat_v1",
+      "hypothesis_v1",
+      "ingest_event_v1",
+      "intervention_v1",
+      "iot_pattern_v1",
+      "measurement_v1",
+      "mechanism_v1",
+      "medicine",
+      "medicine_clinical",
+      "memory_event_v1",
+      "memory_reflection_v1",
+      "meta_goal_v1",
+      "meta_principle_v1",
+      "model_v1",
+      "naics_industry_group_v1",
+      "naics_national_industry_v1",
+      "observations",
+      "opus_goal_v1",
+      "opus_loop_job_v1",
+      "pipeline_event_v1",
+      "plan_item_v1",
+      "prediction_v1",
+      "private",
+      "private_chunk_v1",
+      "private_concept_v1",
+      "private_idea_v1",
+      "publication_v1",
+      "reasoning_patterns",
+      "research_cycle_result_v1",
+      "result_v1",
+      "routing_quarantine",
+      "self_knowledge_fact_v1",
+      "semantic_mesh",
+      "session_v1",
+      "signal_candidate_v1",
+      "skill_proposal_v1",
+      "structural_shift_v1",
+      "structural_variable_v1",
+      "supported_claim_v1",
+      "supported_hypothesis_v1",
+      "surface_v1",
+      "symbiose_skills",
+      "system_note_v1",
+      "taxon_v1",
+      "trend_v1",
+      "user_documents",
+      "validation_candidate_v1",
+      "value_chain_hazard_v1",
+      "variable_v1",
+      "why_chain_decisions",
+      "why_chain_decisions_patterns",
+      "work_thread_v1"
+    ],
+    "user_private": [
+      "biology_private",
+      "canonical_facts",
+      "cognitive",
+      "cognitive_framework_v1",
+      "cognitive_private",
+      "conversation_log_v1",
+      "earth_systems_private",
+      "economy_private",
+      "food_private",
+      "memory_event_v1",
+      "memory_reflection_v1",
+      "private",
+      "private_chunk_v1",
+      "private_concept_v1",
+      "private_idea_v1",
+      "user_documents"
+    ],
+    "knowledge": [
+      "biology",
+      "coding",
+      "cognitive",
+      "earth_systems",
+      "economy",
+      "efc",
+      "food",
+      "medicine",
+      "medicine_clinical",
+      "private"
+    ]
+  },
+  "path_counts": {
+    "schema": 32,
+    "migrations/neo4j": 198,
+    "symbiose_gnn_output": 49,
+    "data/qdrant/collections": 16280
+  },
+  "schema_files": [
+    "migrations/neo4j/001_add_knowledge_domain_indexes.down.cypher",
+    "migrations/neo4j/001_add_knowledge_domain_indexes.up.cypher",
+    "migrations/neo4j/001_add_knowledge_domain_indexes.validate.cypher",
+    "migrations/neo4j/002_canonicalize_existing_domain_values.down.cypher",
+    "migrations/neo4j/002_canonicalize_existing_domain_values.up.cypher",
+    "migrations/neo4j/002_canonicalize_existing_domain_values.validate.cypher",
+    "migrations/neo4j/003_populate_knowledge_domain_from_source.down.cypher",
+    "migrations/neo4j/003_populate_knowledge_domain_from_source.up.cypher",
+    "migrations/neo4j/003_populate_knowledge_domain_from_source.validate.cypher",
+    "migrations/neo4j/004_add_layer_labels_to_concepts.down.cypher",
+    "migrations/neo4j/004_add_layer_labels_to_concepts.up.cypher",
+    "migrations/neo4j/004_add_layer_labels_to_concepts.validate.cypher",
+    "migrations/neo4j/005_add_validation_shadow_label.down.cypher",
+    "migrations/neo4j/005_add_validation_shadow_label.up.cypher",
+    "migrations/neo4j/005_add_validation_shadow_label.validate.cypher",
+    "migrations/neo4j/006_create_constraints_layer_frameworks.down.cypher",
+    "migrations/neo4j/006_create_constraints_layer_frameworks.up.cypher",
+    "migrations/neo4j/006_create_constraints_layer_frameworks.validate.cypher",
+    "migrations/neo4j/007_create_medicine_specific_constraints.down.cypher",
+    "migrations/neo4j/007_create_medicine_specific_constraints.up.cypher",
+    "migrations/neo4j/007_create_medicine_specific_constraints.validate.cypher",
+    "migrations/neo4j/008_evidence_grading_columns.down.cypher",
+    "migrations/neo4j/008_evidence_grading_columns.up.cypher",
+    "migrations/neo4j/008_evidence_grading_columns.validate.cypher",
+    "migrations/neo4j/009_crossdomainlink_evidence_audit.down.cypher",
+    "migrations/neo4j/009_crossdomainlink_evidence_audit.up.cypher",
+    "migrations/neo4j/009_crossdomainlink_evidence_audit.validate.cypher",
+    "migrations/neo4j/010_dsm_schema_constraints.down.cypher",
+    "migrations/neo4j/010_dsm_schema_constraints.up.cypher",
+    "migrations/neo4j/010_dsm_schema_constraints.validate.cypher",
+    "migrations/neo4j/011_rcmp_axes_document_chunk.down.cypher",
+    "migrations/neo4j/011_rcmp_axes_document_chunk.up.cypher",
+    "migrations/neo4j/011_rcmp_axes_document_chunk.validate.cypher",
+    "migrations/neo4j/012_rce_governance_labels.down.cypher",
+    "migrations/neo4j/012_rce_governance_labels.up.cypher",
+    "migrations/neo4j/012_rce_governance_labels.validate.cypher",
+    "migrations/neo4j/013_cross_domain_regime_seeds.down.cypher",
+    "migrations/neo4j/013_cross_domain_regime_seeds.up.cypher",
+    "migrations/neo4j/013_cross_domain_regime_seeds.validate.cypher",
+    "migrations/neo4j/014_v36_medical_signal_rerouting.down.cypher",
+    "migrations/neo4j/014_v36_medical_signal_rerouting.up.cypher",
+    "migrations/neo4j/014_v36_medical_signal_rerouting.validate.cypher",
+    "migrations/neo4j/014a_v36a_ebv_infection_signal.down.cypher",
+    "migrations/neo4j/014a_v36a_ebv_infection_signal.up.cypher",
+    "migrations/neo4j/014a_v36a_ebv_infection_signal.validate.cypher",
+    "migrations/neo4j/015_label_rename_v36_cosmos_to_medicine.down.cypher",
+    "migrations/neo4j/015_label_rename_v36_cosmos_to_medicine.up.cypher",
+    "migrations/neo4j/015_label_rename_v36_cosmos_to_medicine.validate.cypher",
+    "migrations/neo4j/016_jsonld_name_cleanup.down.cypher",
+    "migrations/neo4j/016_jsonld_name_cleanup.up.cypher",
+    "migrations/neo4j/016_jsonld_name_cleanup.validate.cypher",
+    "migrations/neo4j/017_orphan_concept_kd_backfill.down.cypher",
+    "migrations/neo4j/017_orphan_concept_kd_backfill.up.cypher",
+    "migrations/neo4j/017_orphan_concept_kd_backfill.validate.cypher",
+    "migrations/neo4j/018_cross_domain_signature_class_preregistration.down.cypher",
+    "migrations/neo4j/018_cross_domain_signature_class_preregistration.up.cypher",
+    "migrations/neo4j/018_cross_domain_signature_class_preregistration.validate.cypher",
+    "migrations/neo4j/019_dsm_seed_ingest.down.cypher",
+    "migrations/neo4j/019_dsm_seed_ingest.validate.cypher",
+    "migrations/neo4j/020_cognitive_routing_fix.down.cypher",
+    "migrations/neo4j/020_cognitive_routing_fix.up.cypher",
+    "migrations/neo4j/020_cognitive_routing_fix.validate.cypher",
+    "migrations/neo4j/021_master_index_routing_fix.down.cypher",
+    "migrations/neo4j/021_master_index_routing_fix.up.cypher",
+    "migrations/neo4j/021_master_index_routing_fix.validate.cypher",
+    "migrations/neo4j/022_heal_qdrant_payloads.validate.cypher",
+    "migrations/neo4j/023_rce_governance_enrichment.down.cypher",
+    "migrations/neo4j/023_rce_governance_enrichment.up.cypher",
+    "migrations/neo4j/023_rce_governance_enrichment.validate.cypher",
+    "migrations/neo4j/024_phase_4_2_framework_phenomenon_kd_backfill.down.cypher",
+    "migrations/neo4j/024_phase_4_2_framework_phenomenon_kd_backfill.up.cypher",
+    "migrations/neo4j/024_phase_4_2_framework_phenomenon_kd_backfill.validate.cypher",
+    "migrations/neo4j/025_phase_5_null_kd_sweep.down.cypher",
+    "migrations/neo4j/025_phase_5_null_kd_sweep.up.cypher",
+    "migrations/neo4j/025_phase_5_null_kd_sweep.validate.cypher",
+    "migrations/neo4j/026_phase_6_3_meta_principle_seeding.down.cypher",
+    "migrations/neo4j/026_phase_6_3_meta_principle_seeding.up.cypher",
+    "migrations/neo4j/026_phase_6_3_meta_principle_seeding.validate.cypher",
+    "migrations/neo4j/027_phase_6_1_cognitive_phenomena_and_shells.down.cypher",
+    "migrations/neo4j/027_phase_6_1_cognitive_phenomena_and_shells.up.cypher",
+    "migrations/neo4j/027_phase_6_1_cognitive_phenomena_and_shells.validate.cypher",
+    "migrations/neo4j/028_phase_6_1_parity_expansion.down.cypher",
+    "migrations/neo4j/028_phase_6_1_parity_expansion.up.cypher",
+    "migrations/neo4j/028_phase_6_1_parity_expansion.validate.cypher",
+    "migrations/neo4j/029_phase_6_2_medicine_parity.down.cypher",
+    "migrations/neo4j/029_phase_6_2_medicine_parity.up.cypher",
+    "migrations/neo4j/029_phase_6_2_medicine_parity.validate.cypher",
+    "migrations/neo4j/030_phase_6_4_acceptance_polish.down.cypher",
+    "migrations/neo4j/030_phase_6_4_acceptance_polish.up.cypher",
+    "migrations/neo4j/030_phase_6_4_acceptance_polish.validate.cypher",
+    "migrations/neo4j/031_phase_6_4_author_year_backfill.down.cypher",
+    "migrations/neo4j/031_phase_6_4_author_year_backfill.up.cypher",
+    "migrations/neo4j/031_phase_6_4_author_year_backfill.validate.cypher",
+    "migrations/neo4j/032_phase_6_4_cross_layer_mirrors.down.cypher",
+    "migrations/neo4j/032_phase_6_4_cross_layer_mirrors.up.cypher",
+    "migrations/neo4j/032_phase_6_4_cross_layer_mirrors.validate.cypher",
+    "migrations/neo4j/033_phase_6_2_dsm_evidence_citations.down.cypher",
+    "migrations/neo4j/033_phase_6_2_dsm_evidence_citations.up.cypher",
+    "migrations/neo4j/033_phase_6_2_dsm_evidence_citations.validate.cypher",
+    "migrations/neo4j/034_phase_6_4_r10_concept_dedup.down.cypher",
+    "migrations/neo4j/034_phase_6_4_r10_concept_dedup.up.cypher",
+    "migrations/neo4j/034_phase_6_4_r10_concept_dedup.validate.cypher",
+    "migrations/neo4j/035_concept_canonical_id_unique.down.cypher",
+    "migrations/neo4j/035_concept_canonical_id_unique.up.cypher",
+    "migrations/neo4j/035_concept_canonical_id_unique.validate.cypher",
+    "migrations/neo4j/036_concept_canonical_kd_pragmatic.down.cypher",
+    "migrations/neo4j/036_concept_canonical_kd_pragmatic.up.cypher",
+    "migrations/neo4j/036_concept_canonical_kd_pragmatic.validate.cypher",
+    "migrations/neo4j/039_multi_domain_biology_schema.down.cypher",
+    "migrations/neo4j/039_multi_domain_biology_schema.up.cypher",
+    "migrations/neo4j/039_multi_domain_biology_schema.validate.cypher",
+    "migrations/neo4j/040_multi_domain_economy_schema.down.cypher",
+    "migrations/neo4j/040_multi_domain_economy_schema.up.cypher",
+    "migrations/neo4j/040_multi_domain_economy_schema.validate.cypher",
+    "migrations/neo4j/041_multi_domain_earth_schema.down.cypher",
+    "migrations/neo4j/041_multi_domain_earth_schema.up.cypher",
+    "migrations/neo4j/041_multi_domain_earth_schema.validate.cypher",
+    "migrations/neo4j/042_metrology_governance_schema.down.cypher",
+    "migrations/neo4j/042_metrology_governance_schema.up.cypher",
+    "migrations/neo4j/042_metrology_governance_schema.validate.cypher",
+    "migrations/neo4j/043_phase_7_1_measurement_standards_extension.down.cypher",
+    "migrations/neo4j/043_phase_7_1_measurement_standards_extension.up.cypher",
+    "migrations/neo4j/043_phase_7_1_measurement_standards_extension.validate.cypher",
+    "migrations/neo4j/044_phase_6_2_dsm_top50_completion.down.cypher",
+    "migrations/neo4j/044_phase_6_2_dsm_top50_completion.up.cypher",
+    "migrations/neo4j/044_phase_6_2_dsm_top50_completion.validate.cypher",
+    "migrations/neo4j/046_phase_7_3_uncertainty_convention.down.cypher",
+    "migrations/neo4j/046_phase_7_3_uncertainty_convention.up.cypher",
+    "migrations/neo4j/046_phase_7_3_uncertainty_convention.validate.cypher",
+    "migrations/neo4j/047_phase_6_1_biology_taxon_seed.down.cypher",
+    "migrations/neo4j/047_phase_6_1_biology_taxon_seed.up.cypher",
+    "migrations/neo4j/047_phase_6_1_biology_taxon_seed.validate.cypher",
+    "migrations/neo4j/048_phase_6_3_earth_climate_subsystem_seed.down.cypher",
+    "migrations/neo4j/048_phase_6_3_earth_climate_subsystem_seed.up.cypher",
+    "migrations/neo4j/048_phase_6_3_earth_climate_subsystem_seed.validate.cypher",
+    "migrations/neo4j/049_phase_6_2_economy_naics_sna_seed.down.cypher",
+    "migrations/neo4j/049_phase_6_2_economy_naics_sna_seed.up.cypher",
+    "migrations/neo4j/049_phase_6_2_economy_naics_sna_seed.validate.cypher",
+    "migrations/neo4j/050_phase_6_2_dsm_chunk1_50_citations.down.cypher",
+    "migrations/neo4j/050_phase_6_2_dsm_chunk1_50_citations.up.cypher",
+    "migrations/neo4j/050_phase_6_2_dsm_chunk1_50_citations.validate.cypher",
+    "migrations/neo4j/051_phase_6_1_biology_goterm_seed.down.cypher",
+    "migrations/neo4j/051_phase_6_1_biology_goterm_seed.up.cypher",
+    "migrations/neo4j/051_phase_6_1_biology_goterm_seed.validate.cypher",
+    "migrations/neo4j/052_phase_6_1_biology_organism_trajectory_seed.down.cypher",
+    "migrations/neo4j/052_phase_6_1_biology_organism_trajectory_seed.up.cypher",
+    "migrations/neo4j/052_phase_6_1_biology_organism_trajectory_seed.validate.cypher",
+    "migrations/neo4j/053_phase_6_3_earth_tipping_event_seed.down.cypher",
+    "migrations/neo4j/053_phase_6_3_earth_tipping_event_seed.up.cypher",
+    "migrations/neo4j/053_phase_6_3_earth_tipping_event_seed.validate.cypher",
+    "migrations/neo4j/054_phase_6_2_economy_market_trajectory_seed.down.cypher",
+    "migrations/neo4j/054_phase_6_2_economy_market_trajectory_seed.up.cypher",
+    "migrations/neo4j/054_phase_6_2_economy_market_trajectory_seed.validate.cypher",
+    "migrations/neo4j/055_phase_6_3_earth_koppen_class_seed.down.cypher",
+    "migrations/neo4j/055_phase_6_3_earth_koppen_class_seed.up.cypher",
+    "migrations/neo4j/055_phase_6_3_earth_koppen_class_seed.validate.cypher",
+    "migrations/neo4j/056_phase_6_3_earth_climate_regime_trajectory_seed.down.cypher",
+    "migrations/neo4j/056_phase_6_3_earth_climate_regime_trajectory_seed.up.cypher",
+    "migrations/neo4j/056_phase_6_3_earth_climate_regime_trajectory_seed.validate.cypher",
+    "migrations/neo4j/057_phase_6_2_dsm_chunk2_50_citations.down.cypher",
+    "migrations/neo4j/057_phase_6_2_dsm_chunk2_50_citations.up.cypher",
+    "migrations/neo4j/057_phase_6_2_dsm_chunk2_50_citations.validate.cypher",
+    "migrations/neo4j/058_phase_5_chunk_document_id_backfill.down.cypher",
+    "migrations/neo4j/058_phase_5_chunk_document_id_backfill.up.cypher",
+    "migrations/neo4j/058_phase_5_chunk_document_id_backfill.validate.cypher",
+    "migrations/neo4j/059_phase_6_4_bio_med_cross_layer_bridges.down.cypher",
+    "migrations/neo4j/059_phase_6_4_bio_med_cross_layer_bridges.up.cypher",
+    "migrations/neo4j/059_phase_6_4_bio_med_cross_layer_bridges.validate.cypher",
+    "migrations/neo4j/060_phase_6_4_earth_med_cross_layer_bridges.down.cypher",
+    "migrations/neo4j/060_phase_6_4_earth_med_cross_layer_bridges.up.cypher",
+    "migrations/neo4j/060_phase_6_4_earth_med_cross_layer_bridges.validate.cypher",
+    "migrations/neo4j/061_phase_6_4_bio_cog_cross_layer_bridges.down.cypher",
+    "migrations/neo4j/061_phase_6_4_bio_cog_cross_layer_bridges.up.cypher",
+    "migrations/neo4j/061_phase_6_4_bio_cog_cross_layer_bridges.validate.cypher",
+    "migrations/neo4j/062_phase_6_2_dsm_chunk3_50_citations.down.cypher",
+    "migrations/neo4j/062_phase_6_2_dsm_chunk3_50_citations.up.cypher",
+    "migrations/neo4j/062_phase_6_2_dsm_chunk3_50_citations.validate.cypher",
+    "migrations/neo4j/063_phase_6_2_dsm_chunk4_50_citations.down.cypher",
+    "migrations/neo4j/063_phase_6_2_dsm_chunk4_50_citations.up.cypher",
+    "migrations/neo4j/063_phase_6_2_dsm_chunk4_50_citations.validate.cypher",
+    "migrations/neo4j/064_phase_6_2_pasient_01_uc_trajectory.down.cypher",
+    "migrations/neo4j/064_phase_6_2_pasient_01_uc_trajectory.up.cypher",
+    "migrations/neo4j/064_phase_6_2_pasient_01_uc_trajectory.validate.cypher",
+    "migrations/neo4j/065_phase_6_2_patient_edge_name_realignment.down.cypher",
+    "migrations/neo4j/065_phase_6_2_patient_edge_name_realignment.up.cypher",
+    "migrations/neo4j/065_phase_6_2_patient_edge_name_realignment.validate.cypher",
+    "migrations/neo4j/066_multi_domain_food_schema.down.cypher",
+    "migrations/neo4j/066_multi_domain_food_schema.up.cypher",
+    "migrations/neo4j/066_multi_domain_food_schema.validate.cypher",
+    "migrations/neo4j/067_bl245_schema_pattern_10dim_fields.down.cypher",
+    "migrations/neo4j/067_bl245_schema_pattern_10dim_fields.up.cypher",
+    "migrations/neo4j/067_bl245_schema_pattern_10dim_fields.validate.cypher",
+    "migrations/neo4j/BL340_canonical_id_migration.cypher",
+    "migrations/neo4j/BL342_author_binding_backfill.cypher",
+    "migrations/neo4j/BL347_doi_propagation.cypher"
+  ],
+  "gnn_artifacts": [
+    {
+      "path": "symbiose_gnn_output/multi_tier_training_log.json",
+      "bytes": 13494
+    },
+    {
+      "path": "symbiose_gnn_output/multi_tier_embeddings.json",
+      "bytes": 292565155
+    },
+    {
+      "path": "symbiose_gnn_output/multi_tier_gnn_model.pt",
+      "bytes": 2864161
+    },
+    {
+      "path": "symbiose_gnn_output/projection_matrix_meta.json",
+      "bytes": 247
+    },
+    {
+      "path": "symbiose_gnn_output/online_embeddings.json",
+      "bytes": 46973543
+    },
+    {
+      "path": "symbiose_gnn_output/v2/graph_log.json",
+      "bytes": 774
+    },
+    {
+      "path": "symbiose_gnn_output/v2/dedup_daemon_case_latest.json",
+      "bytes": 3678
+    },
+    {
+      "path": "symbiose_gnn_output/v2/backfill_canonical_id_execute_20260519T165318Z.json",
+      "bytes": 26578
+    },
+    {
+      "path": "symbiose_gnn_output/v2/dedup_daemon_aggressive_latest.json",
+      "bytes": 36644
+    },
+    {
+      "path": "symbiose_gnn_output/v2/training_log.json",
+      "bytes": 51045
+    },
+    {
+      "path": "symbiose_gnn_output/v2/dedup_backup_aggressive.json",
+      "bytes": 37962510
+    },
+    {
+      "path": "symbiose_gnn_output/v2/dedup_aggressive_report.json",
+      "bytes": 3663
+    },
+    {
+      "path": "symbiose_gnn_output/v2/backfill_canonical_id_execute_singletons_only_20260519T151920Z.json",
+      "bytes": 24746
+    },
+    {
+      "path": "symbiose_gnn_output/v2/embeddings.json",
+      "bytes": 917376530
+    },
+    {
+      "path": "symbiose_gnn_output/v2/features_with_structural.pt",
+      "bytes": 117854112
+    },
+    {
+      "path": "symbiose_gnn_output/v2/graph.pt",
+      "bytes": 12583948
+    },
+    {
+      "path": "symbiose_gnn_output/v2/structural_features_log.json",
+      "bytes": 438
+    },
+    {
+      "path": "symbiose_gnn_output/v2/model.pt",
+      "bytes": 16131054
+    },
+    {
+      "path": "symbiose_gnn_output/v2/eval_report.json",
+      "bytes": 6614
+    },
+    {
+      "path": "symbiose_gnn_output/v2/features_log.json",
+      "bytes": 279
+    },
+    {
+      "path": "symbiose_gnn_output/v2/backfill_canonical_id_dry_run_20260519T144227Z.json",
+      "bytes": 13844
+    },
+    {
+      "path": "symbiose_gnn_output/v2/model_sota.pt",
+      "bytes": 40492341
+    },
+    {
+      "path": "symbiose_gnn_output/v2/config_used.json",
+      "bytes": 2457
+    },
+    {
+      "path": "symbiose_gnn_output/v2/backfill_canonical_id_dry_run_20260519T144936Z.json",
+      "bytes": 24480
+    },
+    {
+      "path": "symbiose_gnn_output/v2/backfill_canonical_id_dry_run_20260519T162333Z.json",
+      "bytes": 21186
+    },
+    {
+      "path": "symbiose_gnn_output/v2/backfill_canonical_id_execute_20260519T160426Z.json",
+      "bytes": 43525
+    },
+    {
+      "path": "symbiose_gnn_output/v2/dedup_report.json",
+      "bytes": 26184
+    },
+    {
+      "path": "symbiose_gnn_output/v2/eval_sota_report.json",
+      "bytes": 6830
+    },
+    {
+      "path": "symbiose_gnn_output/v2/embeddings_sota.json",
+      "bytes": 154954029
+    },
+    {
+      "path": "symbiose_gnn_output/v2/training_log_sota.json",
+      "bytes": 49523
+    },
+    {
+      "path": "symbiose_gnn_output/v2/concepts.json",
+      "bytes": 29795045
+    },
+    {
+      "path": "symbiose_gnn_output/v2/dedup_daemon_history.json",
+      "bytes": 8453
+    },
+    {
+      "path": "symbiose_gnn_output/v2/dedup_backup.json",
+      "bytes": 41448777
+    },
+    {
+      "path": "symbiose_gnn_output/v2/normalize_log.json",
+      "bytes": 102823
+    },
+    {
+      "path": "symbiose_gnn_output/v2/backfill_canonical_id_dry_run_20260519T145546Z.json",
+      "bytes": 24697
+    },
+    {
+      "path": "symbiose_gnn_output/v2/node_merge_Person_case_latest.json",
+      "bytes": 1447
+    },
+    {
+      "path": "symbiose_gnn_output/v2/eval_tucker_only_report.json",
+      "bytes": 5252
+    },
+    {
+      "path": "symbiose_gnn_output/v2/tucker_head.pt",
+      "bytes": 9242503
+    },
+    {
+      "path": "symbiose_gnn_output/v2/features.pt",
+      "bytes": 667700592
+    },
+    {
+      "path": "symbiose_gnn_output/v2_prev/training_log.json",
+      "bytes": 52255
+    },
+    {
+      "path": "symbiose_gnn_output/v2_prev/embeddings.json",
+      "bytes": 833891716
+    },
+    {
+      "path": "symbiose_gnn_output/v2_prev/model.pt",
+      "bytes": 15643566
+    },
+    {
+      "path": "symbiose_gnn_output/v2_prev/eval_report.json",
+      "bytes": 6520
+    },
+    {
+      "path": "symbiose_gnn_output/v2_prev/_backup_meta.json",
+      "bytes": 148
+    },
+    {
+      "path": "compose/symbiose_gnn_output._misdeploy_BL2222/multi_tier_training_log.json",
+      "bytes": 13628
+    },
+    {
+      "path": "compose/symbiose_gnn_output._misdeploy_BL2222/multi_tier_embeddings.json",
+      "bytes": 281715538
+    },
+    {
+      "path": "compose/symbiose_gnn_output._misdeploy_BL2222/multi_tier_gnn_model.pt",
+      "bytes": 2864161
+    },
+    {
+      "path": "compose/symbiose_gnn_output._misdeploy_BL2222/v2/graph_log.json",
+      "bytes": 773
+    },
+    {
+      "path": "compose/symbiose_gnn_output._misdeploy_BL2222/v2/dedup_daemon_case_latest.json",
+      "bytes": 866
+    },
+    {
+      "path": "compose/symbiose_gnn_output._misdeploy_BL2222/v2/graph.pt",
+      "bytes": 11355276
+    },
+    {
+      "path": "compose/symbiose_gnn_output._misdeploy_BL2222/v2/concepts.json",
+      "bytes": 26948059
+    },
+    {
+      "path": "compose/symbiose_gnn_output._misdeploy_BL2222/v2/dedup_daemon_history.json",
+      "bytes": 5265
+    },
+    {
+      "path": "compose/symbiose_gnn_output._misdeploy_BL2222/v2/normalize_log.json",
+      "bytes": 77150
+    },
+    {
+      "path": "compose/symbiose_gnn_output._misdeploy_BL2222/v2_prev/_backup_meta.json",
+      "bytes": 58
+    }
+  ],
+  "active_graph_gnn_processes": [
+    "sh              sh -c pip install --no-cache-dir requests neo4j python-dotenv PyYAML >/dev/null 2>&1 && python3 /app/tools/goal_alignment_monitor.py --mode daemon --interval 1800",
+    "qdrant          ./qdrant",
+    "python          python tools/ab_compare_qdrant_daemon.py",
+    "python          python -u tools/qdrant_neo4j_sync.py --daemon --interval 3600",
+    "python          python -u tools/qdrant_neo4j_sync.py --daemon --interval 3600",
+    "sh              sh -c pip install --no-cache-dir requests qdrant-client neo4j tiktoken openai >/dev/null && python3 /app/tools/repo_content_ingest_daemon.py",
+    "sh              sh -c pip install --no-cache-dir requests >/dev/null && python3 /app/tools/gnn_tier_propagation_daemon.py",
+    "sh              sh -c pip install --no-cache-dir requests >/dev/null && python3 /app/tools/memory_qdrant_indexer_daemon.py --daemon",
+    "sh              sh -c pip install --no-cache-dir requests >/dev/null && python3 /app/tools/evidence_qdrant_sync_daemon.py",
+    "sh              sh -c pip install --no-cache-dir neo4j requests >/dev/null 2>&1 && python3 /app/tools/autoheal_causal_learning_daemon.py --daemon",
+    "sh              sh -c pip install --no-cache-dir neo4j requests >/dev/null 2>&1 && python3 /app/tools/consumer_gap_auditor.py --daemon",
+    "sh              sh -c pip install --no-cache-dir requests >/dev/null && python3 /app/tools/qdrant_payload_bootstrap_daemon.py",
+    "sh              sh -c pip install --no-cache-dir requests numpy >/dev/null && python3 /app/tools/gnn_online_concept_embedder_daemon.py",
+    "sh              sh -c pip install --no-cache-dir requests neo4j >/dev/null 2>&1 && python3 /app/tools/self_knowledge_oracle.py",
+    "tini            tini -g -- /startup/docker-entrypoint.sh neo4j",
+    "python3         python3 /app/tools/memory_qdrant_indexer_daemon.py --daemon",
+    "python3         python3 /app/tools/gnn_tier_propagation_daemon.py",
+    "python3         python3 /app/tools/qdrant_payload_bootstrap_daemon.py",
+    "java            /opt/java/openjdk/bin/java -cp /var/lib/neo4j/plugins/*:/var/lib/neo4j/conf/*:/var/lib/neo4j/lib/* -XX:+UseG1GC -XX:-OmitStackTraceInFastThrow -XX:+AlwaysPreTouch -XX:+UnlockExperimentalVMOptions -XX:+TrustFinalNonStaticFields -XX:+DisableExplicitGC -XX:-RestrictContended -Djdk.nio.maxCachedBufferSize=1024 -Dio.netty.tryReflectionSetAccessible=true -Dio.netty.leakDetection.level=DISABLED -Djdk.tls.ephemeralDHKeySize=2048 -Djdk.tls.rejectClientInitiatedRenegotiation=true -XX:FlightRecorderOptions=stackdepth=256 -XX:+UnlockDiagnosticVMOptions -XX:+DebugNonSafepoints --add-opens=java.base/java.nio=ALL-UNNAMED --add-opens=java.base/java.io=ALL-UNNAMED --add-opens=java.base/sun.nio.ch=ALL-UNNAMED --add-opens=java.base/java.util.concurrent=ALL-UNNAMED --enable-native-access=ALL-UNNAMED -Dlog4j2.disable.jmx=true -Dlog4j.layout.jsonTemplate.maxStringLength=32768 -XX:+UseG1GC -XX:MaxGCPauseMillis=300 -XX:+UseG1GC -XX:MaxGCPauseMillis=300 -XX:+UseG1GC -XX:MaxGCPauseMillis=300 -XX:+UseG1GC -XX:MaxGCPauseMillis=300 -Dfile.encoding=UTF-8 -Xms32505856k -Xmx32505856k com.neo4j.server.enterprise.Neo4jEnterprise --home-dir=/var/lib/neo4j --config-dir=/var/lib/neo4j/conf --console-mode",
+    "python3         python3 /app/tools/gnn_online_concept_embedder_daemon.py",
+    "sh              sh -c pip install --no-cache-dir neo4j==5.21.0 >/dev/null && python3 /app/tools/loop_health_watchdog.py",
+    "python3         python3 /app/tools/evidence_qdrant_sync_daemon.py",
+    "python3         python3 /app/tools/gnn_training_daemon.py --check-interval 3600",
+    "sh              sh -c pip install --no-cache-dir neo4j requests >/dev/null && python3 /app/tools/master_autohealer_daemon.py --mode daemon",
+    "sh              sh -c pip install --no-cache-dir requests >/dev/null && python3 /app/tools/gnn_concept_trigger_daemon.py",
+    "python3         python3 /app/tools/gnn_concept_trigger_daemon.py",
+    "python          python tools/bidirectional_sync_v2.py --mode neo4j-to-qdrant-all --collection private --backfill --daemon --interval 3600 --batch-size 500 --embed-batch-size 64 --min-text-chars 20 --state-path /state/neo4j_to_qdrant_all_cursor.json"
+  ]
+}

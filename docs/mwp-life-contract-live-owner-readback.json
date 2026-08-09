@@ -1,0 +1,27 @@
+{
+  "gate": "life-contract-domain-steward-post-creation-roundtrip",
+  "status": "BLOCKED",
+  "scope": {
+    "user_id": "morten",
+    "installation_id": "mwp-status-quo",
+    "login_surface_id": "current-hermes-chat",
+    "agent_id": "opus"
+  },
+  "canonical_writer": {
+    "host": ".12",
+    "route": "apis/unified_api/routers/life_contract_api.py::deploy_domain_agent",
+    "agent_creation": "tools/agent_roster.py",
+    "contract_projection": "tools/steward_contract_emit.py",
+    "fact_aggregator": "tools/life_contract_aggregator_daemon.py"
+  },
+  "observed_gap": [
+    "no UserDomain create/reconcile in deployment route",
+    "no verified user-scoped domain-agent binding writeback",
+    "no contract -> domain -> agent -> contract round-trip readback",
+    "memory_scope lifecontract:{domain} is not user-scoped"
+  ],
+  "owner": ".12 unified_api/life_contract_api.py maintainer",
+  "evidence": "docs/mwp-uosh-dot12-daemon-audit.md",
+  "next_action": "Implement sanctioned post-creation sync on .12, then return metadata-only creation receipt and round-trip readback",
+  "prohibited_promotion": "Do not mark SYNCED/LIVE_VERIFIED from deployment response alone"
+}

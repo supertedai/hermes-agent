@@ -1,0 +1,63 @@
+{
+  "artifact_id": "mwp-external-gates-closeout-readback-v2",
+  "mwp_id": "MWP-UOSH-001",
+  "status": "DESKTOP_GATE_COMPLETE_IDENTITY_GATE_BLOCKS_DOWNSTREAM",
+  "mode": "metadata-only-fail-closed-readback",
+  "canonical_destination": "https://github.com/supertedai/AGI.git branch mwp/uosh-automation-01",
+  "gates": [
+    {
+      "gate": "desktop-session-visibility",
+      "status": "COMPLETE_TECHNICAL_FIX_VERIFIED",
+      "owner": "Desktop/runtime authority",
+      "evidence": ["legacy /api/sessions fallback", "transient empty refresh guard", "42 API/parity/session tests passed", "917 Electron tests passed with 2 skipped", "Desktop build PASS", "Hermes remote commit f901d1c5de"],
+      "next_action": "No further Desktop mutation; preserve old working Desktop as operational baseline.",
+      "writes_allowed": false
+    },
+    {
+      "gate": "live-identity",
+      "status": "BLOCKED_FRESH_RECEIPT_UNAVAILABLE",
+      "owner": "identity/surface authority",
+      "evidence": ["user confirmed ai.byopus.com browser 2FA handoff", "canonical state.db contains 4049 sessions and 35120 messages", "fresh desktop-auth-readback receipt absent on .15"],
+      "required_evidence": ["fresh authenticated /api/me", "fresh authenticated /api/mwp/identity", "principal", "device_class", "login_surface_id", "transport/provenance", "freshness"],
+      "next_action": "Obtain fresh metadata-only identity receipt from the already-working old Desktop surface without re-home, logout or Home switch.",
+      "writes_allowed": false
+    },
+    {
+      "gate": "active-role-provider",
+      "status": "BLOCKED_DOWNSTREAM_IDENTITY",
+      "owner": "runtime/provider authority",
+      "required_evidence": ["role_id", "provider_id", "model_id", "api_mode", "llm_instance_id", "fallback-health", "freshness"],
+      "next_action": "Read active-turn receipt only after identity PASS.",
+      "writes_allowed": false
+    },
+    {
+      "gate": "kanban-child-lease",
+      "status": "BLOCKED_DOWNSTREAM_IDENTITY_AND_ROLE_PROVIDER",
+      "owner": "owner/orchestrator",
+      "required_evidence": ["parent", "child", "lease", "heartbeat", "worker activation state"],
+      "next_action": "Do not create child, lease or worker activation before upstream receipts are live.",
+      "writes_allowed": false
+    },
+    {
+      "gate": "full-graph-projection",
+      "status": "BLOCKED_FULL_AUTHORITY_AND_ROLLBACK_RECEIPTS",
+      "owner": "graph/data authority",
+      "required_evidence": ["schema/key pre-read", "owner approval", "short-lived grant", "execute receipt", "read-after-write", "rollback reference"],
+      "next_action": "Keep full graph projection blocked.",
+      "writes_allowed": false
+    }
+  ],
+  "closed_baseline": {
+    "AGI_canonical": "VERIFIED_MAC_PUSH",
+    "source_mapping": "COMPLETE_PARTIAL_AUTHORITY",
+    "CAD": "30_INDEXED_IMPORTED",
+    "ADR": "7_INDEXED_MAPPED",
+    "BL": "16_REFERENCES_MAPPED_REGISTRY_MISSING",
+    "Obsidian": "BOUNDED_VERIFIED",
+    "Graph": "BOUNDED_VERIFIED",
+    "Hermes_current_tree_cleanup": "COMPLETE",
+    "Desktop_session_visibility": "COMPLETE"
+  },
+  "overall_status": "OPEN_IDENTITY_BLOCKS_DOWNSTREAM_GATES",
+  "raw_payload_included": false
+}

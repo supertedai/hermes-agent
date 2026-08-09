@@ -1,0 +1,19 @@
+{
+  "mwp_id": "MWP-UOSH-001",
+  "case_id": "CASE-AUTONOMY-00",
+  "artifact_id": "mwp-candidate-role-provider-verdict-v2",
+  "mode": "metadata-only-live-registry-correlation",
+  "status": "ALL_CANDIDATES_UNVERIFIED",
+  "snapshot_at": "2026-08-06T13:38:56.255360+00:00",
+  "candidate_count": 5,
+  "verdicts": [
+    {"agent_id": "faber", "role": "faber", "model": "gpt-oss-120b", "provider": "unknown", "verdict": "UNVERIFIED", "blockers": ["model absent from catalog", "live runtime receipt required"]},
+    {"agent_id": "helios", "role": "helios", "model": "hermes-120b", "provider": "unknown", "verdict": "UNVERIFIED", "blockers": ["model absent from catalog", "live runtime receipt required"]},
+    {"agent_id": "hermes-critic", "role": "hermes-critic", "model": "gpt-oss-120b", "provider": "unknown", "verdict": "UNVERIFIED", "blockers": ["model absent from catalog", "live runtime receipt required"]},
+    {"agent_id": "hermes-infra", "role": "hermes-infra", "model": "gpt-oss-120b", "provider": "unknown", "verdict": "UNVERIFIED", "blockers": ["model absent from catalog", "live runtime receipt required"]},
+    {"agent_id": "testing", "role": "testing", "model": "gpt-oss-120b", "provider": "unknown", "verdict": "UNVERIFIED", "blockers": ["model absent from catalog", "live runtime receipt required"]}
+  ],
+  "gate": {"candidate_routing": "BLOCKED", "live_role_provider_receipt": "MISSING", "owner_authorization": "MISSING"},
+  "mutation": {"routing": false, "activation": false, "provider_write": false},
+  "raw_payload_included": false
+}

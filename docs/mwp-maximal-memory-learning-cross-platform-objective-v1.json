@@ -1,0 +1,73 @@
+{
+  "artifact_id": "mwp-maximal-memory-learning-cross-platform-objective-v1",
+  "mwp_id": "MWP-UOSH-001",
+  "status": "ARCHITECTURAL_OBJECTIVE",
+  "objective": "maximize useful memory, learning and retrieval potential across every Hermes surface and Opus/Symbiose layer without sacrificing latency, scope safety or canonical truth",
+  "runtime_waist": "Hermes engine",
+  "provider_position": "Holographic is optional provider capability, not the objective or canonical architecture",
+  "coverage_axes": [
+    "chat/session",
+    "user/principal",
+    "system/Cortex",
+    "agent/steward/domain",
+    "skills/procedures",
+    "tasks/goals",
+    "evidence/provenance",
+    "world-model/graph",
+    "vector/semantic retrieval",
+    "GNN/structural ranking",
+    "evaluation/feedback",
+    "cross-platform surface/device"
+  ],
+  "surface_scope": [
+    "ai.byopus.com web",
+    "Hermes Desktop",
+    "CLI/TUI",
+    "gateway/mobile/chat platforms",
+    "cron/scheduled execution",
+    "subagents/delegation",
+    "IoT/domain stewards"
+  ],
+  "memory_lifecycle": [
+    "implicit turn-start prefetch",
+    "multi-signal candidate extraction",
+    "scope/principal/tenant binding",
+    "provenance and confidence assignment",
+    "canonicalization and contradiction handling",
+    "async governed promotion",
+    "cross-layer projection",
+    "feedback/evaluation/rollback",
+    "next-turn and next-task retrieval"
+  ],
+  "ranking_signals": [
+    "lexical FTS5",
+    "semantic/vector similarity",
+    "recency/freshness",
+    "trust/confidence",
+    "graph proximity",
+    "GNN structural score",
+    "role/task relevance",
+    "scope/tenant fit",
+    "contradiction/consistency",
+    "user feedback and observed utility"
+  ],
+  "non_negotiables": [
+    "one canonical authority per datum",
+    "all surfaces enter through Hermes runtime",
+    "no unscoped global broadcast",
+    "implicit normal retrieval/capture",
+    "local hot-path fallback and bounded remote latency",
+    "writes/promotions governed and receipt-bearing",
+    "all projections reversible and freshness-labelled",
+    "raw data remains tenant/principal scoped"
+  ],
+  "current_gates": {
+    "cross_platform_authority": "BLOCKED_P1",
+    "canonical_crud": "BLOCKED_P2",
+    "implicit_runtime_ingest": "CONTRACT_READY_RUNTIME_UNVERIFIED",
+    "latency_baseline": "MEASURED_LOCAL_HERMES_SQLITE_FTS5",
+    "provider_comparison": "OPEN",
+    "production_writes": false
+  },
+  "next_action": "return to broad cross-platform Hermes/Opus memory-learning integration; map every producer, consumer, layer and projection before choosing or promoting any single provider"
+}

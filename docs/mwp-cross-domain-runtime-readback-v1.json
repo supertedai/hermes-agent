@@ -1,0 +1,18 @@
+{
+  "artifact_id": "mwp-cross-domain-runtime-readback-v1",
+  "mwp_id": "MWP-UOSH-001",
+  "status": "CROSS_DOMAIN_READBACK_PARTIAL_EMPTY_BRIDGES_STATS_500",
+  "mode": "read-only-http-get",
+  "routes": {
+    "/neo4j/cross-domain/bridges?min_domains=2&limit=10": {"status": 200, "result_count": 0},
+    "/neo4j/cross-domain/statistics": {"status": 500, "result": "internal_server_error"}
+  },
+  "interpretation": [
+    "Neo4j authority/health is reachable, but cross-domain bridge projection returns no qualifying bridges",
+    "cross-domain statistics route is failing",
+    "this does not prove absence of graph data; it proves observability/projection path is not healthy",
+    "no production write or mutation was attempted"
+  ],
+  "writes_allowed": false,
+  "next_action": "trace cross-domain route implementation and required domain labels/properties; repair only in isolated/source layer until authority gate opens"
+}

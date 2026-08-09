@@ -1,0 +1,16 @@
+{
+  "mwp_id": "MWP-UOSH-001",
+  "artifact_id": "mwp-h10-semantic-validation-readback-v1",
+  "gate": "GAP-H10-ASI-SEMANTIC-BOUNDARY-001",
+  "mode": "proposal-only-fail-closed-validation",
+  "status": "SCHEMA_VALIDATION_COMPLETE_HUMAN_REVIEW_PENDING",
+  "source_inventory": "docs/mwp-h10-theory-home-inventory-v2.json",
+  "records": 178,
+  "validator_verdicts": {"COMPLETE_PROPOSAL": 122, "BLOCKED_SEMANTIC_CLASSIFICATION": 56},
+  "heuristics": {"layer_proposals": 122, "prediction_sealed_normalized_to_prediction": 87, "unmapped_lane": 0},
+  "blocked_reason": "56 records have paper_type values without an approved record_layer mapping",
+  "policy": "no graph projection, steward activation, public promotion or claim promotion from proposal-only classification",
+  "required_human_review": ["approve layer mapping", "approve claim/evidence/prediction semantics", "review ambiguous records", "attach DOI/commit/provenance and evaluation receipts"],
+  "mutation": {"theory_records_written": false, "graph_write": false, "steward_activation": false, "public_publish": false},
+  "next_action": "review 56 quarantined records, then reconcile approved records to H10 TheoryHomeRecords"
+}

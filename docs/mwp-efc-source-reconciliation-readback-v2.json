@@ -1,0 +1,17 @@
+{
+  "mwp_id": "MWP-UOSH-001",
+  "artifact_id": "mwp-efc-source-reconciliation-readback-v2",
+  "gate": "GAP-EFC-SOURCE-DRIFT-001",
+  "policy": "A_LOCAL_HEAD_CANDIDATE_RECONCILE_BEFORE_PUSH",
+  "status": "RECONCILIATION_CLEAN_PUSH_APPROVAL_PENDING",
+  "base": "5aa57d8366c925692186f1e8220e3844461f7351",
+  "local_head": "ea3d131202b563ea4cc787288a64bad5997d321f",
+  "ahead": 1,
+  "behind": 0,
+  "working_tree": "CLEAN",
+  "merge_conflict_markers": "NONE",
+  "diff_check": "PASS",
+  "governance_tests": "4 passed",
+  "mutation": {"merge": false, "push": false, "reset": false, "public_publish": false},
+  "next_action": "owner approves explicit merge/reconciliation and push path; otherwise retain local candidate"
+}

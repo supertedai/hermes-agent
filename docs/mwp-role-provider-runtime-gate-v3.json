@@ -1,0 +1,45 @@
+{
+  "mwp_id": "MWP-UOSH-001",
+  "case_id": "CASE-AUTONOMY-00",
+  "artifact_id": "mwp-role-provider-runtime-gate-v3",
+  "recorded_at": "2026-08-07T10:18:22Z",
+  "mode": "metadata-only-fail-closed",
+  "gate": "role-provider-runtime-binding",
+  "status": "BLOCKED",
+  "scope": {
+    "principal": "morten",
+    "installation_id": "mwp-status-quo",
+    "login_surface_id": "current-hermes-chat",
+    "agent_id": "opus",
+    "system_scope": "mwp-uosh"
+  },
+  "fresh_evidence": {
+    "topology_inventory_hash": "b3c97fe1b757f9421a43a3245c12ef34c53656c86e5a96da43a3f0eca8e9b0fc",
+    "topology_event": "EVT-7a7dda21875b",
+    "hermes_process": "present in metadata-only topology",
+    "source_validator": "agent/mwp_role_provider.py",
+    "catalog_source": "website/static/api/model-catalog.json",
+    "observed_pair": {"model_id": "gpt-5.6-luna", "provider_id": "openai-api"},
+    "catalog_normalization": "provider-qualified catalog id matches native runtime model id after family-prefix normalization",
+    "local_binding_verdict": "CONSISTENT_WITH_CATALOG_BUT_LIVE_RECEIPT_REQUIRED",
+    "runtime_route": "not exposed/verified; role_id, api_mode, llm_instance_id and fallback health remain absent"
+  },
+  "local_change": {
+    "files": ["agent/mwp_role_provider.py", "tests/test_mwp_role_provider.py"],
+    "change": "normalize provider-qualified catalog model ids against native runtime model ids",
+    "test_command": "scripts/run_tests.sh tests/hermes_cli/test_runtime_provider_resolution.py tests/hermes_cli/test_provider_parity.py tests/test_mwp_role_provider.py -q",
+    "test_result": "63 passed, 0 failed"
+  },
+  "blocker": "No authoritative authenticated active-turn resolver receipt exists; catalog consistency is not live runtime proof.",
+  "owner": "Morten / authorized runtime configuration owner",
+  "next_action": "Provide an owner-authorized authenticated metadata-only resolver receipt containing role_id, provider_id, model_id, api_mode, llm_instance_id, fallback health/transition and freshness timestamp; then rerun this gate.",
+  "mutation": {
+    "config_write": false,
+    "restart": false,
+    "task_write": false,
+    "lease_claim": false,
+    "graph_write": false,
+    "production_activation": false
+  },
+  "raw_payload_included": false
+}

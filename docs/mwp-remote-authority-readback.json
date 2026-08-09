@@ -1,0 +1,35 @@
+{
+  "recorded_at": "2026-08-09T17:00:15.249142+00:00",
+  "host": "box12",
+  "metadata_only": true,
+  "graph_or_obsidian_write": false,
+  "world_model": {
+    "status": "VERIFIED",
+    "domains": 42,
+    "experiences": 710,
+    "cross_domain_links": 455,
+    "patterns": 1400,
+    "errors": []
+  },
+  "lateral_bus": {
+    "status": "ok",
+    "route": "/lateral-bus/status",
+    "principal": "morten",
+    "metadata_only": true,
+    "read_only": true,
+    "substrate": "neo4j-daemonmesh",
+    "total_daemons": 363,
+    "by_health": {
+      "healthy": 340,
+      "restarting": 5,
+      "starting": 2,
+      "stopped": 12,
+      "unknown": 4
+    },
+    "mesh_edges": 374368,
+    "latest_seen": "2026-08-09T17:00:14.341000000+00:00",
+    "stale_minutes": 10,
+    "generated_at": "2026-08-09T17:00:15.799661+00:00"
+  },
+  "next_action": "continue local lanes; keep remote authority read-only until every receipt is fresh"
+}

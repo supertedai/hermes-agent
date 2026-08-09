@@ -1,0 +1,25 @@
+{
+  "mwp_id": "MWP-UOSH-001",
+  "case_id": "CASE-SYMBIOSE-02",
+  "work_package": "SYMBIOSE-02C",
+  "artifact_id": "symbiose-labeled-retrieval-shadow-receipt-v1",
+  "dataset_id": "symbiose-labeled-retrieval-v1",
+  "mode": "read-only-shadow",
+  "results": {
+    "positive": {"http_status": 200, "chunk_count": 5, "latency_ms": 78.6},
+    "negative": {"http_status": 200, "chunk_count": 5, "latency_ms": 68.3},
+    "hashed_overlap_count": 1,
+    "stable_chunk_identity": false
+  },
+  "interpretation": {
+    "service_health": "PASS",
+    "negative_false_positive_signal": "PRESENT",
+    "chunk_identity_provenance": "MISSING_OR_UNEXPOSED",
+    "precision_at_k": "UNVERIFIED",
+    "recall_at_k": "UNVERIFIED",
+    "quality_gate": "BLOCKED_PENDING_OWNER_LABELS_AND_CHUNK_ID_ROUTE"
+  },
+  "mutation": {"qdrant_write": false, "promotion": false},
+  "next_permitted_action": "obtain owner labels and expose stable chunk identity/provenance metadata in read-only route",
+  "raw_payload_included": false
+}

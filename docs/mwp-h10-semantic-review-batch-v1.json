@@ -1,0 +1,30 @@
+{
+  "mwp_id": "MWP-UOSH-001",
+  "artifact_id": "mwp-h10-semantic-review-batch-v1",
+  "gate": "GAP-H10-ASI-SEMANTIC-BOUNDARY-001",
+  "mode": "bounded-human-review-queue",
+  "status": "REVIEW_QUEUE_PREPARED_NO_PROMOTION",
+  "source": "docs/mwp-h10-theory-home-inventory-v2.json",
+  "records": 56,
+  "groups": {
+    "methodology": 26,
+    "sealed_prediction": 14,
+    "missing_paper_type": 6,
+    "Theory": 2,
+    "empirical_validation": 2,
+    "observational_pipeline": 2,
+    "foundational_or_other": 4
+  },
+  "lane_counts": {"H10.6": 32, "H10.5": 11, "H10.4": 8, "H10.3": 2, "H10.8": 1, "H10.10": 1, "UNMAPPED": 1},
+  "review_questions": [
+    "which record_layer is authoritative",
+    "which claim_status is authoritative",
+    "is the source theory, methodology, evidence or prediction",
+    "what DOI/commit/public provenance applies",
+    "does any runtime/capability claim have an independent receipt",
+    "what supersession/rollback reference applies"
+  ],
+  "policy": {"graph_write": false, "steward_activation": false, "public_publish": false, "automatic_promotion": false, "ambiguous_records": "QUARANTINE"},
+  "next_action": "human review the 56 grouped records, beginning with missing_paper_type and foundational/other categories",
+  "raw_payload_included": false
+}

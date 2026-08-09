@@ -1,0 +1,42 @@
+{
+  "artifact_id": "mwp-hermes-memory-manager-runtime-wiring-readback-v1",
+  "mwp_id": "MWP-UOSH-001",
+  "phase": "P3",
+  "status": "CORE_ORCHESTRATION_SOURCE_CONFIRMED_PROVIDER_AUTHORITY_OPEN",
+  "source": "agent/memory_manager.py",
+  "confirmed_runtime_wiring": {
+    "prefetch_all": {
+      "behavior": "collects prefetch context from all registered providers",
+      "external_provider_isolation": "thread per provider with timeout",
+      "failure_mode": "non-fatal skip unless strict",
+      "source_lines": "586-660"
+    },
+    "queue_prefetch_all": {
+      "behavior": "dispatches next-turn prefetch in background",
+      "failure_mode": "non-fatal per provider",
+      "source_lines": "662-687"
+    },
+    "sync_all": {
+      "behavior": "completed-turn sync runs on background worker",
+      "ordering": "single serialized worker, turn N before N+1",
+      "failure_mode": "provider failure cannot stall turn",
+      "source_lines": "703-727"
+    }
+  },
+  "architecture_effect": [
+    "normal chat remains implicit and non-tool-driven",
+    "multiple provider capabilities can contribute without parallel synchronous waits",
+    "local Hermes provider remains safe hot path",
+    "remote provider failures degrade without blocking response",
+    "MWP can govern receipts/promotions around existing orchestration"
+  ],
+  "still_unverified": [
+    "which provider is active in the current live process",
+    "opus provider implementation/authority path",
+    "cross-platform surface receipts",
+    "Memory Fabric canonical writer",
+    "runtime effect of Opus/Symbiose layer provider"
+  ],
+  "writes_allowed": false,
+  "next_action": "bind MWP metadata receipts and latency measurements to this existing MemoryManager orchestration; do not replace it with a parallel memory engine"
+}

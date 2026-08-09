@@ -1,0 +1,55 @@
+{
+  "artifact_id": "mwp-cad-adr-bl-intent-gate-readback-v24",
+  "mwp_id": "MWP-UOSH-001",
+  "gate_id": "cad-adr-bl-intent-registry",
+  "mode": "metadata-only-source-runtime-verification",
+  "status": "BLOCKED",
+  "scope": {
+    "user_id": "morten",
+    "installation_id": "mwp-status-quo",
+    "login_surface_id": "current-hermes-chat",
+    "agent_id": "opus"
+  },
+  "fresh_evidence": {
+    "topology_readback": "docs/mwp-local-topology-readback.json",
+    "topology_recorded_at": "2026-08-08T12:22:08Z",
+    "topology_inventory_hash": "64019c19dfe1ffb3cb16e9b292c4c17007915a90d6cff0e28d57c904f4cff24b",
+    "topology_item_count": 66,
+    "topology_drift": {"added": [], "removed": [], "changed": []},
+    "local_closeout": "docs/mwp-final-closeout-readback.json",
+    "local_closeout_status": "OPEN",
+    "local_closeout_blocker_count": 9,
+    "source_runtime": {
+      "repository": "/home/agent/agent-layer/mwp-uosh-automation-01",
+      "git_head": "96b51c4bcff981e1088be0f52cfb3e13fd79a94c",
+      "working_tree": "dirty",
+      "qualification": "local metadata only; no authoritative CAD/ADR/BL-to-runtime reconciliation"
+    },
+    "runtime_observation": {
+      "hermes_dashboard_service": "active",
+      "listener_inventory": "present",
+      "qualification": "local runtime presence only; not CAD/ADR/BL alignment proof"
+    },
+    "local_tests": {
+      "command": "scripts/run_tests.sh tests/test_mwp_asi_alignment_registry.py tests/test_mwp_asi_closeout.py tests/test_mwp_receipt_adapters.py tests/test_mwp_receipt_coordinator.py -q",
+      "result": "14 passed, 0 failed"
+    },
+    "destination_receipts": {
+      "git": {"status": "VERIFIED", "ref": "local repository metadata readback; working tree dirty"},
+      "graph": {"status": "BLOCKED", "ref": "Neo4j write authority not configured; no authorized write/read-after-write receipt"},
+      "obsidian": {"status": "VERIFIED", "ref": "destination preflight read-after-write PASS; no gate-specific mutation"}
+    }
+  },
+  "blocker": "Authoritative live CAD/ADR/BL-to-runtime reconciliation and authorized Graph write/read-after-write authority are unavailable; local source/runtime evidence remains local-only.",
+  "owner": "Morten / authorized ASI architecture, source-of-truth and runtime owners",
+  "evidence_required": [
+    "authenticated metadata-only CAD/ADR/BL-to-runtime reconciliation",
+    "authorized Graph receipt with write/read-after-write verification",
+    "canonical Obsidian receipt with gate-specific write/read-after-write verification"
+  ],
+  "next_action": "Owner provides the required authenticated reconciliation and authorized destination receipts; rerun this gate and verify read-after-write before any promotion.",
+  "promotion_rule": "Do not promote DECLARED, REACHABLE, collection presence, static inventory, or local source/runtime evidence to LIVE_VERIFIED.",
+  "mutation": {"source_write": false, "graph_write": false, "obsidian_write": false, "production_activation": false},
+  "ledger_event": {"status": "OPEN", "provisional": true, "receipts_verified": false},
+  "raw_payload_included": false
+}

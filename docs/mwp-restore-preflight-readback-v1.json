@@ -1,0 +1,23 @@
+{
+  "artifact_id": "mwp-restore-preflight-readback-v1",
+  "mwp_id": "MWP-UOSH-001",
+  "status": "PREFLIGHT_ONLY_RESTORE_NOT_ATTEMPTED",
+  "host": "192.168.40.12",
+  "evidence": {
+    "full_snapshot": {
+      "path": "/home/byopus/AGI/backups/proton/20260807/symbiose_stack_12/full-snapshot-2026-08-07-00-38-51.snapshot",
+      "status": "PHYSICAL_ARTIFACT_FOUND"
+    },
+    "qdrant_snapshot_count": 86,
+    "gnn_artifact_count": 8
+  },
+  "mutation": {
+    "restore": false,
+    "delete": false,
+    "service_restart": false,
+    "writes": false
+  },
+  "promotion": "BLOCKED_UNTIL_MANIFEST_DESTINATION_RESTORE_ROLLBACK_EVIDENCE",
+  "provenance": "mwp_restore_preflight.py via authenticated SSH",
+  "next_action": "Bind snapshot artifacts to manifest/checksum, isolated restore target and rollback reference; do not restore production in-place."
+}

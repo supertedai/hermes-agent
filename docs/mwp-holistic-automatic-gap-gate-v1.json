@@ -1,0 +1,82 @@
+{
+  "artifact_id": "mwp-holistic-automatic-gap-gate-v1",
+  "mwp_id": "MWP-UOSH-001",
+  "status": "MANDATORY_FOR_EVERY_STEP",
+  "purpose": "automatically audit each change against industry baseline, SOTA, ASI/cutting-edge and cross-plane compatibility before closeout or promotion",
+  "trigger_scope": [
+    "schema or migration",
+    "Neo4j node/edge model",
+    "Qdrant collection/vector model",
+    "GNN feature/label/checkpoint/model",
+    "Hermes provider/memory lifecycle",
+    "ingest/envelope/CRUD",
+    "web/Desktop/gateway/CLI/cron/subagent surface",
+    "learning/promotion/evaluation",
+    "backup/restore/rollback",
+    "CAD/ADR/BL/MWP closeout"
+  ],
+  "mandatory_sequence": [
+    {
+      "gate":"G0_SCOPE_AND_BASELINE",
+      "checks":["exact target/scope", "current authority", "known-good baseline", "reversibility", "dirty/WIP isolation"]
+    },
+    {
+      "gate":"G1_INDUSTRY_BASELINE",
+      "checks":["schema constraints/indexes", "identity/uniqueness", "CRUD/idempotency", "tenant/security", "observability", "backup/restore", "DR"]
+    },
+    {
+      "gate":"G2_SOTA_REVIEW",
+      "checks":["hybrid retrieval", "temporal/causal/entity semantics", "provenance/lineage", "entity resolution", "evaluation/ablation", "continual learning/replay", "active learning"]
+    },
+    {
+      "gate":"G3_ASI_CUTTING_EDGE_REVIEW",
+      "checks":["cross-surface self-consistency", "world-model/action/observation loop", "recursive improvement evidence", "bounded autonomy", "multi-agent coordination", "reversible self-modification"]
+    },
+    {
+      "gate":"G4_CROSS_PLANE_COMPATIBILITY",
+      "checks":[
+        "schema canonical key/version/hash",
+        "Neo4j labels/relationships/constraints",
+        "Qdrant collection owner/dimension/metric/payload indexes/point identity",
+        "GNN feature schema/label schema/checkpoint/leakage controls",
+        "Hermes ingest envelope/principal/tenant/scope/session",
+        "surface/provider/runtime route",
+        "graph-vector-GNN identity/provenance/freshness parity",
+        "CRUD propagation/outbox/order/tombstone/rollback"
+      ]
+    },
+    {
+      "gate":"G5_TEST_AND_MEASURE",
+      "checks":["unit/integration tests", "real read-only path", "latency p50/p95/p99", "quality/utility baseline", "drift/freshness", "failure/degraded mode"]
+    },
+    {
+      "gate":"G6_LIVE_EVIDENCE",
+      "checks":["authenticated principal", "authority readback", "pre-read", "mutation receipt if applicable", "read-after-write", "projection receipts", "rollback receipt"]
+    },
+    {
+      "gate":"G7_CLOSEOUT_DECISION",
+      "checks":["COMPLETE only with evidence", "BLOCKED with owner/evidence/next_action", "no claims from declaration-only state", "manifest/CAD/ADR/BL/Git traceability"]
+    }
+  ],
+  "cross_plane_contract": {
+    "canonical_identity": "one scoped canonical_key per datum/entity",
+    "versioning": "entity_version + content_hash + schema_version",
+    "provenance": "source_ref + provenance_ref + observed_at + principal/tenant/scope",
+    "graph": "canonical relational projection",
+    "qdrant": "derived retrieval projection with scope filters and model/dimension/metric contract",
+    "gnn": "derived structural ranking projection with feature/label/checkpoint/leakage contract",
+    "hermes": "runtime waist, implicit lifecycle, bounded prefetch, async sync",
+    "propagation": "single writer/outbox/idempotency/ordered projections/read-after-write/rollback"
+  },
+  "verdicts": ["COMPLETE", "PARTIAL", "OPEN", "BLOCKED", "QUARANTINED"],
+  "fail_closed_rules": [
+    "no production writer if G0-G4 are not satisfied",
+    "no COMPLETE from local tests alone",
+    "no COMPLETE from schema/inventory alone",
+    "no provider or projection becomes canonical by presence",
+    "no cross-surface promotion without principal/tenant/scope/readback",
+    "no ASI/cutting-edge claim without measured causal or utility evidence"
+  ],
+  "writes_allowed": false,
+  "next_action": "invoke this gate automatically before and after every MWP/CAD/ADR/BL/schema/data-plane/runtime step"
+}

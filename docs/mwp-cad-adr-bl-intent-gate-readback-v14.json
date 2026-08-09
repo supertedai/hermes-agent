@@ -1,0 +1,56 @@
+{
+  "gate": "cad-adr-bl-intent-registry",
+  "artifact_id": "mwp-cad-adr-bl-intent-gate-readback-v14",
+  "status": "BLOCKED",
+  "mode": "metadata-only-source-runtime-verification",
+  "scope": {
+    "principal": "morten",
+    "installation_id": "mwp-status-quo",
+    "login_surface_id": "current-hermes-chat",
+    "agent_id": "opus"
+  },
+  "source_evidence": {
+    "implementation": "agent/mwp_asi_alignment_registry.py",
+    "closeout_evaluator": "agent/mwp_asi_closeout.py",
+    "fresh_registry_snapshot": "docs/mwp-final-closeout-readback.json",
+    "fresh_topology": "docs/mwp-local-topology-readback.json",
+    "topology_inventory_hash": "929a0ef5fd9c5fee1f5406aa0e29b9795873cd563c03d5bfaf5cf2e3d375ea6f",
+    "topology_item_count": 66,
+    "topology_delta": {
+      "added": ["process:python3"],
+      "removed": ["process:node"],
+      "changed": []
+    },
+    "git_head": "96b51c4bcff981e1088be0f52cfb3e13fd79a94c",
+    "git_worktree": "dirty",
+    "registry_observation": "cad-adr-bl-intent-registry remains BLOCKED; the local registry is a conservative projection and has no authoritative live CAD/ADR/BL-to-runtime alignment spine",
+    "runtime_observation": "fresh metadata-only local topology records listeners, processes and systemd presence; presence is not CAD/ADR/BL runtime alignment proof",
+    "test_observation": "scripts/run_tests.sh tests/test_mwp_asi_alignment_registry.py tests/test_mwp_asi_closeout.py tests/test_mwp_change_ledger.py tests/test_mwp_receipt_adapters.py tests/test_mwp_receipt_coordinator.py -q: 18 passed, 0 failed"
+  },
+  "receipts": {
+    "git": "VERIFIED by fresh closeout tick",
+    "graph": "BLOCKED: Neo4j write authority not configured",
+    "obsidian": "VERIFIED: metadata-only destination preflight read-after-write pass"
+  },
+  "owner": "Morten / authorized CAD-ADR-BL source-of-truth and runtime owners",
+  "evidence_required": [
+    "authenticated metadata-only CAD/ADR/BL-to-runtime reconciliation",
+    "authorized Graph receipt with write/read-after-write verification",
+    "canonical source-of-truth reconciliation receipt"
+  ],
+  "blocker": "Authoritative live CAD/ADR/BL source reconciliation and authorized Graph write/read-after-write authority are unavailable.",
+  "next_action": "Owner provides authenticated reconciliation and Graph authority; rerun this gate and verify destination read-after-write before any promotion.",
+  "promotion_rule": "Do not promote DECLARED, REACHABLE, collection presence, local schema integrity, or local task presence to LIVE_VERIFIED. Do not close the parent on partial progress.",
+  "mutation": {
+    "source_write": false,
+    "graph_write": false,
+    "obsidian_write": false,
+    "production_activation": false
+  },
+  "ledger": {
+    "latest_tick_events": ["topology heartbeat tick", "closeout projection tick"],
+    "event_status": "OPEN",
+    "provisional_cad_adr_bl": true,
+    "raw_payload_included": false
+  }
+}

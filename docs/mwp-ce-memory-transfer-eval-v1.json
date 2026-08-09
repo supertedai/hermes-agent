@@ -1,0 +1,18 @@
+{
+  "artifact_id":"mwp-ce-memory-transfer-eval-v1",
+  "parent_mwp":"MWP-UOSH-001",
+  "cad":"CAD-E / CAD-RI / CAD-CE-001",
+  "adr":"ADR-CE-001 / ADR-RECURSIVE-IMPROVEMENT-001",
+  "bl":"BL-RI-002 / BL-RI-008 / BL-CE-001",
+  "status":"SYNTHETIC_SHADOW_MANIFEST_NOT_LIVE_AGENT_EVAL",
+  "design":"paired fresh-session episodes with memory-on and memory-off controls",
+  "metrics":["success_rate_delta","transfer_gain","irrelevant_retrieval_rate","interference_rate","save_retrieve_update_path_compliance","cost_delta","latency_delta"],
+  "promotion_rule":"no memory promotion unless memory-on improves target outcomes without unacceptable interference, cost or provenance regression",
+  "epistemic_labels":["synthetic_shadow_fixture","derived_metric","not_live_agent_effect"],
+  "cases":[
+    {"case_id":"memory-reuse-001","domain":"workflow","requires_retrieval":true},
+    {"case_id":"memory-reuse-002","domain":"reasoning","requires_retrieval":true},
+    {"case_id":"interference-001","domain":"workflow","requires_retrieval":false},
+    {"case_id":"transfer-001","domain":"cross-domain","requires_retrieval":true}
+  ]
+}

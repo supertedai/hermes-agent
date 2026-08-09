@@ -1,0 +1,52 @@
+{
+  "artifact_id": "mwp-active-turn-authority-source-gap-v1",
+  "mwp_id": "MWP-UOSH-001",
+  "status": "BLOCKED_MISSING_CANONICAL_ACTIVE_TURN_SOURCE",
+  "mode": "read-only-cross-surface-runtime-reconciliation",
+  "evidence": {
+    "hermes_dot15": {
+      "gateway_state": "running",
+      "active_agents": 0,
+      "active_sessions": 0,
+      "configured_model": "gpt-5.6-luna",
+      "configured_provider": "openai-api",
+      "runtime_updated_at": "2026-08-07T11:41:48.355890+00:00",
+      "freshness": "stale_or_missing"
+    },
+    "agi_dot12": {
+      "route_http_status": 200,
+      "model_id": "cco",
+      "served_model_count": 3,
+      "active_turn": false,
+      "provider_id": null,
+      "role_id": null,
+      "api_mode": null,
+      "llm_instance_id": null,
+      "fallback_health": null
+    },
+    "chat_runtime_metadata": {
+      "model_id": "gpt-5.6-luna",
+      "provider_id": "openai-api",
+      "authority": "system_runtime_metadata_only",
+      "not_a_broker_readback": true
+    }
+  },
+  "gap": "No shared authoritative turn_id/correlation or resolver connects the active chat provider binding to Hermes gateway state and AGI unified_api.",
+  "non_claims": [
+    "Configured model/provider is not treated as active-turn authority.",
+    "AGI served models are not treated as the current chat provider.",
+    "No role_id, api_mode, llm_instance_id or fallback health is inferred."
+  ],
+  "required_before_gate_close": [
+    "canonical broker-owned active-turn record",
+    "authenticated readback route",
+    "turn correlation/provenance",
+    "role/provider/model/api-mode/instance/fallback fields",
+    "freshness timestamp",
+    "read-after-write or runtime receipt verification"
+  ],
+  "downstream": "Kanban, worker activation and full projection remain fail-closed",
+  "writes_performed": false,
+  "rollback_ref": null,
+  "provenance": "live read-only probes from .15 Hermes runtime and .12 efc-unified-api"
+}

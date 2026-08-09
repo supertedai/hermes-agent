@@ -1,0 +1,24 @@
+{
+  "mwp_id": "MWP-UOSH-001",
+  "case_id": "CASE-AUTONOMY-00",
+  "artifact_id": "mwp-candidate-role-provider-readback-v1",
+  "mode": "metadata-only-candidate-correlation",
+  "status": "ALL_CANDIDATES_ROLE_PROVIDER_UNVERIFIED",
+  "snapshot_at": "2026-08-06T13:25:41Z",
+  "catalog_source": "~/.hermes/cache/model_catalog.json",
+  "candidates": [
+    {"agent_id": "faber", "declared_model": "gpt-oss-120b", "declared_runtime": "claude-subagent", "capability": "docstring-verdict-judgment", "catalog_match": false, "status": "ROLE_PROVIDER_UNVERIFIED"},
+    {"agent_id": "helios", "declared_model": "hermes-120b", "declared_runtime": "claude-subagent", "capability": "prediction", "catalog_match": false, "status": "ROLE_PROVIDER_UNVERIFIED"},
+    {"agent_id": "hermes-bugfix", "declared_model": "gpt-oss-120b", "declared_runtime": "raw-120b-completion", "capability": "python-bugfix-signature", "catalog_match": false, "status": "ROLE_PROVIDER_UNVERIFIED"},
+    {"agent_id": "hermes-graphwrite", "declared_model": "gpt-oss-120b", "declared_runtime": "raw-120b-completion", "capability": "graph-mutation", "catalog_match": false, "status": "ROLE_PROVIDER_UNVERIFIED"},
+    {"agent_id": "hermes-pilot-001", "declared_model": "gpt-oss-120b", "declared_runtime": "hermes-agent", "capability": "code-generation-humaneval-rolling", "catalog_match": false, "status": "ROLE_PROVIDER_UNVERIFIED"}
+  ],
+  "gate": {
+    "candidate_routing": "BLOCKED",
+    "reason": "no independent live role/provider receipt for any candidate",
+    "required": ["provider ownership", "model availability", "runtime endpoint", "role assignment", "health/readback"]
+  },
+  "mutation": {"routing": false, "activation": false, "provider_write": false},
+  "next_permitted_action": "owner-authorized live role/provider resolver readback for each candidate",
+  "raw_payload_included": false
+}

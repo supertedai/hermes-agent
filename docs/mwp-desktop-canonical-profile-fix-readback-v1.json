@@ -1,0 +1,31 @@
+{
+  "artifact_id": "mwp-desktop-canonical-profile-fix-readback-v1",
+  "mwp_id": "MWP-UOSH-001",
+  "status": "ADDITIVE_PROFILE_INSTALLED_ACTIVE_SSH_PRESERVED_TICKET_AUTH_OPEN",
+  "host": ".13",
+  "connection_file": "/Users/morpheus/Library/Application Support/Opus/connection.json",
+  "backup": "/Users/morpheus/Library/Application Support/Opus/connection.json.pre-canonical-handoff-20260809-165243",
+  "change": {
+    "added_profile": "canonical",
+    "mode": "remote",
+    "url": "https://ai.byopus.com",
+    "authMode": "oauth",
+    "active_profile_changed": true,
+    "ssh_default_changed": false,
+    "threads_or_home_switched": false,
+    "activation_scope": "next_desktop_boot_only",
+    "current_session_restarted": false
+  },
+  "readback": {
+    "default_mode": "ssh",
+    "default_remote_host": "192.168.40.15",
+    "profiles": ["canonical"],
+    "active_profile_json": {},
+    "api_status": 200,
+    "auth_providers": 200,
+    "ws_ticket_without_browser_session": 401
+  },
+  "interpretation": "additive canonical route is now available to Desktop config; current SSH session remains known-good baseline; actual ticket mint requires the browser OAuth session in the same Desktop handoff flow",
+  "writes_allowed": false,
+  "rollback": "restore connection.json from recorded backup; active SSH profile was not changed"
+}

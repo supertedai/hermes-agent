@@ -1,0 +1,15 @@
+{
+  "mwp_id": "MWP-UOSH-001",
+  "artifact_id": "mwp-h10-semantic-validation-readback-v2",
+  "gate": "GAP-H10-ASI-SEMANTIC-BOUNDARY-001",
+  "mode": "proposal-only-review-group-validation",
+  "status": "SUPPORTING_ARTIFACT_GROUP_PROPOSED_HUMAN_REVIEW_PENDING",
+  "group": "missing_paper_type",
+  "records": 6,
+  "validator": {"supporting_artifact_proposals": 6, "still_blocked": 0, "automatic_promotions": 0},
+  "semantic_rule": "data/figures/toolkits/complete packages are SUPPORTING_ARTIFACT, not theory/runtime authority",
+  "review_required": ["confirm attachment to parent package", "confirm source/provenance", "confirm claim_status", "confirm no independent runtime authority"],
+  "remaining_quarantine": 50,
+  "mutation": {"theory_record_write": false, "graph_write": false, "steward_activation": false, "public_publish": false},
+  "next_action": "human-review six supporting-artifact proposals, then process foundational/other group"
+}

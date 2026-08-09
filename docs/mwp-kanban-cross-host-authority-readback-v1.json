@@ -1,0 +1,18 @@
+{
+  "mwp_id": "MWP-UOSH-001",
+  "artifact_id": "mwp-kanban-cross-host-authority-readback-v1",
+  "mode": "metadata-only-cross-host-authority-discovery",
+  "status": "CROSS_HOST_AUTHORITY_READBACK_PENDING",
+  "topology": {
+    "box13": {"role": "opus/symbiose bridge", "source": "/Users/morpheus/AGI/tools/agent_layer/kanban_apply.py", "bridge": "/Users/morpheus/AGI/tools/agent_layer/opus_kanban_bridge.py"},
+    "box15": {"role": "canonical GUI Kanban authority", "db_path": "/home/agent/.hermes-gui/kanban.db"},
+    "local_box12": {"role": "local Hermes Kanban readback", "db_path": "/home/agent/.hermes/kanban.db", "not_global_authority": true}
+  },
+  "box13_readback": {"ssh": "ok", "bridge_source_verified": true, "canonical_target_confirmed": "box15 /home/agent/.hermes-gui/kanban.db"},
+  "box15_readback": {"ssh": "unavailable", "alias": "missing", "direct_ip": "permission_denied"},
+  "parent_reference": "t_fe6a5950",
+  "missing": ["authoritative .15 parent readback", "children", "runs", "lease", "heartbeat"],
+  "gate": {"child_creation": "NOT_ATTEMPTED", "worker_activation": false, "write": false},
+  "next_action": "obtain .15 read-only access or canonical dashboard/API readback for t_fe6a5950",
+  "raw_payload_included": false
+}

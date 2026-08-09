@@ -1,0 +1,40 @@
+{
+  "artifact_id": "mwp-g2-git-scoped-landing-preflight-v1",
+  "mwp_id": "MWP-UOSH-001",
+  "gate": "G2_SCOPED_GIT_LANDING",
+  "status": "SURFACE_AUTH_PRESENT_CLI_HANDOFF_OPEN",
+  "mode": "scoped-git-preflight",
+  "evidence": {
+    "manifest_artifacts": 102,
+    "manifest_missing": 0,
+    "isolated_landing_worktree": "/tmp/mwp-g2-landing",
+    "isolated_allowlist_copied": 102,
+    "isolated_status_rows": 100,
+    "isolated_staged": 0,
+    "branch": "mwp/uosh-automation-01",
+    "remote_auth_probe": {
+      "linux_ssh": "CLI_AUTH_NOT_AVAILABLE",
+      "dot13_id_ed25519": "CLI_AUTH_NOT_AVAILABLE_IN_SSH_SESSION",
+      "dot13_id_ed25519_agent15": "CLI_AUTH_NOT_AVAILABLE_IN_SSH_SESSION",
+      "dot13_https_osxkeychain": "GUI_KEYCHAIN_HANDOFF_NOT_AVAILABLE_IN_SSH_SESSION",
+      "mac_studio_key_fingerprint": "SHA256:UXR6Besi6gIv9tTCctPIjzb2X+53wF/5haDczke1zq4",
+      "mac_studio_candidate_192_168_1_155": "NOT_REQUIRED_FOR_ASSERTED_DOT13_SURFACE_AUTH",
+      "mac_studio_candidate_192_168_1_231": "NOT_REQUIRED_FOR_ASSERTED_DOT13_SURFACE_AUTH",
+      "matching_local_public_key": false,
+      "active_surface_authority": ".13 GitHub/browser surface (owner-reported)",
+      "cli_handoff": "OPEN",
+      "remote_read_after_probe": "not_available"
+    },
+    "canonical_origin": "git@github.com:supertedai/AGI.git",
+    "hermes_origin": "git@github.com:supertedai/hermes-agent.git",
+    "status_rows": 432,
+    "modified": 20,
+    "untracked": 412,
+    "staged": 0
+  },
+  "interpretation": "all manifest artifacts exist, but the working tree includes unrelated/WIP changes and is not safe for blind landing",
+  "writes_performed": {"git_add": false, "commit": false, "push": false},
+  "next_action": "owner-approved exact allowlist and isolated landing worktree/branch",
+  "writes_unlocked": false,
+  "forbidden": ["git add .", "blind commit", "push dirty tree", "history purge"]
+}

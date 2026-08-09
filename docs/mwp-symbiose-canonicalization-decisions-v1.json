@@ -1,0 +1,107 @@
+{
+  "mwp_id": "MWP-UOSH-001",
+  "case_id": "CASE-SYMBIOSE-02",
+  "work_package": "SYMBIOSE-02B",
+  "decision_set_id": "symbiose-canonicalization-decisions-v1",
+  "version": 1,
+  "mode": "shadow-only",
+  "source_receipts": [
+    "docs/mwp-symbiose-02a-audit-receipt.json",
+    "docs/mwp-symbiose-02-shadow-inventory-receipt.json",
+    "docs/mwp-symbiose-02-eval-set-v1.json"
+  ],
+  "decision_rules": [
+    {
+      "id": "retain-active-provenance-complete",
+      "decision": "retain",
+      "when": "active concept, canonical identity unique, source/owner/freshness present, no conflict"
+    },
+    {
+      "id": "quarantine-deprecated-or-conflicting",
+      "decision": "quarantine",
+      "when": "deprecated, conflicting identity, or unsafe provenance; preserve history"
+    },
+    {
+      "id": "merge-candidate-only-with-owner",
+      "decision": "merge-candidate",
+      "when": "duplicate identity is deterministic but live merge requires owner approval and rollback"
+    },
+    {
+      "id": "unresolved-missing-evidence",
+      "decision": "unresolved",
+      "when": "node-level evidence, owner, provenance, freshness or rollback handle is missing"
+    }
+  ],
+  "observed_scope": {
+    "concept": "Homo Fluxus",
+    "identity_search_result_count": 12,
+    "relation_inventory_count": 50,
+    "relation_inventory_capped": true,
+    "unknown_negative_result_count": 0,
+    "node_level_shadow_readback": {
+      "http_status": 200,
+      "latency_ms": 5289.6,
+      "total": 12,
+      "active": 6,
+      "deprecated": 6,
+      "source_present": 2,
+      "owner_present": 0,
+      "freshness_present": 3,
+      "confidence_present": 0,
+      "fully_provenanced": 0,
+      "raw_payload_included": false,
+      "provenance_recovery_by_class": {
+        "active": {
+          "rows": 6,
+          "canonical_id_present": 3,
+          "evidence_count_present": 3,
+          "epistemic_status_present": 6,
+          "source_present": 2,
+          "source_origin_present": 1,
+          "updated_at_present": 3,
+          "owner_present": 0,
+          "authored_by_relation_count": 5,
+          "supported_by_relation_count": 3
+        },
+        "deprecated": {
+          "rows": 6,
+          "canonical_id_present": 6,
+          "deprecated_at_present": 6,
+          "epistemic_status_present": 6
+        }
+      },
+      "relation_drift": {
+        "supports_upper_count": 124,
+        "supports_title_case_count": 12,
+        "normalization_conflict": true,
+        "shadow_target": "SUPPORTS"
+      }
+    }
+  },
+  "provisional_classification": {
+    "retain": 0,
+    "quarantine": 6,
+    "merge_candidate": 0,
+    "unresolved": 6,
+    "reason": "six rows carry DeprecatedConcept and are quarantine-candidates in shadow; six active rows remain unresolved because owner/provenance/freshness promotion evidence is incomplete"
+  },
+  "promotion_gate": {
+    "status": "BLOCKED",
+    "required": [
+      "node-level shadow rows",
+      "canonical ID decision per row",
+      "source/owner/freshness evidence",
+      "reviewed relation normalization map",
+      "owner-approved merge/quarantine policy",
+      "independent rollback handle"
+    ]
+  },
+  "mutation": {
+    "graph_write": false,
+    "qdrant_write": false,
+    "gnn_write": false,
+    "scheduler_write": false
+  },
+  "next_permitted_action": "recover owner/source/freshness/confidence authority for six active rows in shadow; preserve six deprecated rows as quarantine-candidates",
+  "raw_payload_included": false
+}

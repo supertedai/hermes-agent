@@ -1,0 +1,21 @@
+{
+  "artifact_id": "mwp-g4-obsidian-projection-preflight-v1",
+  "mwp_id": "MWP-UOSH-001",
+  "gate": "G4_OBSIDIAN_PROJECTION",
+  "status": "COMPLETE_METADATA_ONLY_PROJECTION",
+  "mode": "scoped-vault-write-readback",
+  "evidence": {
+    "dot13_target_search": "active vault registry readback",
+    "dot15_target_search": "no .obsidian result in /home/agent",
+    "vault_path": "/Users/morpheus/Documents/Brain",
+    "projection_path": "/Users/morpheus/Documents/Brain/MWP/receipts/mwp-g4-projection-readback-v1.md",
+    "projection_bytes": 1323,
+    "projection_sha256": "940a422c785a9999e21a57ef77bd221ec258c9980a7f781e00b1e104686bb3ca",
+    "read_after_write": true,
+    "canonical_source": "private AGI/MWP readbacks and live runtime evidence",
+    "writes_performed": true
+  },
+  "required_before_write": ["exact vault path", "owner/scope", "projection allowlist", "provenance", "rollback path", "read-after-write"],
+  "writes_unlocked": false,
+  "next_action": "private AGI GitHub authority; no blind credential handling"
+}

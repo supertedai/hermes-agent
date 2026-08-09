@@ -1,0 +1,15 @@
+{
+  "artifact_id":"mwp-ce-memory-transfer-shadow-readback-v1",
+  "manifest":"mwp-ce-memory-transfer-eval-v1",
+  "status":"SYNTHETIC_SHADOW_FIXTURE_ONLY",
+  "canonical_command":"python3 -m pytest -q tests/test_mwp_memory_transfer_eval.py",
+  "memory_on_success":1.0,
+  "memory_off_success":0.5,
+  "transfer_gain":0.5,
+  "interference_rate":0.0,
+  "pathway_compliance":1.0,
+  "cost_delta_ms":15.0,
+  "promotion_eligible_in_fixture":true,
+  "epistemic_labels":["synthetic_shadow_fixture","derived_metric","not_live_agent_effect"],
+  "next_action":"replace fixtures with matched live agent episodes and independent evaluator; do not promote memory policy from this receipt"
+}

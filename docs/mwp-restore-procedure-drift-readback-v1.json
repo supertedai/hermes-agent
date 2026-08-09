@@ -1,0 +1,42 @@
+{
+  "artifact_id": "mwp-restore-procedure-drift-readback-v1",
+  "mwp_id": "MWP-UOSH-001",
+  "status": "BLOCKED_RESTORE_PROCEDURE_NOT_TARGET_PORTABLE",
+  "mode": "read-only-restore-procedure-audit",
+  "findings": {
+    "qdrant_restore": {
+      "path": "/home/byopus/AGI/scripts/restore_qdrant.sh",
+      "status": "STALE_MAC_PATHS",
+      "issues": [
+        "hardcodes /Users/morpheus/energyflow-cosmology",
+        "expects cloud_migration/qdrant_export rather than current /home/byopus/AGI/restore/qdrant snapshots",
+        "destructive delete/recreate/upsert flow",
+        "no current snapshot manifest binding"
+      ]
+    },
+    "neo4j_restore": {
+      "path": "/home/byopus/AGI/docker/backup/neo4j_restore.py",
+      "status": "GUARDED_BUT_EXPORT_DEPENDENT",
+      "issues": [
+        "requires explicit NEO4J_RESTORE_CONFIRM=yes",
+        "requires nodes.jsonl.gz/rels.jsonl.gz export directory",
+        "appends to target rather than replacing it",
+        "no current full-snapshot binding"
+      ]
+    },
+    "cutover_restore_audit": {
+      "path": "/home/byopus/AGI/tools/cutover_restore_audit.py",
+      "status": "PROPOSAL_DRY_RUN_ONLY",
+      "mutation": false
+    }
+  },
+  "required_fix": "Create target-specific metadata-only restore preflight that binds current snapshot handles to destination, manifest/checksum, isolated target and rollback reference before any restore command can be approved.",
+  "non_claims": [
+    "No restore command was executed.",
+    "No Qdrant collection was deleted or recreated.",
+    "No Neo4j mutation was performed.",
+    "No credentials were read or exposed."
+  ],
+  "promotion_gate": "BLOCKED",
+  "provenance": "read-only inspection of live .12 restore scripts and backup inventory"
+}

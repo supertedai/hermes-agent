@@ -1,0 +1,36 @@
+{
+  "mwp_id": "MWP-UOSH-001",
+  "artifact_id": "mwp-uosh-closeout-sweep-v1",
+  "mode": "metadata-only-end-to-end-sweep",
+  "status": "OPEN_BLOCKED_NOT_COMPLETE",
+  "closeout_rule": "only COMPLETE with implementation plus runtime/readback/provenance/rollback/authority proof",
+  "complete_subpackages": [
+    "control-plane foundation and wrapper-plan contract",
+    "adaptive fleet projection implementation and tests",
+    "fail-closed role/provider validator and tests",
+    "Chat-Cortex-agent context contract and tests",
+    "Desktop Faber governed-route shadow contract and review",
+    "gap register and stale-status reconciliation",
+    "SYMBIOSE metadata-only audit and retrieval shadow artifacts"
+  ],
+  "blocked_gates": [
+    {"id": "GAP-KANBAN-AUTHORITY-001", "status": "CANONICAL_PARENT_REPAIRED_CHILD_LEASE_BLOCKED", "owner": "owner/orchestrator", "evidence": "mwp-kanban-cross-host-authority-readback-v3; .15 parent inserted/read-after-write verified", "next_action": "after identity/role-provider gates, create dependency-scoped child through canonical .15 authority"},
+    {"id": "GAP-IDENTITY-REMOTE-001", "status": "AUTH_SOURCE_PRESENT_READBACK_PENDING", "owner": "Desktop/gateway authority", "evidence": "mwp-identity-auth-topology-readback-v1; shared .15 auth asserted for .13 Desktop/.14 broker", "next_action": "attach/probe existing shared auth session and read /api/mwp/identity metadata"},
+    {"id": "GAP-ROLE-PROVIDER-001", "status": "BLOCKED_RUNTIME_RECEIPT", "owner": "runtime/provider authority", "evidence": "mwp-role-provider-runtime-endpoint-readback-v1; LM Studio listener present but standard model routes 404", "next_action": "authoritative runtime resolver/route contract and active-turn receipt"},
+    {"id": "GAP-FLEET-ADAPTIVE-001", "status": "BLOCKED_NAMESPACE_MAPPING", "owner": "adaptive fleet authority", "evidence": "mwp-fleet-runtime-mapping-readback-v2; fleet 200/362 but registry↔fleet direct and indirect matches zero", "next_action": "authoritative runtime registry export with stable agent/fleet identity mapping"},
+    {"id": "GAP-CORTEX-WORLDMODEL-001", "status": "BLOCKED_METADATA_CONTRACT", "owner": "Cortex/world-model authority", "evidence": "mwp-cortex-worldmodel-live-route-readback-v1; routes HTTP 200 but required identity/agent/handoff/freshness/provenance fields absent", "next_action": "add authenticated metadata envelope and resolve steward binding before promotion"},
+    {"id": "GAP-MEMORY-LEARNING-001", "status": "BLOCKED_CAUSAL_CHAIN", "owner": "memory/learning authority", "evidence": "mwp-memory-learning-live-readback-v1; endpoints 200 but retrieval/use/effect/promotion metadata absent; timeline 500", "next_action": "add retrieval/use/effect/promotion correlation and repair timeline endpoint"},
+    {"id": "GAP-GRAPH-QDRANT-GNN-001", "status": "BLOCKED_ROLLBACK_QUALITY", "owner": "graph/Qdrant/GNN authority", "evidence": "mwp-symbiose-02a-audit-receipt; agent/mwp_world_model_gates.py", "next_action": "owner-authorized snapshot/checkpoint discovery and labeled evaluation"},
+    {"id": "GAP-DESKTOP-FABER-001", "status": "BLOCKED_UNWIRED", "owner": "Desktop/Faber authority", "evidence": "typed route is shadow-only", "next_action": "wire only after identity/Kanban/role-provider/reviewer/rollback gates"},
+    {"id": "GAP-DEVICE-ORIGIN-001", "status": "BLOCKED_TRANSPORT", "owner": "identity/transport authority", "evidence": "agent/mwp_origin_iot_gates.py; device and SSH origin not bound", "next_action": "metadata-only device-origin route probe"},
+    {"id": "GAP-IOT-STEWARD-001", "status": "BLOCKED_STEWARD", "owner": "IOT domain authority", "evidence": "agent/mwp_origin_iot_gates.py; canonical steward and scoped writer absent", "next_action": "metadata-only IOT steward/read-after-write probe"},
+    {"id": "GAP-TOPOLOGY-DRIFT-001", "status": "BLOCKED_OWNER_MAPPING", "owner": "topology/runtime authority", "evidence": "mwp-topology-reconciliation-readback-v1; 64/64 baseline items preserved; 304 additions unmapped", "next_action": "map additions to canonical owners and rerun topology heartbeat"},
+    {"id": "GAP-CROSS-SURFACE-TRUTH-001", "status": "BLOCKED_LIVE_ADAPTERS", "owner": "MWP control-plane/data authority", "evidence": "ADR-TRUTH-001; mwp-uosh-cross-surface-truth-contract-v1; truth validator/tests", "next_action": "bind CRUD adapters and require canonical read-after-write/version/hash receipts"},
+    {"id": "GAP-H10-ASI-SEMANTIC-BOUNDARY-001", "status": "BLOCKED_HUMAN_REVIEW", "owner": "Morten / theory and Opus architecture authority", "evidence": "mwp-h10-semantic-validation-readback-v5; 178 schema-valid proposals, 0 quarantine, no promotions", "next_action": "human approve classifications and attach evidence receipts before H10 promotion"},
+    {"id": "GAP-THEORY-PACKAGE-MAPPING-001", "status": "OPEN_METADATA_RECONCILIATION", "owner": "efc-asi-steward proposal / Morten", "evidence": "mwp-h10-semantic-validation-readback-v1; 178 records, 56 semantic blockers", "next_action": "reconcile approved records against H10 schema"},
+    {"id": "GAP-EFC-SOURCE-DRIFT-001", "status": "RECONCILIATION_CLEAN_PUSH_APPROVAL_PENDING", "owner": "Morten / EFC source authority", "evidence": "mwp-efc-source-reconciliation-readback-v2; diff-check PASS; merge markers NONE; governance tests 4 passed", "next_action": "owner approves explicit reconciliation/push path; remote unchanged"}
+  ],
+  "live_mutations": {"kanban": false, "identity": false, "provider": false, "graph": false, "qdrant": false, "gnn": false, "desktop_route": false, "production": false},
+  "parent_closeout": "BLOCKED_UNTIL_REQUIRED_GATES_GREEN_OR_EXPLICIT_OWNER_BLOCKED",
+  "raw_payload_included": false
+}

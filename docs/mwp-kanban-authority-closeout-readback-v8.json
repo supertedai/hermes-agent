@@ -1,0 +1,50 @@
+{
+  "mwp_id": "MWP-UOSH-001",
+  "gate_id": "GAP-KANBAN-AUTHORITY-001",
+  "artifact_id": "mwp-kanban-authority-closeout-readback-v8",
+  "recorded_at": "2026-08-07T04:40:23Z",
+  "mode": "metadata-only-source-runtime-verification",
+  "status": "BLOCKED",
+  "scope": {
+    "user_id": "morten",
+    "installation_id": "mwp-status-quo",
+    "login_surface_id": "current-hermes-chat",
+    "agent_id": "opus"
+  },
+  "evidence": {
+    "local_repository": {
+      "path": "/home/agent/agent-layer/mwp-uosh-automation-01",
+      "head": "12d613b582fdec9166c36ba011bacba264856bd9",
+      "working_tree": "dirty",
+      "qualification": "local source metadata only; not deployment proof"
+    },
+    "local_runtime": {
+      "path": "/home/agent/.hermes/kanban.db",
+      "integrity": "ok",
+      "counts": {"tasks": 1, "task_runs": 0, "task_links": 0, "task_comments": 0, "task_events": 2},
+      "qualification": "local mirror only; no canonical child lease or worker heartbeat"
+    },
+    "separate_gui_mirror": {
+      "path": "/home/agent/.hermes-gui/kanban.db",
+      "integrity": "ok",
+      "counts": {"tasks": 102, "task_runs": 0, "task_links": 0, "task_comments": 0, "task_events": 28},
+      "qualification": "separate mirror; not canonical LIVE_VERIFIED authority"
+    },
+    "fresh_topology": {
+      "inventory_hash": "93d13016aba69ebf4194a7dc83e7325de8fc7930bbf067bf8316ebbfd9ed4171",
+      "item_count": 65,
+      "delta": {"added": [], "removed": [], "changed": []}
+    },
+    "tests": {
+      "command": "scripts/run_tests.sh tests/hermes_cli/test_kanban_db.py tests/hermes_cli/test_kanban_db_init.py tests/hermes_cli/test_kanban_write_guard.py tests/hermes_cli/test_kanban_core_functionality.py tests/hermes_cli/test_kanban_blocked_sticky.py tests/hermes_cli/test_kanban_promote.py -q",
+      "result": "64 passed, 0 failed"
+    }
+  },
+  "owner": "owner/orchestrator; identity authority; runtime/provider authority",
+  "blocker": "Authenticated identity and role/provider receipts are absent; canonical .15 authority child creation, lease, heartbeat, and worker state remain unverified. Local integrity and separate GUI presence cannot be promoted to LIVE_VERIFIED.",
+  "next_action": "After authenticated identity and role/provider receipts, create exactly one dependency-scoped child through canonical .15 authority; independently verify child id, lease, heartbeat, and worker state; reconcile before activation.",
+  "promotion_rule": "Do not promote DECLARED, REACHABLE, collection presence, local schema integrity, or local task presence to LIVE_VERIFIED. Do not activate a worker or close the parent on partial progress.",
+  "mutation": {"sqlite_write": false, "child_creation": false, "lease_claim": false, "worker_activation": false, "production_activation": false},
+  "ledger_event": {"status": "OPEN", "provisional": true},
+  "raw_payload_included": false
+}

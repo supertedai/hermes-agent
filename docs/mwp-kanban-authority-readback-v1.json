@@ -1,0 +1,28 @@
+{
+  "mwp_id": "MWP-UOSH-001",
+  "case_id": "AUTOMATION-01",
+  "artifact_id": "mwp-kanban-authority-readback-v1",
+  "mode": "read-only",
+  "target": "~/.hermes/kanban.db",
+  "status": "SCHEMA_INTEGRITY_PASS_OPERATIONAL_STATE_UNINSTANTIATED",
+  "integrity": "ok",
+  "tables": ["tasks", "task_runs", "task_events", "task_links", "task_comments", "task_attachments", "kanban_notify_subs"],
+  "counts": {
+    "tasks": 0,
+    "task_runs": 0,
+    "task_events": 0,
+    "task_links": 0,
+    "task_comments": 0,
+    "task_attachments": 0,
+    "kanban_notify_subs": 0
+  },
+  "authority": {
+    "implementation": "existing Hermes Kanban database/tooling",
+    "schema_complete": true,
+    "mwp_task_state_instantiated": false,
+    "parallel_store_created": false
+  },
+  "next_permitted_action": "owner-authorized bootstrap/readback of canonical MWP task state",
+  "mutation": {"database_write": false, "task_create": false, "scheduler_write": false},
+  "raw_payload_included": false
+}

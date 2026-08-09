@@ -1,0 +1,34 @@
+{
+  "mwp_id": "MWP-UOSH-001",
+  "case_id": "CASE-SYMBIOSE-02",
+  "dataset_id": "symbiose-shadow-eval-v1",
+  "recorded_at": "2026-08-06T11:42:00Z",
+  "mode": "metadata-only-shadow-inventory",
+  "status": "INVENTORY_CAPTURED_CANONICALIZATION_NOT_PROMOTABLE",
+  "results": {
+    "concept_identity": {"http_status": 200, "result_count": 12, "latency_ms": 5345.1},
+    "unknown_negative": {"http_status": 200, "result_count": 0, "latency_ms": 3818.1},
+    "provenance_aggregate": {"http_status": 200, "aggregate_rows": 1, "latency_ms": 5252.4},
+    "relation_inventory": {"http_status": 200, "result_count": 50, "capped": true, "latency_ms": 22617.8},
+    "qdrant_root": {"http_status": 200, "latency_ms": 1.3},
+    "qdrant_collections": {"http_status": 200, "latency_ms": 1.3},
+    "gnn_similarity": {"http_status": 200, "result_count": 5, "degraded": true, "latency_ms": 3223.2}
+  },
+  "interpretation": {
+    "duplicate_or_identity_drift": "PRESENT_OR_REQUIRES_CLASSIFICATION",
+    "provenance": "AGGREGATE_OBSERVED_DETAILS_REDACTED",
+    "relation_normalization": "INCOMPLETE_CAPPED_INVENTORY",
+    "retrieval_baseline": "SERVICE_REACHABLE_QUALITY_NOT_YET_MEASURED",
+    "gnn_collapse_gate": "BLOCKED_DEGRADED_TRUE",
+    "latency_baseline": "GRAPH_READS_REQUIRE_BUDGET_AND_QUERY_REVIEW"
+  },
+  "mutation": {
+    "graph_write": false,
+    "qdrant_write": false,
+    "gnn_write": false,
+    "daemon_restart": false,
+    "promotion": false
+  },
+  "next_permitted_action": "review capped relation inventory, define canonicalization decisions and add versioned retrieval positives/negatives",
+  "raw_payload_included": false
+}

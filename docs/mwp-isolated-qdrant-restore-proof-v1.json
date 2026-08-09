@@ -1,0 +1,36 @@
+{
+  "artifact_id": "mwp-isolated-qdrant-restore-proof-v1",
+  "mwp_id": "MWP-UOSH-001",
+  "status": "BOUNDED_RESTORE_VERIFIED_ONE_COLLECTION",
+  "mode": "isolated-qdrant-restore-read-after-write-proof",
+  "isolated_target": {
+    "container": "mwp-restore-qdrant-20260807",
+    "port": "127.0.0.1:16333",
+    "volume": "mwp_restore_qdrant_20260807",
+    "source_snapshot": "/home/byopus/AGI/restore/qdrant/private_chunk_v1.snapshot",
+    "recover_http": 200,
+    "collection": "private_chunk_v1",
+    "status": "green",
+    "points_count": 50,
+    "sample_scroll_http": 200,
+    "sample_point_id": "044a25aa-1a58-5ee7-b291-f6860a4c1b47"
+  },
+  "production_comparison": {
+    "endpoint": "127.0.0.1:6333",
+    "collection": "private_chunk_v1",
+    "points_count": 50,
+    "sample_scroll_http": 200,
+    "sample_point_id": "044a25aa-1a58-5ee7-b291-f6860a4c1b47",
+    "production_mutation": false
+  },
+  "rollback_reference": "mwp_restore_qdrant_20260807 / mwp-restore-qdrant-20260807",
+  "scope": "one Qdrant collection only",
+  "non_claims": [
+    "This does not prove full 110-collection restore.",
+    "This does not prove Neo4j restore.",
+    "This does not prove GNN checkpoint restore.",
+    "Production Qdrant was read only and not modified."
+  ],
+  "next_action": "Repeat bounded restore proof for selected critical collections, then decide whether full isolated restore is owner-approved.",
+  "provenance": "authenticated SSH readback on .12"
+}

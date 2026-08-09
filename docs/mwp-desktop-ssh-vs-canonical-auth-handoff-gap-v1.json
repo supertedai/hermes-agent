@@ -1,0 +1,30 @@
+{
+  "artifact_id": "mwp-desktop-ssh-vs-canonical-auth-handoff-gap-v1",
+  "mwp_id": "MWP-UOSH-001",
+  "status": "ROOT_CAUSE_CONFIRMED_ADDITIVE_HANDOFF_REPAIR_REQUIRED",
+  "evidence": {
+    "desktop_connection_mode": "ssh",
+    "desktop_remote_host": "192.168.40.15",
+    "desktop_remote_user": "agent",
+    "desktop_canonical_browser_route": "not_used_by_active_connection",
+    "canonical_public_route": "ai.byopus.com -> ngrok -> .14:9120",
+    "proxy_handoff": "/api/auth/ws-ticket -> /api/ws -> .15:9119",
+    "active_desktop_to_proxy_9120": false,
+    "active_desktop_to_local_dashboard_9119": false,
+    "public_api_readback": "401 without browser/session handoff"
+  },
+  "interpretation": [
+    "Desktop SSH session and canonical browser auth are separate surfaces",
+    "login on .13 Firefox does not automatically authorize the .15 SSH runtime",
+    "switching Desktop connection blindly risks the known-good session/thread baseline",
+    "the safe fix is an additive broker/session handoff while preserving SSH rollback baseline"
+  ],
+  "recommended_fix": {
+    "preserve": "Desktop SSH connection and current Home/thread baseline",
+    "add": ".14 proxy ticket handoff or equivalent server-side session bridge",
+    "verify": "principal/tenant/scope, runtime receipt, read-after-write, rollback",
+    "forbid": "logout, profile switch, credential copy, blind connection.json mutation"
+  },
+  "writes_allowed": false,
+  "owner_boundary": "Morten and Opus must approve the additive handoff design before changing auth/runtime routing"
+}

@@ -1,0 +1,391 @@
+{
+  "artifact_id": "mwp-cross-plane-best-practice-sota-asi-readiness-v1",
+  "authority_policy": "registry/source/contract evidence never equals live runtime authority",
+  "best_practice_sota_asi_findings": {
+    "asi": [
+      "cross-surface self-consistency",
+      "world-model/action/observation correction",
+      "causal recursive improvement",
+      "bounded reversible autonomy",
+      "multi-agent coordination"
+    ],
+    "industry": [
+      "canonical identity population",
+      "relationship provenance/source",
+      "schema/index coverage",
+      "tenant/scope authorization",
+      "CRUD/read-after-write/rollback",
+      "restore/DR"
+    ],
+    "sota": [
+      "hybrid retrieval utility",
+      "temporal/causal/entity graph views",
+      "continual replay",
+      "active learning",
+      "GNN non-collapse and utility",
+      "vector contract compatibility"
+    ]
+  },
+  "covered_required_planes": [
+    "CRUD",
+    "GNN",
+    "Hermes",
+    "Neo4j",
+    "Qdrant",
+    "agent",
+    "chat",
+    "cortex",
+    "cron",
+    "daemon",
+    "delegation",
+    "desktop",
+    "gateway",
+    "ingest",
+    "learning",
+    "local",
+    "per-user",
+    "scope",
+    "steward",
+    "surface",
+    "system",
+    "tenant",
+    "user",
+    "web"
+  ],
+  "gate_status": {
+    "G0_scope_baseline": "PARTIAL",
+    "G1_industry_baseline": "BLOCKED_BY_B03_B04_B06_B11",
+    "G2_sota": "BLOCKED_BY_S01_S02_S03_S07_S08",
+    "G3_asi_cutting_edge": "BLOCKED_BY_A01_A02_A03_A04",
+    "G4_cross_plane": "BLOCKED_BY_IDENTITY_PROVENANCE_AND_VECTOR_HETEROGENEITY",
+    "G5_tests_measurements": "PARTIAL_TESTS_GREEN_LIVE_UTILITY_OPEN",
+    "G6_live_evidence": "BLOCKED_AUTHORITY_RECEIPTS_READ_AFTER_WRITE_ROLLBACK",
+    "G7_closeout": "BLOCKED"
+  },
+  "holistic_gate_reference": [
+    {
+      "checks": [
+        "exact target/scope",
+        "current authority",
+        "known-good baseline",
+        "reversibility",
+        "dirty/WIP isolation"
+      ],
+      "gate": "G0_SCOPE_AND_BASELINE"
+    },
+    {
+      "checks": [
+        "schema constraints/indexes",
+        "identity/uniqueness",
+        "CRUD/idempotency",
+        "tenant/security",
+        "observability",
+        "backup/restore",
+        "DR"
+      ],
+      "gate": "G1_INDUSTRY_BASELINE"
+    },
+    {
+      "checks": [
+        "hybrid retrieval",
+        "temporal/causal/entity semantics",
+        "provenance/lineage",
+        "entity resolution",
+        "evaluation/ablation",
+        "continual learning/replay",
+        "active learning"
+      ],
+      "gate": "G2_SOTA_REVIEW"
+    },
+    {
+      "checks": [
+        "cross-surface self-consistency",
+        "world-model/action/observation loop",
+        "recursive improvement evidence",
+        "bounded autonomy",
+        "multi-agent coordination",
+        "reversible self-modification"
+      ],
+      "gate": "G3_ASI_CUTTING_EDGE_REVIEW"
+    },
+    {
+      "checks": [
+        "schema canonical key/version/hash",
+        "Neo4j labels/relationships/constraints",
+        "Qdrant collection owner/dimension/metric/payload indexes/point identity",
+        "GNN feature schema/label schema/checkpoint/leakage controls",
+        "Hermes ingest envelope/principal/tenant/scope/session",
+        "surface/provider/runtime route",
+        "graph-vector-GNN identity/provenance/freshness parity",
+        "CRUD propagation/outbox/order/tombstone/rollback"
+      ],
+      "gate": "G4_CROSS_PLANE_COMPATIBILITY"
+    },
+    {
+      "checks": [
+        "unit/integration tests",
+        "real read-only path",
+        "latency p50/p95/p99",
+        "quality/utility baseline",
+        "drift/freshness",
+        "failure/degraded mode"
+      ],
+      "gate": "G5_TEST_AND_MEASURE"
+    },
+    {
+      "checks": [
+        "authenticated principal",
+        "authority readback",
+        "pre-read",
+        "mutation receipt if applicable",
+        "read-after-write",
+        "projection receipts",
+        "rollback receipt"
+      ],
+      "gate": "G6_LIVE_EVIDENCE"
+    },
+    {
+      "checks": [
+        "COMPLETE only with evidence",
+        "BLOCKED with owner/evidence/next_action",
+        "no claims from declaration-only state",
+        "manifest/CAD/ADR/BL/Git traceability"
+      ],
+      "gate": "G7_CLOSEOUT_DECISION"
+    }
+  ],
+  "live_data_evidence": {
+    "identity_provenance": {
+      "canonical_key_population_rate": 1.012e-06,
+      "duplicate_key_groups": 0,
+      "largest_duplicate_group": null,
+      "nodes_in_duplicate_groups": 0,
+      "nodes_with_canonical_key": 12,
+      "nodes_without_canonical_key": 11860637,
+      "relationships_missing_provenance": 24897866,
+      "relationships_missing_source": 24897895,
+      "relationships_touching_unidentified_nodes": 24899047,
+      "relationships_with_identified_endpoints": 0,
+      "total_nodes": 11859782,
+      "total_relationships": 24897866
+    },
+    "neo4j": {
+      "constraint_labels": 168,
+      "constraints": 181,
+      "indexed_labels": 212,
+      "indexes": 427,
+      "labels": 1065,
+      "labels_with_constraint_without_index": 1,
+      "labels_with_index_without_constraint": 45,
+      "labels_without_constraint_or_index": 852,
+      "property_keys": 10738,
+      "relationship_indexes": 1,
+      "relationship_types": 4106,
+      "vector_indexes": 1
+    },
+    "qdrant": {
+      "collections": 110,
+      "descriptors_ok": 110,
+      "errors": 0,
+      "total_points": 4965726
+    }
+  },
+  "missing_declared_planes": [],
+  "mwp_id": "MWP-UOSH-001",
+  "next_action": "continue read-only L3/L4/L6 evidence lanes; require owner-gated authority before any graph/Qdrant/GNN mutation or runtime promotion",
+  "producer_count": 10,
+  "producer_matrix": [
+    {
+      "canonical_authority": "UNVERIFIED",
+      "contract_tested": "implemented_contracts_and_tests",
+      "declared": true,
+      "failure_mode": "fail_closed_until_principal_tenant_scope_provenance_receipt_read_after_write_rollback",
+      "planes": [
+        "chat",
+        "user"
+      ],
+      "producer": "ai.byopus.com web",
+      "promotion_safe": false,
+      "runtime_effective": "UNVERIFIED",
+      "runtime_receipt": "UNVERIFIED",
+      "source_activity": "not_proven",
+      "surface": "web"
+    },
+    {
+      "canonical_authority": "UNVERIFIED",
+      "contract_tested": "implemented_contracts_and_tests",
+      "declared": true,
+      "failure_mode": "fail_closed_until_principal_tenant_scope_provenance_receipt_read_after_write_rollback",
+      "planes": [
+        "chat",
+        "user"
+      ],
+      "producer": "Hermes Desktop",
+      "promotion_safe": false,
+      "runtime_effective": "UNVERIFIED",
+      "runtime_receipt": "UNVERIFIED",
+      "source_activity": "confirmed_only_for_local_state_db_entries",
+      "surface": "desktop"
+    },
+    {
+      "canonical_authority": "UNVERIFIED",
+      "contract_tested": "implemented_contracts_and_tests",
+      "declared": true,
+      "failure_mode": "fail_closed_until_principal_tenant_scope_provenance_receipt_read_after_write_rollback",
+      "planes": [
+        "chat",
+        "user",
+        "system"
+      ],
+      "producer": "CLI/TUI",
+      "promotion_safe": false,
+      "runtime_effective": "UNVERIFIED",
+      "runtime_receipt": "UNVERIFIED",
+      "source_activity": "confirmed_only_for_local_state_db_entries",
+      "surface": "local"
+    },
+    {
+      "canonical_authority": "UNVERIFIED",
+      "contract_tested": "implemented_contracts_and_tests",
+      "declared": true,
+      "failure_mode": "fail_closed_until_principal_tenant_scope_provenance_receipt_read_after_write_rollback",
+      "planes": [
+        "chat",
+        "user"
+      ],
+      "producer": "gateway/mobile/chat platforms",
+      "promotion_safe": false,
+      "runtime_effective": "UNVERIFIED",
+      "runtime_receipt": "UNVERIFIED",
+      "source_activity": "not_proven",
+      "surface": "gateway"
+    },
+    {
+      "canonical_authority": "UNVERIFIED",
+      "contract_tested": "implemented_contracts_and_tests",
+      "declared": true,
+      "failure_mode": "fail_closed_until_principal_tenant_scope_provenance_receipt_read_after_write_rollback",
+      "planes": [
+        "system",
+        "agent"
+      ],
+      "producer": "cron/scheduled execution",
+      "promotion_safe": false,
+      "runtime_effective": "UNVERIFIED",
+      "runtime_receipt": "UNVERIFIED",
+      "source_activity": "confirmed_only_for_local_state_db_entries",
+      "surface": "cron"
+    },
+    {
+      "canonical_authority": "UNVERIFIED",
+      "contract_tested": "implemented_contracts_and_tests",
+      "declared": true,
+      "failure_mode": "fail_closed_until_principal_tenant_scope_provenance_receipt_read_after_write_rollback",
+      "planes": [
+        "agent",
+        "system"
+      ],
+      "producer": "subagent/delegation",
+      "promotion_safe": false,
+      "runtime_effective": "UNVERIFIED",
+      "runtime_receipt": "UNVERIFIED",
+      "source_activity": "confirmed_only_for_local_state_db_entries",
+      "surface": "delegation"
+    },
+    {
+      "canonical_authority": "UNVERIFIED",
+      "contract_tested": "implemented_contracts_and_tests",
+      "declared": true,
+      "failure_mode": "fail_closed_until_principal_tenant_scope_provenance_receipt_read_after_write_rollback",
+      "planes": [
+        "system"
+      ],
+      "producer": "Cortex/system",
+      "promotion_safe": false,
+      "runtime_effective": "UNVERIFIED",
+      "runtime_receipt": "UNVERIFIED",
+      "source_activity": "confirmed_only_for_local_state_db_entries",
+      "surface": "cortex"
+    },
+    {
+      "canonical_authority": "UNVERIFIED",
+      "contract_tested": "implemented_contracts_and_tests",
+      "declared": true,
+      "failure_mode": "fail_closed_until_principal_tenant_scope_provenance_receipt_read_after_write_rollback",
+      "planes": [
+        "agent",
+        "system"
+      ],
+      "producer": "agent/steward/domain",
+      "promotion_safe": false,
+      "runtime_effective": "UNVERIFIED",
+      "runtime_receipt": "UNVERIFIED",
+      "source_activity": "confirmed_only_for_local_state_db_entries",
+      "surface": "agent"
+    },
+    {
+      "canonical_authority": "UNVERIFIED",
+      "contract_tested": "implemented_contracts_and_tests",
+      "declared": true,
+      "failure_mode": "fail_closed_until_principal_tenant_scope_provenance_receipt_read_after_write_rollback",
+      "planes": [
+        "system",
+        "agent"
+      ],
+      "producer": "skills/procedures",
+      "promotion_safe": false,
+      "runtime_effective": "UNVERIFIED",
+      "runtime_receipt": "UNVERIFIED",
+      "source_activity": "not_proven",
+      "surface": "learning"
+    },
+    {
+      "canonical_authority": "UNVERIFIED",
+      "contract_tested": "implemented_contracts_and_tests",
+      "declared": true,
+      "failure_mode": "fail_closed_until_principal_tenant_scope_provenance_receipt_read_after_write_rollback",
+      "planes": [
+        "system",
+        "agent"
+      ],
+      "producer": "Jetstream/external research",
+      "promotion_safe": false,
+      "runtime_effective": "UNVERIFIED",
+      "runtime_receipt": "UNVERIFIED",
+      "source_activity": "not_proven",
+      "surface": "ingest"
+    }
+  ],
+  "producer_runtime_receipt_counts": {
+    "canonical_authority_verified": 0,
+    "declared": 10,
+    "promotion_safe": 0,
+    "runtime_effective_verified": 0,
+    "runtime_receipt_verified": 0
+  },
+  "required_planes": [
+    "chat",
+    "user",
+    "per-user",
+    "tenant",
+    "scope",
+    "system",
+    "cortex",
+    "agent",
+    "steward",
+    "delegation",
+    "daemon",
+    "ingest",
+    "learning",
+    "CRUD",
+    "Neo4j",
+    "Qdrant",
+    "GNN",
+    "Hermes",
+    "surface"
+  ],
+  "scope": "all registered producers, surfaces, planes and data projections",
+  "status": "CROSS_PLANE_READINESS_BLOCKED_FAIL_CLOSED",
+  "verdict": "BLOCKED",
+  "writes_allowed": false
+}

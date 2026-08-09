@@ -1,0 +1,54 @@
+{
+  "artifact_id": "mwp-p2-crud-truth-audit-v1",
+  "mwp_id": "MWP-UOSH-001",
+  "phase": "P2",
+  "status": "BLOCKED_UNTIL_CANONICAL_AUTHORITY",
+  "mode": "local-static-contract-audit-metadata-only",
+  "covered_contracts": [
+    "agent/mwp_cross_surface_truth.py",
+    "agent/mwp_receipt_pipeline.py",
+    "agent/mwp_receipt_adapters.py",
+    "docs/ADR-TRUTH-001-cross-surface-canonical-truth.md"
+  ],
+  "green_contracts": {
+    "mutation_idempotency_field": true,
+    "operation_validation": true,
+    "expected_version_for_update": true,
+    "canonical_key_check": true,
+    "canonical_version_and_hash_check": true,
+    "outbox_mutation_and_version_check": true,
+    "projection_freshness_version_hash_check": true,
+    "metadata_only_receipts": true,
+    "graph_missing_authority_fails_closed": true,
+    "obsidian_missing_vault_fails_closed": true
+  },
+  "open_gaps": {
+    "mutation_envelope_full_topology": {
+      "status": "IMPLEMENTED_STRICT_CONTRACT_NOT_WIRED",
+      "missing_or_not_required_in_validator": ["tenant_id", "installation_id", "device_id", "login_surface_id", "session_id", "system_scope"]
+    },
+    "canonical_readback_authority": {
+      "status": "IMPLEMENTED_STRICT_CONTRACT_NOT_WIRED",
+      "required": ["canonical_authority_ref", "entity_version", "content_hash", "provenance_ref", "readback_at", "rollback_ref", "freshness"]
+    },
+    "canonical_writer_route": {
+      "status": "BLOCKED",
+      "reason": "receipts can be collected, but live canonical writer/authority is not proven"
+    },
+    "outbox_contract": {
+      "status": "PARTIAL",
+      "required": ["mutation_id", "canonical_version", "content_hash", "provenance_ref", "delivery_state", "replay_idempotency"]
+    },
+    "delete_tombstone_retention": {
+      "status": "OPEN",
+      "required": ["canonical tombstone", "retention policy", "projection propagation", "rollback/correction receipt"]
+    },
+    "cross_surface_parity": {
+      "status": "BLOCKED_BY_P1",
+      "required": ["web", "desktop", "backend", "canonical session/thread authority"]
+    }
+  },
+  "writes_allowed": false,
+  "next_action": "close P1 broker/session authority, then extend mutation/readback contract with full topology and rollback fields before any canonical writer activation",
+  "raw_payload_included": false
+}

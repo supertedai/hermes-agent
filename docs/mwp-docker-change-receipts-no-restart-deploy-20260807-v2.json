@@ -1,0 +1,74 @@
+{
+  "artifact_id": "mwp-canonical-docker-change-gate-v1",
+  "mode": "deploy",
+  "status": "DEPLOY_PASS",
+  "host": "canonical-docker-host",
+  "source_root": "/home/byopus/AGI-staging",
+  "canonical_root": "/home/byopus/AGI",
+  "container": "efc-unified-api",
+  "files": [
+    {
+      "path": "apis/unified_api/routers/mwp_runtime.py",
+      "source": {
+        "sha256": "37e522d1ad20241331d35253e620905f7ec5bc36bd93d48d5b35c9aefee175c9",
+        "bytes": 1405
+      },
+      "canonical_before": {
+        "sha256": "37e522d1ad20241331d35253e620905f7ec5bc36bd93d48d5b35c9aefee175c9",
+        "bytes": 1405
+      },
+      "container_before": "37e522d1ad20241331d35253e620905f7ec5bc36bd93d48d5b35c9aefee175c9",
+      "canonical_after": {
+        "sha256": "37e522d1ad20241331d35253e620905f7ec5bc36bd93d48d5b35c9aefee175c9",
+        "bytes": 1405
+      },
+      "container_after": "37e522d1ad20241331d35253e620905f7ec5bc36bd93d48d5b35c9aefee175c9"
+    }
+  ],
+  "mutation": {
+    "copy": true,
+    "restart": false,
+    "rollback": false
+  },
+  "probes": [
+    {
+      "url": "http://127.0.0.1:8010/health",
+      "http": 200,
+      "payload": {
+        "status": "ok",
+        "loop_lag_s": 0.002,
+        "loop_lag_max_60s": 0.179,
+        "budget_s": 5.0
+      }
+    },
+    {
+      "url": "http://127.0.0.1:8010/api/mwp/runtime",
+      "http": 200,
+      "payload": {
+        "artifact": "mwp-active-turn-runtime-readback-v1",
+        "status": "NO_ACTIVE_TURN",
+        "model_id": "cco",
+        "provider_id": null,
+        "role_id": null,
+        "api_mode": null,
+        "llm_instance_id": null,
+        "fallback_health": null,
+        "active_turn": false,
+        "served_model_count": 3,
+        "source": "local-model-router-read-only",
+        "raw_payload_included": false
+      }
+    }
+  ],
+  "rollback_root": "/home/byopus/AGI/.mwp-change-backups/20260807T144602+0200",
+  "repo_mount": {
+    "Type": "bind",
+    "Source": "/home/byopus/AGI",
+    "Destination": "/repo",
+    "Mode": "rw",
+    "RW": true,
+    "Propagation": "rprivate"
+  },
+  "container_compile": "PASS",
+  "verified_at": "2026-08-07T14:46:02+0200"
+}

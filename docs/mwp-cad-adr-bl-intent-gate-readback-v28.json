@@ -1,0 +1,43 @@
+{
+  "mwp_id": "MWP-UOSH-001",
+  "gate_id": "cad-adr-bl-intent-registry",
+  "artifact_id": "mwp-cad-adr-bl-intent-gate-readback-v28",
+  "mode": "metadata-only-source-runtime-verification",
+  "status": "BLOCKED",
+  "scope": {
+    "principal": "morten",
+    "installation_id": "mwp-status-quo",
+    "login_surface_id": "current-hermes-chat",
+    "agent_id": "opus",
+    "system_scope": "mwp-cad-adr-bl-intent"
+  },
+  "fresh_evidence": {
+    "topology_snapshot": "docs/mwp-local-topology-readback.json",
+    "topology_inventory_hash": "7b6bc13d7364cc73b10cc8a19d8c5b2d6f33090f3830511369e53194e0293e1c",
+    "topology_item_count": 66,
+    "topology_delta": {"added": [], "removed": [], "changed": []},
+    "closeout_snapshot": "docs/mwp-final-closeout-readback.json",
+    "closeout_status": "OPEN",
+    "registry_open_rows": 8,
+    "closeout_blocker_count": 9,
+    "git_head": "96b51c4bcff981e1088be0f52cfb3e13fd79a94c",
+    "git_worktree": "dirty",
+    "local_source": "agent/mwp_asi_alignment_registry.py; agent/mwp_asi_closeout.py",
+    "local_runtime_observation": "hermes-dashboard.service active; local listener/process/systemd metadata present",
+    "runtime_qualification": "local metadata-only runtime presence; no authoritative CAD-to-ADR-to-BL-to-runtime reconciliation",
+    "local_test_result": "7 passed, 0 failed",
+    "test_command": "scripts/run_tests.sh tests/test_mwp_asi_alignment_registry.py tests/test_mwp_asi_closeout.py -q"
+  },
+  "blocker": "Authoritative live CAD/ADR/BL source reconciliation and graph write/read-after-write authority are unavailable. Local source, active service, topology inventory, and passing tests do not establish LIVE_VERIFIED.",
+  "owner": "Morten / authorized CAD, ADR, BL source-of-truth and runtime owners",
+  "evidence_required": [
+    "authenticated metadata-only CAD-to-ADR-to-BL-to-runtime reconciliation",
+    "owner and canonical version for each mapped record",
+    "authorized graph receipt with write/read-after-write verification"
+  ],
+  "next_action": "Owner supplies authenticated CAD-to-ADR-to-BL-to-runtime reconciliation and authorized graph write/read-after-write receipt; rerun this gate and retain BLOCKED until verified.",
+  "promotion_rule": "Do not promote DECLARED, REACHABLE, collection presence, catalog consistency, or local runtime presence to LIVE_VERIFIED.",
+  "mutation": {"source_write": false, "graph_write": false, "obsidian_write": false, "production_activation": false},
+  "ledger_event": {"status": "OPEN", "provisional": true, "receipts_verified": false},
+  "raw_payload_included": false
+}

@@ -1,0 +1,26 @@
+{
+  "mwp_id": "MWP-UOSH-001",
+  "artifact_id": "mwp-cortex-worldmodel-live-route-readback-v1",
+  "mode": "metadata-only-live-route-schema-probe",
+  "status": "ROUTE_VERIFIED_METADATA_CONTRACT_BLOCKED",
+  "endpoint_probes": {
+    "/health": {"http_status": 200},
+    "/msty/live-context": {"http_status": 200, "response_shape": {"context": "string", "status": "string"}},
+    "/life-contract/steward-context": {"http_status": 200, "response_shape": "metadata object", "resolved": false, "steward_id": null, "memory_scope": null}
+  },
+  "context_contract_presence": {
+    "conversation_id": false,
+    "user_id": false,
+    "working_model_ref": false,
+    "cortex_ref": false,
+    "agent_id": false,
+    "agent_role": false,
+    "agent_binding_ref": false,
+    "handoff_ref": false,
+    "recorded_at": false,
+    "freshness_seconds": false,
+    "provenance": false
+  },
+  "gate": {"route": "PRESENT", "live_round_trip": "UNVERIFIED", "raw_context_included": false, "mutation": false},
+  "next_action": "add authenticated metadata envelope to live context route and resolve steward binding before context promotion"
+}

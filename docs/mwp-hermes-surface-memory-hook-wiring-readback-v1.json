@@ -1,0 +1,26 @@
+{
+  "artifact_id": "mwp-hermes-surface-memory-hook-wiring-readback-v1",
+  "mwp_id": "MWP-UOSH-001",
+  "phase": "P3",
+  "status": "CORE_TURN_WIRING_CONFIRMED_SURFACE_RECEIPTS_OPEN",
+  "runtime_waist": "hermes-agent-engine",
+  "source_evidence": [
+    {"file":"agent/turn_context.py","hook":"prefetch_all","position":"before model/API call","status":"SOURCE_CONFIRMED"},
+    {"file":"agent/continuous_pipeline.py","hook":"prefetch_all","position":"context assembly","status":"SOURCE_CONFIRMED"},
+    {"file":"agent/continuous_pipeline.py","hook":"sync_all","position":"completed turn","status":"SOURCE_CONFIRMED"},
+    {"file":"agent/continuous_pipeline.py","hook":"queue_prefetch_all","position":"next-turn warming","status":"SOURCE_CONFIRMED"},
+    {"file":"run_agent.py","hook":"sync_all + queue_prefetch_all","position":"post-response lifecycle","status":"SOURCE_CONFIRMED"},
+    {"file":"agent/memory_manager.py","hook":"provider timeout/background/FIFO","position":"orchestration boundary","status":"SOURCE_CONFIRMED"}
+  ],
+  "surface_matrix": [
+    {"surface":"web","expected_entry":"shared Hermes turn lifecycle","runtime_receipt":"UNVERIFIED"},
+    {"surface":"desktop","expected_entry":"shared Hermes turn lifecycle","runtime_receipt":"UNVERIFIED"},
+    {"surface":"cli_tui","expected_entry":"shared Hermes turn lifecycle","runtime_receipt":"UNVERIFIED"},
+    {"surface":"gateway","expected_entry":"shared Hermes turn lifecycle","runtime_receipt":"UNVERIFIED"},
+    {"surface":"cron","expected_entry":"scoped Hermes lifecycle","runtime_receipt":"UNVERIFIED"},
+    {"surface":"subagent_delegation","expected_entry":"parent/child governed lifecycle","runtime_receipt":"UNVERIFIED"}
+  ],
+  "interpretation": "core hook wiring is real; cross-surface authority, provider selection and producer receipts remain unverified",
+  "writes_allowed": false,
+  "next_action": "obtain one metadata-only runtime receipt per surface from the known-good Hermes runtime; do not create a second memory path"
+}

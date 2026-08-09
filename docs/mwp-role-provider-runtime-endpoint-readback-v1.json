@@ -1,0 +1,13 @@
+{
+  "mwp_id": "MWP-UOSH-001",
+  "artifact_id": "mwp-role-provider-runtime-endpoint-readback-v1",
+  "mode": "metadata-only-live-endpoint-discovery",
+  "status": "RUNTIME_PROCESS_PRESENT_API_UNVERIFIED",
+  "host": ".13",
+  "listener": {"address": "127.0.0.1:41343", "owner_process": "LM Studio", "pid": 76062},
+  "probes": {"/health": 404, "/models": 404, "/v1/models": 404},
+  "interpretation": "a runtime process exists, but no verifiable standard model API or role/provider resolver was exposed on the listener",
+  "missing": ["active-turn role_id", "model_id", "provider_id", "route/api_mode", "llm_instance_id", "fallback health"],
+  "gate": {"role_provider": "BLOCKED_RUNTIME_RECEIPT", "task_routing": "BLOCKED", "config_write": false, "restart": false, "raw_payload_included": false},
+  "next_action": "obtain authenticated runtime resolver receipt or authoritative LM Studio route contract"
+}

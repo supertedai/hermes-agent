@@ -1,0 +1,48 @@
+{
+  "artifact_id": "mwp-hermes-memory-latency-benchmark-v1",
+  "mwp_id": "MWP-UOSH-001",
+  "phase": "P3",
+  "status": "CONTRACT_READY_BASELINE_NOT_MEASURED",
+  "mode": "read-only-shadow-benchmark-contract",
+  "baseline": {
+    "name": "current-hermes-local-memory",
+    "components": ["MEMORY.md", "USER.md", "SQLite session store", "SQLite FTS5 session search"],
+    "authority": "Hermes local engine",
+    "must_remain_safe_fallback": true
+  },
+  "paths": [
+    {"path":"local_hot_path","deadline_required":true,"async":false},
+    {"path":"provider_prefetch","deadline_required":true,"async":true},
+    {"path":"remote_memory_fabric","deadline_required":true,"async":true},
+    {"path":"graph_qdrant_enrichment","deadline_required":true,"async":true},
+    {"path":"gnn_deep_enrichment","deadline_required":true,"async":true}
+  ],
+  "metrics": [
+    "retrieval_latency_p50_ms",
+    "retrieval_latency_p95_ms",
+    "retrieval_latency_p99_ms",
+    "context_assembly_latency_p50_ms",
+    "context_assembly_latency_p95_ms",
+    "context_assembly_latency_p99_ms",
+    "cache_hit_rate",
+    "stale_hit_rate",
+    "async_projection_lag_ms",
+    "timeout_rate",
+    "scope_rejection_rate",
+    "fallback_rate"
+  ],
+  "gates": [
+    "baseline measured on Hermes local hot path",
+    "provider path compared against same query/turn fixtures",
+    "no unbounded wait on remote path",
+    "fallback preserves normal chat availability",
+    "cache key scope/version isolation verified",
+    "stale/freshness labels visible",
+    "remote enrichment does not block synchronous turn",
+    "no production writer activated by benchmark"
+  ],
+  "promotion_rule": "remain shadow/async until measured p50/p95/p99 and freshness meet owner-approved budget against baseline",
+  "writes_allowed": false,
+  "raw_payload_included": false,
+  "next_action": "run local Hermes SQLite/FTS5 baseline fixture, then compare provider shadow path with bounded deadlines"
+}

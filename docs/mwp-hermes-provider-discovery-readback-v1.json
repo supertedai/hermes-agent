@@ -1,0 +1,26 @@
+{
+  "artifact_id": "mwp-hermes-provider-discovery-readback-v1",
+  "mwp_id": "MWP-UOSH-001",
+  "phase": "P3",
+  "status": "CONFIG_DECLARED_RUNTIME_PROVIDER_UNVERIFIED",
+  "mode": "read-only-provider-discovery",
+  "config_source": "/home/agent/.hermes/config.yaml",
+  "config_observed": {
+    "memory_enabled": true,
+    "provider_declared": "opus",
+    "plugins_enabled": []
+  },
+  "source_observed": {
+    "memory_provider_contract": "agent/memory_provider.py",
+    "provider_implementation_found_in_mwp_workspace": false,
+    "holographic_provider_active": false,
+    "live_provider_benchmark_executed": false
+  },
+  "baseline": {
+    "local_hermes_sqlite_fts5": "MEASURED",
+    "provider_comparison": "OPEN"
+  },
+  "interpretation": "config declaration is not runtime activation or authority evidence",
+  "writes_allowed": false,
+  "next_action": "discover the authoritative opus provider/runtime path and benchmark it in shadow/read-only mode against the measured local baseline"
+}

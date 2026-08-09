@@ -1,0 +1,219 @@
+{
+  "artifact_id": "mwp-producer-runtime-receipt-census-v1",
+  "canonical_authority_receipts_verified": 0,
+  "mwp_id": "MWP-UOSH-001",
+  "next_action": "obtain one metadata-only live receipt per producer with principal/tenant/scope/provenance/correlation/idempotency/runtime path",
+  "producer_count": 10,
+  "producers": [
+    {
+      "canonical_authority_receipt": "NOT_FOUND",
+      "declared_hooks": [
+        "turn_start_prefetch",
+        "sync_turn",
+        "session_end"
+      ],
+      "declared_status": "UNVERIFIED",
+      "planes": [
+        "chat",
+        "user"
+      ],
+      "producer": "ai.byopus.com web",
+      "read_after_write": "NOT_FOUND",
+      "rollback_receipt": "NOT_FOUND",
+      "runtime_receipt": "NOT_FOUND",
+      "source_activity": "CONFIRMED_ONLY_WHERE_LOCAL_STATE_DB_COUNTS_EXIST",
+      "surface": "web",
+      "verdict": "DECLARED_ONLY_OR_SOURCE_ACTIVITY_ONLY"
+    },
+    {
+      "canonical_authority_receipt": "NOT_FOUND",
+      "declared_hooks": [
+        "turn_start_prefetch",
+        "sync_turn",
+        "session_switch"
+      ],
+      "declared_status": "UNVERIFIED",
+      "planes": [
+        "chat",
+        "user"
+      ],
+      "producer": "Hermes Desktop",
+      "read_after_write": "NOT_FOUND",
+      "rollback_receipt": "NOT_FOUND",
+      "runtime_receipt": "NOT_FOUND",
+      "source_activity": "CONFIRMED_ONLY_WHERE_LOCAL_STATE_DB_COUNTS_EXIST",
+      "surface": "desktop",
+      "verdict": "DECLARED_ONLY_OR_SOURCE_ACTIVITY_ONLY"
+    },
+    {
+      "canonical_authority_receipt": "NOT_FOUND",
+      "declared_hooks": [
+        "turn_start_prefetch",
+        "sync_turn",
+        "compression",
+        "session_end"
+      ],
+      "declared_status": "UNVERIFIED",
+      "planes": [
+        "chat",
+        "user",
+        "system"
+      ],
+      "producer": "CLI/TUI",
+      "read_after_write": "NOT_FOUND",
+      "rollback_receipt": "NOT_FOUND",
+      "runtime_receipt": "NOT_FOUND",
+      "source_activity": "CONFIRMED_ONLY_WHERE_LOCAL_STATE_DB_COUNTS_EXIST",
+      "surface": "local",
+      "verdict": "DECLARED_ONLY_OR_SOURCE_ACTIVITY_ONLY"
+    },
+    {
+      "canonical_authority_receipt": "NOT_FOUND",
+      "declared_hooks": [
+        "turn_start_prefetch",
+        "sync_turn",
+        "session_expiry",
+        "session_switch"
+      ],
+      "declared_status": "UNVERIFIED",
+      "planes": [
+        "chat",
+        "user"
+      ],
+      "producer": "gateway/mobile/chat platforms",
+      "read_after_write": "NOT_FOUND",
+      "rollback_receipt": "NOT_FOUND",
+      "runtime_receipt": "NOT_FOUND",
+      "source_activity": "CONFIRMED_ONLY_WHERE_LOCAL_STATE_DB_COUNTS_EXIST",
+      "surface": "gateway",
+      "verdict": "DECLARED_ONLY_OR_SOURCE_ACTIVITY_ONLY"
+    },
+    {
+      "canonical_authority_receipt": "NOT_FOUND",
+      "declared_hooks": [
+        "scoped_observation",
+        "outcome",
+        "no_user_profile_contamination"
+      ],
+      "declared_status": "UNVERIFIED",
+      "planes": [
+        "system",
+        "agent"
+      ],
+      "producer": "cron/scheduled execution",
+      "read_after_write": "NOT_FOUND",
+      "rollback_receipt": "NOT_FOUND",
+      "runtime_receipt": "NOT_FOUND",
+      "source_activity": "CONFIRMED_ONLY_WHERE_LOCAL_STATE_DB_COUNTS_EXIST",
+      "surface": "cron",
+      "verdict": "DECLARED_ONLY_OR_SOURCE_ACTIVITY_ONLY"
+    },
+    {
+      "canonical_authority_receipt": "NOT_FOUND",
+      "declared_hooks": [
+        "parent_observation",
+        "child_outcome",
+        "correlation"
+      ],
+      "declared_status": "UNVERIFIED",
+      "planes": [
+        "agent",
+        "system"
+      ],
+      "producer": "subagent/delegation",
+      "read_after_write": "NOT_FOUND",
+      "rollback_receipt": "NOT_FOUND",
+      "runtime_receipt": "NOT_FOUND",
+      "source_activity": "CONFIRMED_ONLY_WHERE_LOCAL_STATE_DB_COUNTS_EXIST",
+      "surface": "delegation",
+      "verdict": "DECLARED_ONLY_OR_SOURCE_ACTIVITY_ONLY"
+    },
+    {
+      "canonical_authority_receipt": "NOT_FOUND",
+      "declared_hooks": [
+        "candidate",
+        "promote",
+        "correct",
+        "evaluation"
+      ],
+      "declared_status": "UNVERIFIED",
+      "planes": [
+        "system"
+      ],
+      "producer": "Cortex/system",
+      "read_after_write": "NOT_FOUND",
+      "rollback_receipt": "NOT_FOUND",
+      "runtime_receipt": "NOT_FOUND",
+      "source_activity": "CONFIRMED_ONLY_WHERE_LOCAL_STATE_DB_COUNTS_EXIST",
+      "surface": "cortex",
+      "verdict": "DECLARED_ONLY_OR_SOURCE_ACTIVITY_ONLY"
+    },
+    {
+      "canonical_authority_receipt": "NOT_FOUND",
+      "declared_hooks": [
+        "candidate",
+        "outcome",
+        "handoff",
+        "provenance"
+      ],
+      "declared_status": "UNVERIFIED",
+      "planes": [
+        "agent",
+        "system"
+      ],
+      "producer": "agent/steward/domain",
+      "read_after_write": "NOT_FOUND",
+      "rollback_receipt": "NOT_FOUND",
+      "runtime_receipt": "NOT_FOUND",
+      "source_activity": "CONFIRMED_ONLY_WHERE_LOCAL_STATE_DB_COUNTS_EXIST",
+      "surface": "agent",
+      "verdict": "DECLARED_ONLY_OR_SOURCE_ACTIVITY_ONLY"
+    },
+    {
+      "canonical_authority_receipt": "NOT_FOUND",
+      "declared_hooks": [
+        "observed_utility",
+        "promotion",
+        "rollback"
+      ],
+      "declared_status": "UNVERIFIED",
+      "planes": [
+        "system",
+        "agent"
+      ],
+      "producer": "skills/procedures",
+      "read_after_write": "NOT_FOUND",
+      "rollback_receipt": "NOT_FOUND",
+      "runtime_receipt": "NOT_FOUND",
+      "source_activity": "CONFIRMED_ONLY_WHERE_LOCAL_STATE_DB_COUNTS_EXIST",
+      "surface": "learning",
+      "verdict": "DECLARED_ONLY_OR_SOURCE_ACTIVITY_ONLY"
+    },
+    {
+      "canonical_authority_receipt": "NOT_FOUND",
+      "declared_hooks": [
+        "source_provenance",
+        "candidate",
+        "dedupe",
+        "promotion_gate"
+      ],
+      "declared_status": "UNVERIFIED",
+      "planes": [
+        "system",
+        "agent"
+      ],
+      "producer": "Jetstream/external research",
+      "read_after_write": "NOT_FOUND",
+      "rollback_receipt": "NOT_FOUND",
+      "runtime_receipt": "NOT_FOUND",
+      "source_activity": "CONFIRMED_ONLY_WHERE_LOCAL_STATE_DB_COUNTS_EXIST",
+      "surface": "ingest",
+      "verdict": "DECLARED_ONLY_OR_SOURCE_ACTIVITY_ONLY"
+    }
+  ],
+  "read_after_write_verified": 0,
+  "rollback_receipts_verified": 0,
+  "runtime_receipts_verified": 0,
+  "status": "RUNTIME_RECEIPTS_MISSING_FAIL_CLOSED",
+  "writes_allowed": false
+}

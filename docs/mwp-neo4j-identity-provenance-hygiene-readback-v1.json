@@ -1,0 +1,36 @@
+{
+  "artifact_id": "mwp-neo4j-identity-provenance-hygiene-readback-v1",
+  "mwp_id": "MWP-UOSH-001",
+  "phase": "P7/P2",
+  "status": "LIVE_IDENTITY_PROVENANCE_GAP_CONFIRMED",
+  "mode": "read-only-cypher",
+  "authority_route": "GET /neo4j/q",
+  "queries": {
+    "duplicate_canonical_keys": "MATCH (n) WHERE n.canonical_key IS NOT NULL WITH n.canonical_key AS k, count(n) AS c WHERE c > 1 RETURN count(*) AS duplicate_key_groups, sum(c) AS nodes_in_duplicate_groups, max(c) AS largest_group",
+    "canonical_key_population": "MATCH (n) RETURN count(n) AS total_nodes, count(n.canonical_key) AS nodes_with_canonical_key",
+    "relationship_missing_provenance": "MATCH ()-[r]->() WHERE r.provenance_ref IS NULL RETURN count(r)",
+    "relationship_missing_source": "MATCH ()-[r]->() WHERE r.source_ref IS NULL RETURN count(r)"
+  },
+  "results": {
+    "total_nodes": 11859782,
+    "nodes_with_canonical_key": 12,
+    "canonical_key_population_rate": 0.000001012,
+    "duplicate_key_groups": 0,
+    "nodes_in_duplicate_groups": 0,
+    "largest_duplicate_group": null,
+    "total_relationships": 24897866,
+    "relationships_missing_provenance": 24897866,
+    "relationships_missing_source": 24897895,
+    "relationships_touching_unidentified_nodes": 24899047,
+    "relationships_with_identified_endpoints": 0,
+    "nodes_without_canonical_key": 11860637
+  },
+  "interpretation": [
+    "zero duplicate canonical-key groups is not a green deduplication result because canonical_key population is nearly absent",
+    "relationship provenance_ref coverage is effectively zero",
+    "relationship source_ref coverage is effectively zero",
+    "graph cannot currently be treated as fully governed canonical truth for CRUD propagation or ASI memory"
+  ],
+  "writes_allowed": false,
+  "next_action": "quarantine promotion, define scoped identity/provenance backfill plan, and verify owner/tenant/source semantics before any mutation"
+}

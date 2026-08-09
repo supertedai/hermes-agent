@@ -1,0 +1,16 @@
+{
+  "mwp_id": "MWP-UOSH-001",
+  "artifact_id": "mwp-fleet-candidate-liveness-readback-v1",
+  "mode": "metadata-only-live-correlation",
+  "status": "CANDIDATES_NOT_CORRELATED_TO_FLEET_HEALTH",
+  "snapshot_at": "2026-08-06T14:49:13.457532+00:00",
+  "fleet_endpoint": {"http_status": 200, "total": 362, "problem_limit": 100, "stale_minutes": 30},
+  "candidates": [
+    {"agent_id": "faber", "registry_model": "gpt-oss-120b", "registry_runtime": "claude-subagent", "registry_freshness_seconds": 321, "fleet_item_present": false, "role_provider_receipt": "MISSING"},
+    {"agent_id": "hermes-graphwrite", "registry_model": "gpt-oss-120b", "registry_runtime": "raw-120b-completion", "registry_freshness_seconds": 625, "fleet_item_present": false, "role_provider_receipt": "MISSING"}
+  ],
+  "gate": {"independent_liveness": "UNVERIFIED", "candidate_routing": "BLOCKED", "task_claim": "NOT_ATTEMPTED"},
+  "interpretation": "registry freshness is not equivalent to fleet-health identity correlation",
+  "next_action": "obtain authoritative agent runtime identity mapping and live role/provider receipt",
+  "raw_payload_included": false
+}

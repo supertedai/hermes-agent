@@ -1,0 +1,47 @@
+{
+  "mwp_id": "MWP-UOSH-001",
+  "gate_id": "cad-adr-bl-intent-registry",
+  "artifact_id": "mwp-gate-cad-adr-bl-intent-readback-v1",
+  "mode": "metadata-only-source-runtime-verification",
+  "status": "BLOCKED",
+  "scope": {
+    "user_id": "morten",
+    "installation_id": "mwp-status-quo",
+    "login_surface_id": "current-hermes-chat",
+    "agent_id": "opus",
+    "system_scope": "mwp-cad-adr-bl-intent"
+  },
+  "fresh_evidence": {
+    "topology": {
+      "readback": "docs/mwp-local-topology-readback.json",
+      "inventory_hash": "89f8e4b39b0a2a1f4c66c39de3e794f3a81bc7d76266570cc03ad6784e041e9f",
+      "item_count": 65,
+      "delta": {"added": [], "removed": ["process:python3"], "changed": []},
+      "status": "OPEN"
+    },
+    "source": {
+      "repo_head": "96b51c4bcff981e1088be0f52cfb3e13fd79a94c",
+      "working_tree": "dirty",
+      "metadata_inventory": {"CAD_named_files": 5, "ADR_named_files": 7, "BL_named_files": 5, "BL_related_named_files": 10},
+      "qualification": "local metadata only"
+    },
+    "runtime": {
+      "closeout_status": "OPEN",
+      "registry_open_rows": 9,
+      "receipt_statuses": ["VERIFIED", "BLOCKED", "VERIFIED"],
+      "graph_write_authority": "missing",
+      "qualification": "metadata-only receipt projection; no authoritative runtime reconciliation"
+    },
+    "tests": {
+      "command": "scripts/run_tests.sh tests/test_mwp_asi_alignment_registry.py tests/test_mwp_asi_closeout.py tests/test_mwp_change_ledger.py tests/test_mwp_receipt_adapters.py -q",
+      "result": "15 passed, 0 failed"
+    }
+  },
+  "blocker": "No single live CAD-to-ADR-to-BL-to-runtime alignment spine or authoritative graph reconciliation receipt is available; local file inventory and passing unit tests do not prove live alignment.",
+  "owner": "ASI architecture/governance authority",
+  "next_action": "Provide an authoritative source-to-runtime reconciliation receipt covering CAD, ADR, BL, commit/deployment tuple, daemon/runtime state, and graph read-after-write; then rerun this gate without promoting collection presence to LIVE_VERIFIED.",
+  "promotion_rule": "Do not promote DECLARED, REACHABLE, static inventory, collection presence, or unit-test success to LIVE_VERIFIED.",
+  "mutation": {"source_write": false, "graph_write": false, "runtime_activation": false},
+  "ledger_event": {"status": "OPEN", "provisional": true, "receipts_verified": false},
+  "raw_payload_included": false
+}

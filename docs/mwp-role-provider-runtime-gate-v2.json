@@ -1,0 +1,42 @@
+{
+  "mwp_id": "MWP-UOSH-001",
+  "case_id": "CASE-AUTONOMY-00",
+  "gate": "role-provider-runtime-binding",
+  "recorded_at": "2026-08-06T13:41:20Z",
+  "mode": "metadata-only",
+  "status": "BLOCKED",
+  "scope": {
+    "principal": "morten",
+    "installation_id": "mwp-status-quo",
+    "login_surface_id": "current-hermes-chat",
+    "agent_id": "opus",
+    "system_scope": "mwp-uosh"
+  },
+  "source_evidence": {
+    "prior_readback": "docs/mwp-role-provider-runtime-readback-v1.json",
+    "fresh_local_config_readback": {
+      "model_default": "gpt-5.6-luna",
+      "model_provider": "openai-api",
+      "delegation_model": "gpt-4o-mini"
+    },
+    "catalog_observation": "gpt-5.6-luna is catalogued under openai-api/openai-codex; local configured provider is openai-api",
+    "fresh_topology_event": "EVT-9a2fda5e3d98",
+    "fresh_topology_inventory_hash": "36195cbfb64909bd225704c733cb980f10321f9c577c0c1514423744ea9236fd",
+    "runtime_presence": "Hermes process present in local metadata-only topology",
+    "runtime_binding_readback": "missing"
+  },
+  "tests": {
+    "command": "scripts/run_tests.sh tests/hermes_cli/test_runtime_provider_resolution.py tests/hermes_cli/test_provider_parity.py -q",
+    "result": "57 passed, 0 failed"
+  },
+  "blocker": "Local configuration resolution and provider-parity contracts are consistent, but no authenticated live role/provider binding receipt exists.",
+  "owner": "Morten / authorized runtime configuration owner",
+  "next_action": "Provide owner-authorized authenticated metadata-only runtime readback of role, provider, model and timestamp; then rerun the gate and verify read-after-write if configuration changes.",
+  "mutation": {
+    "config_write": false,
+    "restart": false,
+    "task_write": false,
+    "production_activation": false
+  },
+  "raw_payload_included": false
+}

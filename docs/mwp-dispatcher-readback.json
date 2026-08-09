@@ -1,0 +1,189 @@
+{
+  "status": "RUNNING",
+  "lease": {
+    "status": "READY",
+    "lease": "ACTIVE",
+    "task_id": "",
+    "blocker": "",
+    "result": {}
+  },
+  "canonical_parent_lease": {
+    "verified": true,
+    "task_id": "t_fe6a5950",
+    "task_status": "running"
+  },
+  "ready_lane_ids": [
+    "git-deploy-daemon-status",
+    "daemon-bl-health-alignment",
+    "world-model-hub-alignment",
+    "chat-cortex-shared-readview",
+    "lateral-agent-bus",
+    "asi-control-spine"
+  ],
+  "autocoder_ingress": [
+    {
+      "status": "BLOCKED",
+      "task_id": "git-deploy-daemon-status",
+      "principal_id": "morten",
+      "executor_allowed": false,
+      "blocker": "child Kanban lease is not verified",
+      "next_action": "claim and heartbeat the canonical child lane",
+      "parent_lease_verified": false,
+      "child_lease_verified": false
+    },
+    {
+      "status": "BLOCKED",
+      "task_id": "daemon-bl-health-alignment",
+      "principal_id": "morten",
+      "executor_allowed": false,
+      "blocker": "child Kanban lease is not verified",
+      "next_action": "claim and heartbeat the canonical child lane",
+      "parent_lease_verified": false,
+      "child_lease_verified": false
+    },
+    {
+      "status": "BLOCKED",
+      "task_id": "world-model-hub-alignment",
+      "principal_id": "morten",
+      "executor_allowed": false,
+      "blocker": "child Kanban lease is not verified",
+      "next_action": "claim and heartbeat the canonical child lane",
+      "parent_lease_verified": false,
+      "child_lease_verified": false
+    },
+    {
+      "status": "BLOCKED",
+      "task_id": "chat-cortex-shared-readview",
+      "principal_id": "morten",
+      "executor_allowed": false,
+      "blocker": "child Kanban lease is not verified",
+      "next_action": "claim and heartbeat the canonical child lane",
+      "parent_lease_verified": false,
+      "child_lease_verified": false
+    },
+    {
+      "status": "BLOCKED",
+      "task_id": "lateral-agent-bus",
+      "principal_id": "morten",
+      "executor_allowed": false,
+      "blocker": "child Kanban lease is not verified",
+      "next_action": "claim and heartbeat the canonical child lane",
+      "parent_lease_verified": false,
+      "child_lease_verified": false
+    },
+    {
+      "status": "BLOCKED",
+      "task_id": "asi-control-spine",
+      "principal_id": "morten",
+      "executor_allowed": false,
+      "blocker": "child Kanban lease is not verified",
+      "next_action": "claim and heartbeat the canonical child lane",
+      "parent_lease_verified": false,
+      "child_lease_verified": false
+    }
+  ],
+  "chips": [
+    {
+      "type": "mission.chip",
+      "payload": {
+        "task_id": "cad-adr-bl-intent-registry",
+        "parent_task_id": "mwp-closeout-parent",
+        "lane": "system",
+        "status": "BLOCKED",
+        "blocker": "BLOCKED; owner=external CAD/ADR/BL authority (not identified in local checkout); evidence=static inventory only (CAD=30, ADR=19, BL-related files=215), no live CAD→ADR→BL→runtime reconciliation or graph write receipt; next_action=authority owner must provide a bounded canonical alignment readback with source refs, runtime receipt and graph read-after-write before promotion",
+        "next_action": "BLOCKED; owner=external CAD/ADR/BL authority (not identified in local checkout); evidence=static inventory only (CAD=30, ADR=19, BL-related files=215), no live CAD→ADR→BL→runtime reconciliation or graph write receipt; next_action=authority owner must provide a bounded canonical alignment readback with source refs, runtime receipt and graph read-after-write before promotion"
+      }
+    },
+    {
+      "type": "mission.chip",
+      "payload": {
+        "task_id": "git-deploy-daemon-status",
+        "parent_task_id": "mwp-closeout-parent",
+        "lane": "system",
+        "status": "RUNNING",
+        "blocker": "",
+        "next_action": "dispatch or continue this independent lane"
+      }
+    },
+    {
+      "type": "mission.chip",
+      "payload": {
+        "task_id": "daemon-bl-health-alignment",
+        "parent_task_id": "mwp-closeout-parent",
+        "lane": "system",
+        "status": "RUNNING",
+        "blocker": "",
+        "next_action": "dispatch or continue this independent lane"
+      }
+    },
+    {
+      "type": "mission.chip",
+      "payload": {
+        "task_id": "per-user-topology",
+        "parent_task_id": "mwp-closeout-parent",
+        "lane": "system",
+        "status": "COMPLETE",
+        "blocker": "",
+        "next_action": "parent may join this lane"
+      }
+    },
+    {
+      "type": "mission.chip",
+      "payload": {
+        "task_id": "life-contract-domain-agent",
+        "parent_task_id": "mwp-closeout-parent",
+        "lane": "system",
+        "status": "BLOCKED",
+        "blocker": "IOT binding and live writer/provisioner round-trip not closed",
+        "next_action": "IOT binding and live writer/provisioner round-trip not closed"
+      }
+    },
+    {
+      "type": "mission.chip",
+      "payload": {
+        "task_id": "world-model-hub-alignment",
+        "parent_task_id": "mwp-closeout-parent",
+        "lane": "system",
+        "status": "RUNNING",
+        "blocker": "",
+        "next_action": "dispatch or continue this independent lane"
+      }
+    },
+    {
+      "type": "mission.chip",
+      "payload": {
+        "task_id": "chat-cortex-shared-readview",
+        "parent_task_id": "mwp-closeout-parent",
+        "lane": "system",
+        "status": "RUNNING",
+        "blocker": "",
+        "next_action": "dispatch or continue this independent lane"
+      }
+    },
+    {
+      "type": "mission.chip",
+      "payload": {
+        "task_id": "lateral-agent-bus",
+        "parent_task_id": "mwp-closeout-parent",
+        "lane": "system",
+        "status": "RUNNING",
+        "blocker": "",
+        "next_action": "dispatch or continue this independent lane"
+      }
+    },
+    {
+      "type": "mission.chip",
+      "payload": {
+        "task_id": "asi-control-spine",
+        "parent_task_id": "mwp-closeout-parent",
+        "lane": "system",
+        "status": "RUNNING",
+        "blocker": "",
+        "next_action": "dispatch or continue this independent lane"
+      }
+    }
+  ],
+  "metadata_only": true,
+  "authority_verified": true,
+  "source": "docs/mwp-final-closeout-readback.json"
+}

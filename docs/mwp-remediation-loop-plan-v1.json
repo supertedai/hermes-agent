@@ -1,0 +1,82 @@
+{
+  "artifact_id": "mwp-remediation-loop-plan-v1",
+  "global_policy": {
+    "continue_independent_readonly_lanes": true,
+    "no_auto_delete": true,
+    "no_auto_merge": true,
+    "no_gnn_promotion": true,
+    "no_qdrant_rebuild": true,
+    "writes_allowed": false
+  },
+  "lanes": [
+    {
+      "action": "repair projection/read API to consume or reconcile authoritative schema metadata",
+      "evidence": "authority/projection parity readback",
+      "finding": "projection reports zero constraints/indexes while authority reports 181/427",
+      "id": "L1_PROJECTION_PARITY",
+      "rollback": "revert projection adapter only",
+      "status": "OWNER_RUNTIME_WRITE_GATE_OPEN",
+      "target": "graph/schema projection versus /neo4j/q authority"
+    },
+    {
+      "action": "assign owner/domain/lifecycle/canonical-derived-legacy-quarantine class; then propose scoped constraints/indexes",
+      "finding": "749 candidate labels remain unclassified; 852 neither constraint nor index",
+      "id": "L2_LABEL_ONTOLOGY",
+      "rollback": "no graph mutation until classification receipt",
+      "status": "READONLY_CLASSIFICATION_DONE_OWNER_REVIEW_OPEN",
+      "target": "1065 labels, 10738 properties, 4106 relationships"
+    },
+    {
+      "action": "run duplicate canonical-key and dangling-edge read-only queries; quarantine candidates, never auto-merge",
+      "finding": "live readback: 24,899,047 relationships touch nodes without canonical_key; 0 relationships have both identified endpoints; 24,897,866 relationships lack provenance_ref",
+      "id": "L3_DUPLICATE_DANGLING",
+      "rollback": "no mutation",
+      "status": "LIVE_GAP_CONFIRMED_READONLY_AUDIT_COMPLETE",
+      "target": "canonical identities and relationship endpoints"
+    },
+    {
+      "action": "map collection\u2192model/version/dimension/metric/owner/scope/graph identity; quarantine incompatible projections",
+      "finding": "108\u00d74096, 1\u00d7512, 1\u00d78; payload-index distribution 107\u00d70,1\u00d72,1\u00d74,1\u00d75",
+      "id": "L4_QDRANT_CONTRACT",
+      "rollback": "isolated rebuild/delete only with owner approval",
+      "status": "FULL_DESCRIPTOR_READBACK_DONE_REPAIR_GATE_OPEN",
+      "target": "110 collections / 4,965,726 points"
+    },
+    {
+      "action": "shadow diagnose/retrain/evaluate non-collapse, leakage, utility and rollback; block ranking promotion until pass",
+      "finding": "collapsed=true, would_abstain=true, cosine=0.8670 > 0.85",
+      "id": "L5_GNN_HEALTH",
+      "rollback": "checkpoint rollback",
+      "status": "PROMOTION_BLOCKED_REPAIR_EXPERIMENT_OPEN",
+      "target": "active v2.0.0 multi-tier GNN"
+    },
+    {
+      "action": "produce bounded metadata receipts and verify ordering/idempotency/tombstone/read-after-write",
+      "finding": "contracts/preflight exist; live receipts/read-after-write/rollback incomplete",
+      "id": "L6_PROPAGATION",
+      "rollback": "receipt-linked rollback",
+      "status": "OPEN_RUNTIME_AUTHORITY",
+      "target": "CRUD \u2192 Neo4j/Qdrant/GNN/Hermes/surfaces"
+    }
+  ],
+  "mode": "plan_and_verify_no_production_writes",
+  "mwp_id": "MWP-UOSH-001",
+  "next_action": "execute L3 read-only duplicate/dangling audit and L4 collection-to-identity mapping; keep L1/L5/L6 owner/runtime gates parked",
+  "observed_inputs": {
+    "graph_constraints": 181,
+    "graph_indexes": 427,
+    "graph_labels": 1065,
+    "graph_property_keys": 10738,
+    "graph_relationship_types": 4106,
+    "label_coverage": {
+      "both": 167,
+      "constraint_only": 1,
+      "index_only": 45,
+      "neither": 852
+    },
+    "qdrant_collections": 110,
+    "qdrant_descriptors": 110,
+    "qdrant_errors": 0
+  },
+  "status": "REMEDIATION_LOOP_ACTIVE_FAIL_CLOSED"
+}

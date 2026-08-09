@@ -1,0 +1,37 @@
+{
+  "artifact_id": "mwp-neo4j-ontology-property-coverage-readback-v1",
+  "mwp_id": "MWP-UOSH-001",
+  "phase": "P7",
+  "status": "LIVE_ONTOLOGY_PROPERTY_COVERAGE_OPEN",
+  "mode": "read-only-cypher-metadata",
+  "authority_route": "GET /neo4j/q",
+  "queries": ["CALL db.labels()", "CALL db.propertyKeys()", "CALL db.relationshipTypes()", "SHOW CONSTRAINTS", "SHOW INDEXES"],
+  "counts": {
+    "labels": 1065,
+    "property_keys": 10738,
+    "relationship_types": 4106,
+    "constraint_labels": 168,
+    "indexed_labels": 212,
+    "labels_without_constraint_or_index": 852,
+    "labels_with_constraint_without_index": 1,
+    "labels_with_index_without_constraint": 45,
+    "relationship_indexes": 1,
+    "vector_indexes": 1
+  },
+  "live_findings": [
+    "property-key and relationship-type cardinality requires namespace/owner/ontology classification",
+    "852 labels lack both constraint and index coverage; role classification is absent from this readback",
+    "one constraint-only label and 45 index-only labels require intentionality/coverage review",
+    "relationship index metadata exists but relationship type/property coverage is not exposed by the current route"
+  ],
+  "required_next_audit": [
+    "label → owner/domain/lifecycle classification",
+    "property-key namespace and type consistency",
+    "relationship type → source/target ontology and provenance requirements",
+    "canonical identity coverage by label",
+    "derived/ephemeral/legacy/quarantine classification",
+    "schema projection parity with authoritative Cypher"
+  ],
+  "writes_allowed": false,
+  "next_action": "classify ontology/property surface before any schema repair or deduplication"
+}

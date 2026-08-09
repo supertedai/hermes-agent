@@ -1,0 +1,23 @@
+{
+  "mwp_id": "MWP-UOSH-001",
+  "artifact_id": "mwp-other-lanes-closeout-readback-v1",
+  "mode": "metadata-only-owner-gated-closeout",
+  "status": "OTHER_LANES_BLOCKED_CLOSED_KANBAN_REMAINS_ACTIVE",
+  "active_gate": "GAP-KANBAN-AUTHORITY-001",
+  "active_gate_reason": "canonical .15 DB does not contain local t_fe6a5950 parent; owner-authorized canonical sync/creation readback required",
+  "closed_as_explicit_blocked": [
+    {"id":"GAP-IDENTITY-REMOTE-001","owner":"Desktop/gateway authority","next_action":"authenticated Desktop login/ticket readback"},
+    {"id":"GAP-FLEET-ADAPTIVE-001","owner":"adaptive fleet authority","next_action":"registry↔runtime namespace mapping"},
+    {"id":"GAP-ROLE-PROVIDER-001","owner":"runtime/provider authority","next_action":"authenticated active-turn receipt"},
+    {"id":"GAP-CORTEX-WORLDMODEL-001","owner":"Cortex/world-model authority","next_action":"live route probe"},
+    {"id":"GAP-MEMORY-LEARNING-001","owner":"memory/learning authority","next_action":"shadow effect/promotion measurement"},
+    {"id":"GAP-GRAPH-QDRANT-GNN-001","owner":"graph/Qdrant/GNN authority","next_action":"rollback/quality evidence"},
+    {"id":"GAP-DESKTOP-FABER-001","owner":"Desktop/Faber authority","next_action":"live governed route after prerequisites"},
+    {"id":"GAP-DEVICE-ORIGIN-001","owner":"identity/transport authority","next_action":"authenticated device-origin readback"},
+    {"id":"GAP-IOT-STEWARD-001","owner":"IOT domain authority","next_action":"steward/read-after-write readback"},
+    {"id":"GAP-TOPOLOGY-DRIFT-001","owner":"topology/runtime authority","next_action":"map 304 additions and rerun heartbeat"}
+  ],
+  "mutation": {"writes": false, "routing": false, "worker_activation": false, "production": false},
+  "operational_autonomy_ready": false,
+  "raw_payload_included": false
+}

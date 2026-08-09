@@ -1,0 +1,51 @@
+{
+  "mwp_id": "MWP-UOSH-001",
+  "gate_id": "GAP-TOPOLOGY-DRIFT-001",
+  "artifact_id": "mwp-topology-drift-gate-readback-v1",
+  "mode": "metadata-only-source-runtime-verification",
+  "status": "BLOCKED",
+  "scope": {
+    "user_id": "morten",
+    "installation_id": "mwp-status-quo",
+    "login_surface_id": "current-hermes-chat",
+    "agent_id": "opus"
+  },
+  "fresh_evidence": {
+    "topology_readback": "docs/mwp-local-topology-readback.json",
+    "inventory_hash": "64019c19dfe1ffb3cb16e9b292c4c17007915a90d6cff0e28d57c904f4cff24b",
+    "item_count": 66,
+    "drift": {
+      "added": ["process:python3"],
+      "removed": [],
+      "changed": []
+    },
+    "discovery_contract": "agent/mwp_topology_discovery.py:74-78",
+    "runtime_observation": {
+      "process_name": "python3",
+      "active_instances_observed": true,
+      "stable_owner_identity": false,
+      "payload_retained": false
+    },
+    "source_state": {
+      "repo_head": "96b51c4bcff981e1088be0f52cfb3e13fd79a94c",
+      "working_tree": "dirty",
+      "source_mutation_for_gate": false
+    }
+  },
+  "blocker": "The discovery key is process name only, while multiple active Python services match the topology predicate; no canonical owner/runtime identity mapping is available from local metadata alone.",
+  "owner": "topology/runtime authority",
+  "next_action": "Add or obtain an owner-approved stable process identity mapping (service/unit, executable role, or canonical runtime id), rerun the metadata-only heartbeat, and verify the drift transition before promotion.",
+  "promotion_rule": "Do not promote process presence, DECLARED, REACHABLE, collection presence, or this readback to LIVE_VERIFIED owner alignment.",
+  "mutation": {
+    "process_change": false,
+    "service_restart": false,
+    "network_write": false,
+    "production_activation": false
+  },
+  "ledger_event": {
+    "status": "OPEN",
+    "provisional": true,
+    "receipts_verified": false
+  },
+  "raw_payload_included": false
+}

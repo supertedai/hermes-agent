@@ -1,0 +1,36 @@
+{
+  "mwp_id": "MWP-UOSH-001",
+  "case_id": "AUTOMATION-01",
+  "artifact_id": "mwp-kanban-bootstrap-readback-v2",
+  "mode": "canonical-cli-write-and-readback",
+  "status": "PARENT_AUTHORITY_BOOTSTRAPPED",
+  "board": "default",
+  "task": {
+    "id": "t_fe6a5950",
+    "title": "MWP-UOSH-001 — canonical parent authority",
+    "status": "blocked",
+    "created_by": "morten",
+    "assignee": null,
+    "priority": 100,
+    "idempotency_key": "mwp-uosh-001-parent-authority-gate-v1"
+  },
+  "readback": {
+    "parents": 0,
+    "children": 0,
+    "runs": 0,
+    "events": 1,
+    "event_kinds": ["created"],
+    "comments": 0,
+    "worker_started": false
+  },
+  "authority": {
+    "canonical_kanban_db": true,
+    "schema_integrity": "PASS",
+    "parent_task_instantiated": true,
+    "parallel_store_created": false,
+    "direct_sqlite_mutation": false,
+    "idempotency_key_used": true
+  },
+  "next_permitted_action": "create dependency-scoped child task only after identity/role/provider gate assignment",
+  "raw_payload_included": false
+}

@@ -1,0 +1,38 @@
+{
+  "artifact_id": "mwp-hermes-memory-provider-capability-census-v1",
+  "mwp_id": "MWP-UOSH-001",
+  "phase": "P3",
+  "status": "SOURCE_CAPABILITIES_CONFIRMED_RUNTIME_SELECTION_OPEN",
+  "source_root": "/home/agent/agent-layer/hermes-agent/plugins/memory",
+  "shared_lifecycle": [
+    "initialize",
+    "system_prompt_block",
+    "prefetch",
+    "queue_prefetch",
+    "sync_turn",
+    "get_tool_schemas",
+    "handle_tool_call",
+    "on_session_end",
+    "on_session_switch",
+    "on_pre_compress",
+    "on_memory_write"
+  ],
+  "providers": [
+    {"name":"honcho","source_present":true,"active_runtime":"UNVERIFIED","role":"user modeling/dialectic context"},
+    {"name":"openviking","source_present":true,"active_runtime":"UNVERIFIED","role":"external persistent memory"},
+    {"name":"mem0","source_present":true,"active_runtime":"UNVERIFIED","role":"external persistent memory"},
+    {"name":"hindsight","source_present":true,"active_runtime":"UNVERIFIED","role":"external persistent memory/reasoning"},
+    {"name":"retaindb","source_present":true,"active_runtime":"UNVERIFIED","role":"external persistent memory"},
+    {"name":"byterover","source_present":true,"active_runtime":"UNVERIFIED","role":"developer/code memory"},
+    {"name":"supermemory","source_present":true,"active_runtime":"UNVERIFIED","role":"external persistent memory"},
+    {"name":"holographic","source_present":true,"active_runtime":"UNVERIFIED","role":"local SQLite/FTS5/trust/HRR provider"}
+  ],
+  "architecture_interpretation": {
+    "provider_choice": "capability selection, not canonical authority",
+    "built_in_memory": "remains active alongside one selected external provider",
+    "maximal_objective": "compose verified signals and lifecycle capabilities across layers, not activate every provider as competing writer",
+    "runtime_control": "config declaration and source presence do not prove activation, liveness or authority"
+  },
+  "writes_allowed": false,
+  "next_action": "map provider capabilities to the maximal cross-platform memory objective and benchmark only the selected/authoritative runtime path against local Hermes baseline"
+}

@@ -1,0 +1,82 @@
+{
+  "artifact_id": "mwp-g1-writer-authority-readback-v1",
+  "mwp_id": "MWP-UOSH-001",
+  "gate": "G1_CANONICAL_WRITER_AUTHORITY",
+  "status": "COMPLETE_CANONICAL_WRITER_CANARY_READBACK_ROLLBACK",
+  "mode": "live-orchestrator-canary-readback",
+  "evidence": {
+    "health": {"status": 200},
+    "chat_health": {"status": 200, "pipeline": "ModeGate -> CanonicalAuthorityContract -> GlobalRouterV3 -> dispatch"},
+    "neo4j_status": {"status": 200, "neo4j": "connected"},
+    "canonical_audit_recent": {"status": 200, "count": 10},
+    "canonical_sync_status": {"status": 422, "reason": "missing X-User-ID"},
+    "writer_route_preflight": {"status": 405, "allow": "POST", "interpretation": "method declared; authority not proven"},
+    "sql_health": {"status": 503, "reason": "Database error: NoneType has no attribute cursor"},
+    "canary": {
+      "status": "COMPLETE_WRITE_READ_ROLLBACK_VERIFIED",
+      "entity_id": "mwp_g1_canary_06f8b3510cfc",
+      "document_id": "2741bb4b-4345-03cf-8d97-4840d2ef2ac3",
+      "write_http_status": 200,
+      "orchestrator_v2": true,
+      "synced_to": ["neo4j", "qdrant", "gnn"],
+      "delete_http_status": 200,
+      "deleted": {"neo4j_documents": 1, "neo4j_chunks": 1, "qdrant_points": 1},
+      "read_after_delete_document_remaining": 0,
+      "read_after_delete_content_remaining": 0
+    },
+    "source_defect": {
+      "canonical_fact_write_missing_user_fallback": "morten",
+      "unified_request_user_id_default": "morten",
+      "classification": "AUTHORITY_BYPASS_FAIL_CLOSED_REPAIR_REQUIRED",
+      "writes_must_remain_locked": true,
+      "source_patch": {
+        "status": "LIVE_CANONICAL_SINGLE_WRITER_ACTIVE",
+        "file": "/home/byopus/AGI/apis/unified_api/routers/canonical.py",
+        "main_file": "/home/byopus/AGI/apis/unified_api/main.py",
+        "router_order": "canonical_router_before_shadow_canonical_write_router",
+        "backup": "/home/byopus/AGI/apis/unified_api/routers/canonical.py.pre-canonical-single-writer-20260809-184729",
+        "user_id_default": null,
+        "write_requires_x_user_id": true,
+        "principal_mismatch_guard": true,
+        "live_container_restarted": true,
+        "live_health": 200,
+        "live_import_fail_closed_header": true,
+        "live_import_mismatch_guard": true,
+        "canonical_runtime_patch": {
+          "status": "FAIL_CLOSED_CANONICAL_RUNTIME_ACTIVE",
+          "runtime_source": "/app/apis/unified_api/routers/canonical_fact_write.py",
+          "bind_source": "/home/byopus/AGI/apis/unified_api/routers/canonical_fact_write.py",
+          "missing_x_user_id_status": 401,
+          "direct_neo4j_write_authority": "blocked_by_single_write_policy",
+          "orchestrator_audit_receipts": 2,
+          "canonical_fact_audit_receipts": 2,
+          "canonical_canary_read_after_rollback": {"status": "RETRACTED", "http_status": 200, "version": 1}
+        },
+        "hermes_writer_client_patch": {
+          "file": "tools/symbiose_tools.py",
+          "status": "LIVE_RESTARTED_SOURCE_PATCH_ACTIVE",
+          "route": "/api/v1/write",
+          "identity_header": "X-User-ID",
+          "source": "session_identity.get_identity(session_id)",
+          "runtime_pid": 3658107,
+          "runtime_port": 41361,
+          "live_write_sent": false
+        }
+      }
+    }
+  },
+  "writer_routes_declared": [
+    "/api/v1/write",
+    "/canonical/fact/write",
+    "/canonical/write",
+    "/memory/crud/write",
+    "/identity/mutate",
+    "/sql/user/upsert",
+    "/sql/fact/upsert",
+    "/sql/relationship/add"
+  ],
+  "interpretation": "canonical.py is now the first single-writer route, protected by explicit principal, authority hierarchy, versioning, audit and orchestrator write context; controlled canonical write/retraction/readback is verified, while broad per-user/tenant production promotion remains gated.",
+  "writes_unlocked": false,
+  "next_gate": "canonical writer audit/receipt path and per-user scoped authority readback",
+  "forbidden": ["POST/PUT/DELETE mutation", "graph write", "Obsidian write", "blind Git staging/push"]
+}

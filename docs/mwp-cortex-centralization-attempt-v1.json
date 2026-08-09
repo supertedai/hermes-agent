@@ -1,0 +1,28 @@
+{
+  "artifact_id": "mwp-cortex-centralization-attempt-v1",
+  "mwp_id": "MWP-UOSH-001",
+  "status": "INCONCLUSIVE_ROLLED_BACK",
+  "target": "efc-opus-cortex",
+  "attempt": {
+    "old_url": "http://192.168.40.13:1234/v1",
+    "candidate_url": "http://192.168.40.12:8000/v1",
+    "model": "glm-5.2",
+    "source_mount": "/home/byopus/AGI -> /app",
+    "candidate_started": true,
+    "candidate_observed": "CORTEX start only; no reasoning output after one loop period"
+  },
+  "rollback": {
+    "method": "remove candidate; rename preserved old container back",
+    "restored_env": "http://192.168.40.13:1234/v1",
+    "restored_status": "running",
+    "old_container_inspect": "/home/byopus/AGI/docs/mwp-docker-change-receipts/efc-opus-cortex-precentralize-20260807.json"
+  },
+  "post_rollback": {
+    "canonical_health_http": 200,
+    "canonical_mwp_runtime_http": 200,
+    "production_mutation": false
+  },
+  "interpretation": "The .12 model-router is not yet a drop-in runtime replacement for the manual cortex loop. Direct .13 dependency remains until router/cortex protocol compatibility is fixed and independently tested.",
+  "next_action": "Keep cortex on known-good .13 path; add a protocol-compatible .12 proxy/cortex test before another production cutover.",
+  "provenance": "authenticated SSH readback on .12"
+}

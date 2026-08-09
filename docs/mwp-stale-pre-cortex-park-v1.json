@@ -1,0 +1,21 @@
+{
+  "artifact_id": "mwp-stale-pre-cortex-park-v1",
+  "mwp_id": "MWP-UOSH-001",
+  "status": "PARKED_STALE_PRE_CONTAINER",
+  "container": "efc-opus-cortex-pre-glm-fix",
+  "reason": "stale manually launched pre-fix loop; direct .13 dependency; no health gate; restart policy none",
+  "mutation": "docker stop only",
+  "rollback_evidence": "/home/byopus/AGI/docs/mwp-docker-change-receipts/efc-opus-cortex-pre-glm-fix-20260807T1450-prepark-inspect.json",
+  "post_stop_status": "Exited (137)",
+  "canonical_runtime_readback": {
+    "health_http": 200,
+    "mwp_runtime_http": 200,
+    "active_turn": false
+  },
+  "non_claims": [
+    "efc-opus-cortex remains active and is not yet centralized",
+    "unified-api-staging remains active and is not production authority",
+    "this does not close public broker role/provider Gate 2"
+  ],
+  "provenance": "authenticated SSH readback on .12"
+}

@@ -1,0 +1,29 @@
+{
+  "scope": {
+    "user_id": "morten",
+    "installation_id": "mwp-status-quo",
+    "login_surface_id": "current-hermes-chat",
+    "agent_id": "opus"
+  },
+  "memory": "LIVE",
+  "learning": "UNVERIFIED",
+  "cognitive": "UNVERIFIED",
+  "cortex": "UNVERIFIED",
+  "goals": "UNVERIFIED",
+  "measured": {
+    "qdrant_reachability": "REACHABLE",
+    "http_status": 200,
+    "collection_count": 110,
+    "candidate_user_scoped_collections": [
+      "canonical_facts",
+      "cognitive_private",
+      "conversation_log_v1",
+      "memory_event_v1",
+      "memory_reflection_v1",
+      "opus_goal_v1"
+    ]
+  },
+  "rule": "collection presence is not per-user live-state proof",
+  "owner": "canonical Opus/Cortex runtime owner on .13/.12",
+  "next_action": "expose authenticated metadata-only per-user read routes for Cortex, learning, cognitive state and goals, then verify freshness/provenance"
+}

@@ -1,0 +1,53 @@
+{
+  "artifact_id": "mwp-rollback-physical-artifact-inventory-v2",
+  "mwp_id": "MWP-UOSH-001",
+  "status": "PHYSICAL_ARTIFACTS_FOUND_RESTORE_VERIFICATION_PENDING",
+  "mode": "read-only-filesystem-inventory",
+  "targets": {
+    "graph": {
+      "physical_artifact": "/home/byopus/AGI/backups/proton/20260807/symbiose_stack_12/full-snapshot-2026-08-07-00-38-51.snapshot",
+      "bytes": 88254563328,
+      "status": "PHYSICALLY_ARCHIVED_UNVERIFIED",
+      "restore_handle": null,
+      "rollback_ref": null
+    },
+    "qdrant": {
+      "physical_artifact_root": "/home/byopus/AGI/restore/qdrant",
+      "snapshot_files_observed": true,
+      "status": "INVENTORY_FOUND_RESTORE_UNVERIFIED",
+      "restore_handle": null,
+      "rollback_ref": null
+    },
+    "gnn": {
+      "physical_artifacts": [
+        "/home/byopus/AGI/symbiose_gnn_output/v2/model.pt",
+        "/home/byopus/AGI/symbiose_gnn_output/v2/model_sota.pt",
+        "/home/byopus/AGI/symbiose_gnn_output/v2/features.pt",
+        "/home/byopus/AGI/symbiose_gnn_output/v2/graph.pt"
+      ],
+      "status": "PHYSICALLY_PRESENT_CHECKPOINT_PROVENANCE_UNVERIFIED",
+      "restore_handle": null,
+      "rollback_ref": null
+    },
+    "archive": {
+      "physical_artifact": "/home/byopus/AGI/backups/proton/20260807/symbiose_stack_12/efc_orb_backup_daily_20260807_020001.tar.gz",
+      "bytes": 58205612336,
+      "status": "PHYSICALLY_ARCHIVED_UNVERIFIED"
+    }
+  },
+  "non_claims": [
+    "Physical presence is not a verified restore handle.",
+    "No checksum was computed for the 88GB artifact in this read-only tick.",
+    "No restore was attempted.",
+    "No service, graph, Qdrant or GNN state was mutated."
+  ],
+  "required_next": [
+    "manifest or checksum sidecar",
+    "destination/retention provenance",
+    "isolated restore test",
+    "read-after-restore verification",
+    "rollback reference"
+  ],
+  "promotion_gate": "BLOCKED",
+  "provenance": "live .12 filesystem inventory via authenticated SSH"
+}

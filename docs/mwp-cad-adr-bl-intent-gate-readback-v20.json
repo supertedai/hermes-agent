@@ -1,0 +1,51 @@
+{
+  "artifact_id": "mwp-cad-adr-bl-intent-gate-readback-v20",
+  "mwp_id": "MWP-UOSH-001",
+  "gate_id": "cad-adr-bl-intent-registry",
+  "mode": "metadata-only-source-runtime-verification",
+  "status": "BLOCKED",
+  "owner": "Morten / authorized source-of-truth and runtime owners",
+  "evidence": {
+    "topology_readback": "docs/mwp-local-topology-readback.json",
+    "topology_event_id": null,
+    "topology_inventory_hash": "89f8e4b39b0a2a1f4c66c39de3e794f3a81bc7d76266570cc03ad6784e041e9f",
+    "topology_item_count": 65,
+    "topology_drift": {
+      "added": [],
+      "removed": [
+        "process:python3"
+      ],
+      "changed": []
+    },
+    "local_closeout": "docs/mwp-final-closeout-readback.json",
+    "registry_status": "OPEN",
+    "registry_open_rows": 9,
+    "git_head": "96b51c4bcff981e1088be0f52cfb3e13fd79a94c",
+    "git_worktree": "DIRTY",
+    "runtime_evidence": "fresh metadata-only topology readback and local registry projection present; no authoritative end-to-end reconciliation found",
+    "graph_receipt": "BLOCKED: Neo4j write authority not configured; no write/read-after-write receipt",
+    "obsidian_receipt": "VERIFIED in latest final closeout readback; no gate-specific mutation performed",
+    "tests": "scripts/run_tests.sh tests/test_mwp_asi_alignment_registry.py tests/test_mwp_asi_closeout.py tests/test_mwp_receipt_adapters.py tests/test_mwp_receipt_coordinator.py -q: 14 passed, 0 failed"
+  },
+  "blocker": "Authoritative live CAD→ADR→BL→runtime reconciliation and authorized Graph write/read-after-write evidence are unavailable. Local source/runtime evidence remains local-only.",
+  "next_action": "Owner provides authenticated metadata-only CAD/ADR/BL-to-runtime reconciliation plus authorized Graph write/read-after-write receipt; rerun this gate and verify all receipts before promotion.",
+  "promotion_rule": "Do not promote DECLARED, REACHABLE, collection presence, static inventory, or local source/runtime evidence to LIVE_VERIFIED.",
+  "mutation": {
+    "source": false,
+    "runtime": false,
+    "graph": false,
+    "obsidian": false,
+    "production": false
+  },
+  "ledger_event": {
+    "event_id": "EVT-a2a4f00d2ac8",
+    "status": "OPEN",
+    "provisional": true,
+    "cad_id": "CAD-EVT-1cc85d44a66a",
+    "adr_id": "ADR-EVT-1cc85d44a66a",
+    "bl_id": "BL-EVT-1cc85d44a66a",
+    "receipts_verified": false
+  },
+  "raw_payload_included": false,
+  "recorded_at": "2026-08-07T11:18:03.684779Z"
+}

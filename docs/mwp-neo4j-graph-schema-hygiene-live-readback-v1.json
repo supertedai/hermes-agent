@@ -1,0 +1,41 @@
+{
+  "artifact_id": "mwp-neo4j-graph-schema-hygiene-live-readback-v1",
+  "mwp_id": "MWP-UOSH-001",
+  "phase": "P7",
+  "status": "LIVE_AUTHORITY_SCHEMA_READBACK_PROJECTION_DIVERGENCE_GNN_BLOCKED",
+  "mode": "read-only-live-route-probe",
+  "authority": "http://192.168.40.12:8010",
+  "live_readback": {
+    "health": {"http_status": 200, "status": "ok", "loop_lag_s": 0.002, "loop_lag_max_60s": 0.122, "budget_s": 5.0},
+    "openapi": {"route":"/openapi.json","http_status":200,"schema_routes":["/graph/schema","/graph/stats","/neo4j/q","/neo4j/status","/neo4j/cross-domain/statistics","/gnn/status","/gnn/served_health"]},
+    "graph_schema_projection": {"route":"/graph/schema","http_status":200,"label_count":1065,"relationship_type_count":4106,"reported_constraint_count":0,"reported_index_count":0,"keys":["labels","property_keys","relationship_types"]},
+    "neo4j_authority_schema": {"route":"/neo4j/q","method":"GET","queries":["SHOW CONSTRAINTS","SHOW INDEXES","CALL db.labels()","CALL db.relationshipTypes()"],"constraints": {"count":181,"types":{"UNIQUENESS":173,"NODE_PROPERTY_EXISTENCE":7,"NODE_KEY":1},"entity_types":{"NODE":181}},"indexes":{"count":427,"states":{"ONLINE":427},"types":{"RANGE":420,"FULLTEXT":4,"LOOKUP":2,"VECTOR":1},"entity_types":{"NODE":426,"RELATIONSHIP":1}},"coverage":{"labels_total":1065,"constraint_labels":168,"indexed_labels":212,"labels_with_neither_constraint_nor_index":852,"labels_with_constraint_but_no_index":1,"labels_with_index_but_no_constraint":45,"vector_index_count":1,"relationship_index_count":1,"vector_index":{"name":"schema_pattern_embedding","label":"SchemaPattern","property":"embedding","state":"ONLINE"}}},
+    "graph_stats": {"route":"/graph/stats","http_status":200,"node_label_count":927,"relationship_type_count":4106,"total_nodes":11858136,"total_relationships":24894360,"top_node_labels":[["TelemetryEvent",2278637],["Chunk",1348460],["Measurement",1276145],["LearningData",752815],["ConversationLog",518781],["Document",408815],["IngestSource",321428],["DocVariable",309457],["DocEntity",237640],["KnowledgeGrounding",226188]],"top_relationship_types":[["CONTAINS_SIGNAL",5306296],["SUPPORTS",4017129],["REPORTED",2278637],["OBSERVED_AT",1276089],["DISCUSSES",1171662],["HAS_CHUNK",1138031],["DECIDED_ON",752815],["PART_OF",623496],["FOLLOWS",506664],["TRACES_TO",366858]]},
+    "neo4j_status": {"route":"/neo4j/status","http_status":200,"readback":true},
+    "cross_domain_statistics": {"route":"/neo4j/cross-domain/statistics","http_status":500,"readback":false},
+    "gnn_status": {"route":"/gnn/status","http_status":200,"status":"ok","version":"multi-tier-v2","active_version":"v2.0.0","artifact_keys":["legacy_embeddings","multi_tier_embeddings","multi_tier_model","training_log"]},
+    "gnn_served_health": {"route":"/gnn/served_health","http_status":200,"computable":true,"collapsed":true,"would_abstain":true,"n_concepts":161488,"source":"/repo/symbiose_gnn_output/multi_tier_embeddings.json","reason":"mean pairwise cosine 0.8670 > 0.85 threshold — embedding space collapsed"},
+    "learning_status": {"route":"/api/v1/learning/status","http_status":200,"status":"active"},
+    "memory_layers": {"route":"/api/v1/memory/layers?user=morten","result":"TIMEOUT","schema_readback":false}
+  },
+  "confirmed_live_findings": [
+    "graph schema projection reports zero constraints/indexes while authoritative /neo4j/q reports 181 constraints and 427 online indexes",
+    "schema authority and graph projection are divergent and must not be treated as equivalent",
+    "label cardinality 1065 and relationship-type cardinality 4106 require ontology/ownership audit",
+    "cross-domain statistics route returns 500",
+    "GNN embedding space is collapsed and served health would abstain",
+    "memory layer projection route times out"
+  ],
+  "still_unverified": [
+    "constraint/index coverage for canonical identity, tenant/scope, provenance and version",
+    "duplicate canonical identities",
+    "dangling edges",
+    "node/edge property provenance coverage",
+    "tenant/scope isolation across graph records",
+    "CRUD propagation/read-after-write/rollback",
+    "Qdrant identity/dimension/metric parity against graph",
+    "GNN feature/label/checkpoint/leakage conformance"
+  ],
+  "writes_allowed": false,
+  "next_action": "reconcile graph/schema projection with authoritative Cypher readback, then run constraint coverage, duplicate/property/ontology and cross-plane Qdrant/GNN audits"
+}

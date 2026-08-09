@@ -1,0 +1,32 @@
+{
+  "artifact_id": "mwp-g0-remote-thread-parity-readback-v1",
+  "mwp_id": "MWP-UOSH-001",
+  "gate": "G0_REMOTE_THREAD_SESSION_PARITY",
+  "status": "COMPLETE_LIVE_DURABLE_SESSION_PARITY",
+  "read_only": true,
+  "evidence": {
+    "dot13_connection_mode": "ssh",
+    "dot13_remote_host": "192.168.40.15",
+    "dot14_public_proxy": "ai.byopus.com -> ngrok -> .14:9120",
+    "dot14_proxy_upstream": "127.0.0.1:9119/api/ws via SSH tunnel to .15",
+    "ssh_store_sessions": 5272,
+    "ssh_store_messages": 58307,
+    "canonical_api_status": 200,
+    "canonical_auth_providers": 200,
+    "canonical_identity": "401_without_browser_cookie_LIVE_with_Firefox_session",
+    "canonical_memory_layers": "401_without_browser_cookie",
+    "thread_id_parity": "LIVE_DURABLE_SESSION_MATCH",
+    "principal_tenant_scope_parity": "LIVE_PRINCIPAL_CONFIRMED_TENANT_SCOPE_PENDING",
+    "canonical_binding_status": "LIVE",
+    "canonical_authenticated_user": "morten",
+    "canonical_binding_count": 10,
+    "canonical_durable_session_ids_present": 1,
+    "durable_session_match_in_dot15_sessions": 1,
+    "live_transport": "cloud→agent→ssh",
+    "live_ssh_hop": "box14→.15:9119"
+  },
+  "interpretation": "canonical browser auth is LIVE for principal morten and its durable session id matches exactly one .15 SQLite session; tenant/scope and writer authority remain open.",
+  "writes_unlocked": false,
+  "next_gate": "G1 canonical writer/scope/provenance/read-after-write/rollback",
+  "owner_action": "none yet; continue read-only investigation; do not ask Morten to abandon this chat or paste credentials"
+}

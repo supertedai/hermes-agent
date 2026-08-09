@@ -1,0 +1,26 @@
+{
+  "mwp_id": "MWP-UOSH-001",
+  "artifact_id": "mwp-reopen-identity-lane-v1",
+  "lane": "GAP-IDENTITY-REMOTE-001",
+  "status": "REOPENED_PENDING_OWNER_INPUT",
+  "reason": "identity is the dependency root for Kanban child lease, role/provider routing, Cortex-agent round-trip and Desktop/Faber",
+  "prior_closeout": "BLOCKED_CLOSED",
+  "required_owner_input": [
+    "authoritative box14 broker route/source",
+    "or approved remote identity propagation design"
+  ],
+  "readback_contract": [
+    "user_id",
+    "principal_id",
+    "conversation_id",
+    "client_session_id",
+    "durable_session_id",
+    "device_id",
+    "device_class",
+    "transport_origin",
+    "ssh_hop",
+    "provenance"
+  ],
+  "mutation": {"identity_write": false, "desktop_change": false, "kanban_child_claim": false},
+  "next_action": "obtain route/source or owner-approved propagation design, then run metadata-only read-after-bind"
+}

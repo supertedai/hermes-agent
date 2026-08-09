@@ -1,0 +1,28 @@
+{
+  "mwp_id": "MWP-UOSH-001",
+  "artifact_id": "mwp-kanban-cross-host-authority-readback-v2",
+  "mode": "metadata-only-cross-host-readback",
+  "status": "CANONICAL_HOST_READBACK_PARENT_MISSING",
+  "topology": {
+    "box13": {"role": "bridge", "bridge_source_verified": true, "target": "agent@192.168.40.15"},
+    "box15": {"role": "canonical GUI Kanban authority", "db_path": "/home/agent/.hermes-gui/kanban.db", "host": "agent-Veriton-N1502G"},
+    "local_box12": {"role": "local Hermes Kanban", "db_path": "/home/agent/.hermes/kanban.db"}
+  },
+  "box15_readback": {
+    "ssh_via_box13": true,
+    "integrity": "ok",
+    "tasks": 101,
+    "task_runs": 0,
+    "task_events": 27,
+    "task_links": 0,
+    "mwp_task_id": "t_fe6a5950",
+    "mwp_task_found": false,
+    "mwp_title_matches": 0,
+    "board_db_inventory": 1
+  },
+  "local_box12_readback": {"mwp_task_id": "t_fe6a5950", "parent_status": "ready", "children": 0, "runs": 0},
+  "interpretation": "local parent is not present in canonical .15 DB; cross-host sync/creation authority is unresolved",
+  "mutation": {"sync": false, "kanban_write": false, "worker_activation": false},
+  "next_action": "owner-authorized canonical .15 creation/sync readback or identify alternate tenant/board authority; do not duplicate parent blindly",
+  "raw_payload_included": false
+}

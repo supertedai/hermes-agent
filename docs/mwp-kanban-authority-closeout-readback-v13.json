@@ -1,0 +1,69 @@
+{
+  "mwp_id": "MWP-UOSH-001",
+  "gate_id": "GAP-KANBAN-AUTHORITY-001",
+  "artifact_id": "mwp-kanban-authority-closeout-readback-v13",
+  "mode": "metadata-only-source-runtime-verification",
+  "status": "BLOCKED",
+  "scope": {
+    "user_id": "morten",
+    "installation_id": "mwp-status-quo",
+    "login_surface_id": "current-hermes-chat",
+    "agent_id": "opus",
+    "system_scope": "mwp-kanban-authority"
+  },
+  "fresh_evidence": {
+    "topology": {
+      "readback": "docs/mwp-local-topology-readback.json",
+      "inventory_hash": "64019c19dfe1ffb3cb16e9b292c4c17007915a90d6cff0e28d57c904f4cff24b",
+      "item_count": 66,
+      "delta": {"added": [], "removed": [], "changed": []},
+      "status": "OPEN"
+    },
+    "local_runtime": {
+      "path": "/home/agent/.hermes/kanban.db",
+      "read_mode": "sqlite-read-only",
+      "integrity": "ok",
+      "tasks": 1,
+      "task_runs": 0,
+      "task_events": 2,
+      "task_links": 0,
+      "qualification": "local mirror only"
+    },
+    "canonical_gui_runtime": {
+      "path": "/home/agent/.hermes-gui/kanban.db",
+      "read_mode": "sqlite-read-only",
+      "integrity": "ok",
+      "tasks": 102,
+      "task_runs": 0,
+      "task_events": 28,
+      "task_links": 0,
+      "qualification": "canonical collection present; authority correlation absent"
+    },
+    "source": {
+      "repo_head": "96b51c4bcff981e1088be0f52cfb3e13fd79a94c",
+      "working_tree": "dirty",
+      "qualification": "local metadata only"
+    },
+    "tests": {
+      "command": "scripts/run_tests.sh tests/hermes_cli/test_kanban_db.py tests/hermes_cli/test_kanban_db_init.py tests/hermes_cli/test_kanban_write_guard.py tests/hermes_cli/test_kanban_core_functionality.py tests/hermes_cli/test_kanban_blocked_sticky.py tests/hermes_cli/test_kanban_promote.py -q",
+      "result": "64 passed, 0 failed"
+    }
+  },
+  "blocker": "No dependency-scoped child, lease, heartbeat, or worker activation receipt exists; local/canonical collection presence and schema integrity do not prove canonical authority.",
+  "owner": "owner/orchestrator",
+  "next_action": "After authenticated identity and active-turn role/provider receipts, create exactly one dependency-scoped child through the canonical .15 authority route and independently verify child id, lease, heartbeat, and worker state.",
+  "promotion_rule": "Do not promote DECLARED, REACHABLE, collection presence, local schema integrity, or local task presence to LIVE_VERIFIED.",
+  "mutation": {
+    "sqlite_write": false,
+    "child_creation": false,
+    "lease_claim": false,
+    "worker_activation": false,
+    "production_activation": false
+  },
+  "ledger_event": {
+    "status": "OPEN",
+    "provisional": true,
+    "receipts_verified": false
+  },
+  "raw_payload_included": false
+}

@@ -1,0 +1,50 @@
+{
+  "artifact_id":"mwp-efc-167-doi-atlas-assessment-v1",
+  "mwp_id":"MWP-UOSH-001",
+  "status":"ROSTER_AND_METADATA_ASSESSMENT_PROPOSED_DEEP_READ_PENDING",
+  "scope":"complete BL-141 DOI roster and graph metadata; not a claim of page-by-page review of every PDF",
+  "readback":{
+    "doi_nodes":167,
+    "morten_authored":165,
+    "health_false_positive_nodes":2,
+    "evidence_count_zero":167,
+    "epistemic_score_zero":167,
+    "graph_epistemic_status_speculative":167,
+    "physical_regime":{"S_trans":136,"S_flow":28,"S_latent":3},
+    "has_record_publication":167,
+    "fulltext_relationships":185,
+    "supports_efc_framework":41,
+    "discovered_via":"figshare_api",
+    "source":"BL-141"
+  },
+  "assessment":{
+    "strongest_role":"cross-domain meta-model / epistemic-operational framework / atlas candidate",
+    "plausible_roles":["model-regime atlas","measurement-validity framework","entropy/uncertainty vocabulary","AI/Cortex routing hypothesis","recursive-improvement prioritization lens"],
+    "unproven_roles":["universal ontology","validated cosmological replacement","validated consciousness theory","proven ASI OS","quantitatively calibrated entropy coordinate system"],
+    "policy_conflict":"Existing EFC_USAGE_POLICY.md correctly calls EFC a structural language, but its PURE_EFC/full-confidence override path requires calibration and must not bypass epistemic/runtime gates.",
+    "key_correction":"The roster is primarily a self-authored EFC development corpus, not 167 independent confirmations.",
+    "copilot_interpretation":"Useful hypothesis about six axes, but secondary interpretation; source-backed and derived claims must remain separate."
+  },
+  "axes_to_test":[
+    "ontology",
+    "meta-epistemology",
+    "field/topology representation",
+    "regime/scale transition",
+    "dynamics/stability/corelock/EBE",
+    "cognition/AI/system architecture",
+    "measurement/validity/falsifiability",
+    "operational routing/control"
+  ],
+  "required_gates":[
+    "deduplicate versions and document lineage",
+    "separate authored theory, external evidence, derived metadata and predictions",
+    "page-level corpus extraction and claim/evidence classification",
+    "independent-source and independent-author analysis",
+    "formal coordinate/entropy schema with calibration",
+    "ablation against non-EFC baselines",
+    "cross-domain transfer evaluation",
+    "owner-gated promotion into Cortex/world-model/agent routing"
+  ],
+  "non_claims":["The graph's speculative status is metadata, not a scientific verdict on every paper.","The 167 count is not 167 independent studies.","Atlas placement is not truth ranking.","EFC cosmology and EFC-as-ASI-metamodel are separate claims."],
+  "next_action":"perform page-level extraction over the 167-record lineage, classify claims/evidence/predictions, then run EFC-as-metamodel ablation tests without promoting cosmological claims"
+}

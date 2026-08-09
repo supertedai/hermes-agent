@@ -1,0 +1,20 @@
+{
+  "artifact_id": "mwp-fullsnapshot-manifest-readback-v1",
+  "mwp_id": "MWP-UOSH-001",
+  "status": "FULLSNAPSHOT_MANIFEST_VERIFIED_RESTORE_TARGET_MISSING",
+  "mode": "read-only-tar-stream-manifest-audit",
+  "artifact": "/home/byopus/AGI/backups/proton/20260807/symbiose_stack_12/full-snapshot-2026-08-07-00-38-51.snapshot",
+  "format": "GNU tar",
+  "manifest_member": "config.json",
+  "collection_mapping_count": 110,
+  "collection_alias_count": 0,
+  "mapping_verified": true,
+  "data_extracted": false,
+  "restore_target": "NOT_PROVISIONED",
+  "restore_executed": false,
+  "read_after_restore": false,
+  "rollback_ref": null,
+  "promotion": "BLOCKED",
+  "next_action": "Provision isolated Qdrant restore target and verify collection count/content before any production recovery.",
+  "provenance": "authenticated SSH + tarfile read of config.json only"
+}

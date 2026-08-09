@@ -1,0 +1,14 @@
+{
+  "mwp_id": "MWP-UOSH-001",
+  "artifact_id": "mwp-fleet-runtime-namespace-readback-v1",
+  "mode": "metadata-only-live-schema-correlation",
+  "status": "RUNTIME_NAMESPACE_UNMAPPED",
+  "endpoint": {"http_status": 200, "total": 362, "returned_items": 117},
+  "fleet_identity_schema": {"identity_field": "id", "health_field": "health", "agent_id_field": false, "worker_id_field": false, "name_field": false},
+  "registry_candidates": ["faber", "hermes-graphwrite"],
+  "fleet_sample_namespace": ["meta_goal_daemon", "prediction_validator_daemon", "sota_prediction_engine", "prediction_daemon"],
+  "interpretation": "registry agent IDs and fleet runtime IDs use different namespaces; absence of direct match is not a liveness verdict",
+  "missing": ["canonical registry↔runtime identity mapping", "per-agent liveness", "capacity/load", "handoff/reassignment", "role/provider receipt"],
+  "gate": {"routing": "BLOCKED", "task_claim": "NOT_ATTEMPTED", "raw_payload_included": false},
+  "next_action": "obtain authoritative namespace mapping or runtime agent registry export"
+}

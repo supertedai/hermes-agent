@@ -1,0 +1,48 @@
+{
+  "mwp_id": "MWP-UOSH-001",
+  "case_id": "CASE-IDENTITY-01",
+  "artifact_id": "mwp-identity-desktop-adapter-readback-v1",
+  "status": "RUNTIME_LOADED_PARTIAL_NOT_CLOSED",
+  "scope": "box14 hermes_ws_proxy.py; canonical ai.byopus.com Cloud Endpoint",
+  "provenance": {
+    "broker_host": "box14 / 192.168.40.14",
+    "broker_listener": "localhost:9120",
+    "agent_endpoint": "https://default.internal",
+    "cloud_endpoint": "https://ai.byopus.com",
+    "upstream": "SSH tunnel to .15 dashboard /api/ws",
+    "runtime_pid": "22976"
+  },
+  "implementation": {
+    "api_status": "installed_and_loaded",
+    "api_auth_providers": "installed_and_loaded",
+    "api_auth_ws_ticket": "installed_and_loaded",
+    "api_ws_alias": "installed_and_loaded",
+    "ticket_ttl_seconds": 30,
+    "ticket_single_use": true,
+    "ticket_principal_source": "verified opus_session",
+    "credential_handling": "browser cookie and 2FA remain outside Desktop renderer"
+  },
+  "smoke_tests": {
+    "local_api_status": {"http_status": 200, "result": "PASS"},
+    "local_api_auth_providers": {"http_status": 200, "result": "PASS"},
+    "unauthenticated_ticket_mint": {"http_status": 401, "result": "PASS_FAIL_CLOSED"},
+    "invalid_ws_ticket": {"http_status": 401, "result": "PASS_FAIL_CLOSED"},
+    "canonical_api_status": {"http_status": 200, "result": "PASS"},
+    "canonical_auth_login": {"http_status": 200, "result": "PASS"},
+    "python_compile": {"result": "PASS"}
+  },
+  "not_yet_verified": [
+    "authenticated /api/auth/ws-ticket positive readback",
+    "single-use ticket consumption over /api/ws",
+    "Desktop live WebSocket handshake",
+    "client_session_id and durable_session_id read-after-bind",
+    "device_id/device_class and SSH provenance readback",
+    "restart/resume readback"
+  ],
+  "rollback": {
+    "backup": "/Users/hermes/symbiose-chat-prototype/hermes_ws_proxy.py.before-desktop-adapter",
+    "endpoint_changes": false,
+    "traffic_policy_changes": false
+  },
+  "raw_payload_included": false
+}

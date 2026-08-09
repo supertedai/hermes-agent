@@ -1,0 +1,59 @@
+{
+  "mwp_id": "MWP-UOSH-001",
+  "case_id": "CASE-DESKTOP-01",
+  "work_package": "DESKTOP-FABER-ROUTE",
+  "artifact_id": "mwp-desktop-faber-governed-route-v1",
+  "version": 1,
+  "mode": "shadow-contract-only",
+  "route": {
+    "name": "desktop.faber.execute",
+    "transport": "typed_authenticated_backend_route",
+    "renderer_direct_internal_relay": false,
+    "request_required": [
+      "principal_id",
+      "profile",
+      "client_session_id",
+      "durable_session_id",
+      "mwp_id",
+      "case_id",
+      "kanban_task_id",
+      "faber_goal_id",
+      "requested_role",
+      "model",
+      "provider",
+      "scope",
+      "capability",
+      "owner_gate",
+      "reviewer_gate",
+      "rollback_ref"
+    ],
+    "response_metadata_only": [
+      "status",
+      "gate",
+      "blocker",
+      "next_permitted_action",
+      "evidence_refs",
+      "readback",
+      "rollback_ref"
+    ]
+  },
+  "state_machine": ["accepted", "blocked", "queued", "running", "reviewing", "landed", "failed"],
+  "hard_rejections": [
+    "missing principal or session lineage",
+    "identity mismatch",
+    "missing Kanban lease/task authority",
+    "unverified role/provider receipt",
+    "missing capability or owner gate",
+    "missing reviewer PASS for promotion",
+    "missing rollback reference",
+    "renderer attempts direct internal relay",
+    "raw memory/secret/private payload in response"
+  ],
+  "promotion_rule": "landed requires independent reviewer PASS, evidence receipt, read-after-write and rollback handle",
+  "current_gate": "BLOCKED_UNWIRED",
+  "live_route_created": false,
+  "faber_execution_invoked": false,
+  "relay_called": false,
+  "next_permitted_action": "review contract against existing gateway/RPC conventions and identity/Kanban gates",
+  "raw_payload_included": false
+}

@@ -1,0 +1,81 @@
+{
+  "artifact_id": "mwp-formal-closeout-readback-v1",
+  "mwp_id": "MWP-UOSH-001",
+  "closeout_type": "FORMAL_PARTIAL_WITH_LIVE_EVIDENCE",
+  "status": "CLOSED_AS_PARTIAL_GATES_OPEN",
+  "decision": "G1 ORCHESTRATOR CANARY COMPLETE BUT CANONICAL AUDIT AUTHORITY OPEN; G3 CONTROLLED CANARY COMPLETE; G4 METADATA PROJECTION COMPLETE; G2 REMOTE GIT AUTH BLOCKED; NORMAL PRODUCTION WRITES NOT UNLOCKED",
+  "scope": {
+    "mwp": "findings, gates, remediation lanes and live canary/projection evidence linked",
+    "cad": "architecture retained with live canary evidence addendum; production authority remains gated",
+    "adr": "decisions/readbacks retained with live canary evidence addendum; promotion gates remain open",
+    "bl": "blockers retain owner/evidence/next_action; memory and ingest BLs are partial, not fully closed",
+    "git": "102-artifact isolated allowlist prepared; no commit/push because GitHub authority is unavailable",
+    "graph": "controlled orchestrator canary synced to Neo4j/Qdrant/GNN and was rolled back with read-after-delete zero",
+    "obsidian": "metadata-only projection written/read back in active Brain vault; projection is not canonical authority"
+  },
+  "git_readback": {
+    "branch": "mwp/uosh-automation-01",
+    "origin": "git@github.com:supertedai/AGI.git",
+    "hermes_origin": "git@github.com:supertedai/hermes-agent.git",
+    "isolated_landing_worktree": "/tmp/mwp-g2-landing",
+    "allowlisted_artifacts": 102,
+    "staged_files": 0,
+    "commit_performed": false,
+    "push_performed": false,
+    "reason": "owner-confirmed .13 GitHub surface exists; CLI/SSH/Keychain handoff to this runtime is not bound"
+  },
+  "graph_canary_readback": {
+    "writer_route": "/api/v1/unified intent=write -> orchestrator_v2",
+    "principal": "morten",
+    "scope": "mwp-g1-canary",
+    "write_http_status": 200,
+    "rollback_http_status": 200,
+    "neo4j_deleted": {"documents": 1, "chunks": 1},
+    "qdrant_deleted": 1,
+    "read_after_delete_remaining": 0
+  },
+  "obsidian_readback": {
+    "vault": "/Users/morpheus/Documents/Brain",
+    "projection": "/Users/morpheus/Documents/Brain/MWP/receipts/mwp-g4-projection-readback-v1.md",
+    "bytes": 1323,
+    "sha256": "940a422c785a9999e21a57ef77bd221ec258c9980a7f781e00b1e104686bb3ca",
+    "read_after_write": true
+  },
+  "live_status": {
+    "canary_writer_receipts": 1,
+    "orchestrator_audit_receipts": 2,
+    "canonical_authority_receipts": 2,
+    "canonical_canary_read_after_rollback": 1,
+    "orchestrator_canary_read_after_write_receipts": 1,
+    "canonical_read_after_write_receipts": 1,
+    "rollback_receipts": 1,
+    "neo4j_canary_writes": true,
+    "qdrant_canary_writes": true,
+    "gnn_promotion": false,
+    "obsidian_projection_write": true,
+    "normal_production_writes": false,
+    "writes_allowed": false
+  },
+  "blocking_gates": [
+    {"id":"PER_USER_AUTHORITY","owner":"Morten + Opus","evidence":"canary proves one principal/scope path; all principals/tenants/scopes and surfaces are not yet live-proven","next_action":"validate each principal/tenant/scope through the same orchestrator receipt contract"},
+    {"id":"IDENTITY_PROVENANCE","owner":"canonical graph writer","evidence":"live canary carries principal/scope/provenance; broad graph identity/provenance hygiene remains incomplete","next_action":"owner-approved isolated repair plan; no bulk backfill/dedup"},
+    {"id":"CROSS_PLANE_RECEIPTS","owner":"runtime producers","evidence":"one live canary receipt exists; all producers/surfaces do not yet have receipts","next_action":"activate lifecycle receipt census per producer"},
+    {"id":"GNN_HEALTH","owner":"GNN steward","evidence":"GNN remains derived and prior live health was collapsed/abstaining","next_action":"shadow repair/retrain and evaluate; no promotion while collapsed"},
+    {"id":"GIT_SCOPED_LANDING","owner":"Morten","evidence":"102-artifact isolated allowlist; GitHub auth unavailable","next_action":"use existing authorized GitHub session/key; then remote read-after-write"}
+  ],
+  "evidence_refs": [
+    "docs/mwp-live-governance-closeout-status-v1.md",
+    "docs/mwp-g1-writer-authority-readback-v1.json",
+    "docs/mwp-g2-git-scoped-landing-preflight-v1.json",
+    "docs/mwp-g3-graph-canary-readback-v1.json",
+    "docs/mwp-g4-obsidian-projection-preflight-v1.json",
+    "docs/mwp-cross-plane-best-practice-sota-asi-readiness-v1.json",
+    "docs/mwp-remediation-loop-plan-v1.json",
+    "docs/mwp-neo4j-full-authority-metadata-audit-v1.json",
+    "docs/mwp-neo4j-identity-provenance-hygiene-readback-v1.json",
+    "docs/mwp-qdrant-full-descriptor-audit-v1.json",
+    "docs/mwp-producer-runtime-receipt-census-v1.json"
+  ],
+  "rollback": "G1/G3 canaries were rolled back with graph/Qdrant read-after-delete zero; G4 projection has a single-file rollback path; known-good SSH/Home/thread baseline preserved",
+  "owner_next_action": "GitHub authority is the sole external landing blocker; normal reads and scoped orchestrator writes remain available, but blanket unrestricted writes are not claimed"
+}

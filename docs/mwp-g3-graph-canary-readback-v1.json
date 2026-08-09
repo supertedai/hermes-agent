@@ -1,0 +1,24 @@
+{
+  "artifact_id": "mwp-g3-graph-canary-readback-v1",
+  "mwp_id": "MWP-UOSH-001",
+  "gate": "G3_GRAPH_METADATA_WRITE",
+  "status": "COMPLETE_CONTROLLED_CANARY_ROLLED_BACK",
+  "mode": "owner-gated-metadata-canary",
+  "evidence": {
+    "writer_route": "/api/v1/unified intent=write",
+    "principal": "morten",
+    "scope": "mwp-g1-canary",
+    "provenance": "mwp-g1-live",
+    "orchestrator": "orchestrator_v2",
+    "synced_planes": ["neo4j", "qdrant", "gnn"],
+    "write_http_status": 200,
+    "delete_http_status": 200,
+    "neo4j_deleted": {"documents": 1, "chunks": 1},
+    "qdrant_deleted": 1,
+    "read_after_delete_document_remaining": 0,
+    "read_after_delete_content_remaining": 0
+  },
+  "production_scope": "not promoted; no non-canary graph records changed",
+  "writes_unlocked": false,
+  "next_gate": "G4 Obsidian projection target/provenance/rollback preflight"
+}

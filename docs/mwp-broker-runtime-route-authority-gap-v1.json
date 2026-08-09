@@ -1,0 +1,36 @@
+{
+  "artifact_id": "mwp-broker-runtime-route-authority-gap-v1",
+  "mwp_id": "MWP-UOSH-001",
+  "status": "BLOCKED_AUTHENTICATED_BROKER_FORWARDING_OR_OWNER_DEPLOY",
+  "mode": "metadata-only-route-boundary-readback",
+  "surfaces": {
+    "broker_private": "http://192.168.40.14:9120",
+    "canonical_public": "https://ai.byopus.com",
+    "local_backend": "http://127.0.0.1:9119"
+  },
+  "evidence": {
+    "broker_server": "Python/3.9 aiohttp/3.13.5",
+    "broker_identity_unauthenticated": 401,
+    "broker_runtime_unauthenticated": 401,
+    "broker_role_provider_unauthenticated": 401,
+    "local_runtime_route": "implemented_source_not_yet_owner_reloaded",
+    "local_runtime_health": "gateway running, dashboard healthy",
+    "ssh_to_broker": "unavailable_permission_denied",
+    "authenticated_public_runtime_observation": 404
+  },
+  "classification": {
+    "route_path_exists_at_middleware_boundary": true,
+    "authenticated_forwarding_verified": false,
+    "role_provider_receipt": "BLOCKED",
+    "desktop_or_session_fault": false
+  },
+  "owner_required": [
+    "broker source/deploy access or authenticated broker route owner",
+    "forward /api/mwp/runtime to local .15 resolver or implement equivalent",
+    "preserve /api/mwp/identity auth/provenance behavior",
+    "read-after-deploy authenticated metadata probe"
+  ],
+  "writes_allowed": false,
+  "next_action": "Owner-authorized .14 broker deploy/read-after-write; keep Kanban, worker and graph writes blocked until active role/provider receipt is live.",
+  "raw_payload_included": false
+}

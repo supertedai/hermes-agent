@@ -1,0 +1,73 @@
+{
+  "artifact_id": "mwp-source-task-authority-mapping-v2",
+  "mwp_id": "MWP-UOSH-001",
+  "status": "SOURCE_COVERAGE_FILLED_AUTHORITY_AND_EXECUTION_REMAIN_BLOCKED",
+  "mode": "metadata-only-no-task-write",
+  "canonical_task_authority": "docs/mwp-kanban-authority-closeout-readback-v10.json",
+  "canonical_gap_authority": "docs/mwp-uosh-gap-register-v1.json",
+  "canonical_project_destination": "https://github.com/supertedai/AGI.git branch mwp/uosh-automation-01",
+  "source_classes": [
+    {
+      "source_class": "CAD",
+      "indexed_records": 30,
+      "source_inventory": "VERIFIED",
+      "semantic_lane_mapping": "PROPOSED_MAPPING_PRESENT",
+      "task_mapping": "BLOCKED_NO_EXECUTABLE_CHILD",
+      "owner": "MWP control-plane/data authority",
+      "authority": "BLOCKED_LIVE_AUTHORITY_RECEIPT",
+      "destination_git": "VERIFIED_AGI_PUSH",
+      "destination_obsidian": "VERIFIED_NAMESPACE_RECEIPT",
+      "destination_graph": "BLOCKED_FULL_PROJECTION_BOUNDED_RELATION_ONLY",
+      "freshness": "RECONCILIATION_REQUIRED"
+    },
+    {
+      "source_class": "ADR",
+      "indexed_records": 7,
+      "source_inventory": "VERIFIED",
+      "semantic_lane_mapping": "PROPOSED_MAPPING_PRESENT",
+      "task_mapping": "BLOCKED_NO_EXECUTABLE_CHILD",
+      "owner": "MWP control-plane/data authority",
+      "authority": "BLOCKED_LIVE_AUTHORITY_RECEIPT",
+      "destination_git": "VERIFIED_AGI_PUSH",
+      "destination_obsidian": "VERIFIED_NAMESPACE_RECEIPT",
+      "destination_graph": "BLOCKED_FULL_PROJECTION_BOUNDED_RELATION_ONLY",
+      "freshness": "RECONCILIATION_REQUIRED"
+    },
+    {
+      "source_class": "BL",
+      "indexed_records": 16,
+      "source_inventory": "TEXTUAL_REFERENCES_VERIFIED",
+      "canonical_registry": "NOT_FOUND",
+      "semantic_lane_mapping": "PROPOSED_MAPPING_PRESENT",
+      "task_mapping": "BLOCKED_CANONICAL_BL_REGISTRY_AND_CHILD_MISSING",
+      "owner": "MWP control-plane/data authority",
+      "authority": "BLOCKED_LIVE_AUTHORITY_RECEIPT",
+      "destination_git": "VERIFIED_AGI_PUSH",
+      "destination_obsidian": "VERIFIED_NAMESPACE_RECEIPT",
+      "destination_graph": "BLOCKED_FULL_PROJECTION_BOUNDED_RELATION_ONLY",
+      "freshness": "RECONCILIATION_REQUIRED"
+    }
+  ],
+  "lane_mapping": [
+    {"lane":"cad-adr-bl-intent-registry","gap_ids":["GAP-CROSS-SURFACE-TRUTH-001"],"parent_task":"mwp-uosh-001-parent-authority-gate-v1","child_task":null,"owner":"MWP control-plane/data authority","status":"BLOCKED"},
+    {"lane":"kanban-authority","gap_ids":["GAP-KANBAN-AUTHORITY-001"],"parent_task":"mwp-uosh-001-parent-authority-gate-v1","child_task":null,"owner":"owner/orchestrator","status":"CANONICAL_PARENT_REPAIRED_CHILD_LEASE_BLOCKED"},
+    {"lane":"identity","gap_ids":["GAP-IDENTITY-MULTIUSER-SURFACE-001","GAP-IDENTITY-REMOTE-001","GAP-DEVICE-ORIGIN-001"],"parent_task":null,"child_task":null,"owner":"identity/surface authority","status":"READBACK_PENDING"},
+    {"lane":"role-provider","gap_ids":["GAP-ROLE-PROVIDER-001"],"parent_task":null,"child_task":null,"owner":"runtime/provider authority","status":"BLOCKED_RUNTIME_RECEIPT"},
+    {"lane":"fleet","gap_ids":["GAP-FLEET-ADAPTIVE-001"],"parent_task":null,"child_task":null,"owner":"adaptive fleet authority","status":"BLOCKED_RUNTIME_MAPPING"},
+    {"lane":"cortex-world-model","gap_ids":["GAP-CORTEX-WORLDMODEL-001","GAP-GRAPH-QDRANT-GNN-001"],"parent_task":null,"child_task":null,"owner":"Cortex/world-model authority","status":"BLOCKED_LIVE_ROUTE"},
+    {"lane":"memory-learning","gap_ids":["GAP-MEMORY-LEARNING-001"],"parent_task":null,"child_task":null,"owner":"memory/learning authority","status":"BLOCKED_LIVE_PROMOTION"},
+    {"lane":"desktop-faber","gap_ids":["GAP-DESKTOP-FABER-001"],"parent_task":null,"child_task":null,"owner":"Desktop/Faber authority","status":"BLOCKED_UNWIRED"},
+    {"lane":"tenant-surface","gap_ids":["GAP-TENANT-SURFACE-ARCH-001","GAP-SERVICE-HOME-PLACEMENT-001"],"parent_task":null,"child_task":null,"owner":"MWP control-plane authority","status":"DECLARED_ARCHITECTURE_BLOCKED_RUNTIME_READBACK"},
+    {"lane":"theory-cosmos","gap_ids":["GAP-H10-THEORY-COSMOS-EFC-ASI-001","GAP-THEORY-PACKAGE-MAPPING-001","GAP-H10-PUBLIC-PUBLISH-WIRE-001","GAP-H10-ASI-SEMANTIC-BOUNDARY-001"],"parent_task":null,"child_task":null,"owner":"Morten / theory and programme authority","status":"DECLARED_OR_BLOCKED_REVIEW"}
+  ],
+  "invariants": [
+    "No new CAD, ADR, BL, gap or task identifier is minted.",
+    "Source inventory evidence does not create execution authority.",
+    "A parent without child/lease/heartbeat is not executable.",
+    "AGI push and Obsidian receipts do not prove full graph projection.",
+    "Owner assertions do not replace authenticated authority readback.",
+    "Unresolved fields remain null or explicitly BLOCKED."
+  ],
+  "next_action": "Use source-class coverage as the closeout baseline; resolve identity and role-provider receipts before Kanban child/lease, and keep full graph projection blocked.",
+  "raw_payload_included": false
+}

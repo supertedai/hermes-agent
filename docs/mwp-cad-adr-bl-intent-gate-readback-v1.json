@@ -1,0 +1,43 @@
+{
+  "gate": "cad-adr-bl-intent-registry",
+  "status": "BLOCKED",
+  "mode": "metadata-only",
+  "scope": {
+    "principal": "morten",
+    "installation_id": "mwp-status-quo",
+    "login_surface_id": "current-hermes-chat",
+    "agent_id": "opus"
+  },
+  "source_evidence": {
+    "implementation": "agent/mwp_asi_alignment_registry.py",
+    "registry_snapshot": "docs/mwp-final-closeout-readback.json",
+    "fresh_topology": "docs/mwp-local-topology-readback.json",
+    "topology_inventory_hash": "89f8e4b39b0a2a1f4c66c39de3e794f3a81bc7d76266570cc03ad6784e041e9f",
+    "git_head": "96b51c4bcff981e1088be0f52cfb3e13fd79a94c",
+    "git_worktree": "dirty; metadata readback reports tracked modifications",
+    "local_test_result": "14 passed, 0 failed",
+    "runtime_observation": "local topology readback contains live listener/process/systemd metadata; no CAD-to-runtime authority receipt",
+    "registry_observation": "local projection has 8 open rows; active row remains BLOCKED",
+    "receipt_observation": "git local metadata verified; graph write/read-after-write authority unavailable; canonical Obsidian receipt unavailable"
+  },
+  "blocker": "Authoritative live CAD/ADR/BL source reconciliation and required destination receipts are unavailable; local source/tests/runtime presence cannot establish LIVE_VERIFIED.",
+  "owner": "Morten / authorized source-of-truth and runtime owners",
+  "evidence_required": [
+    "authenticated metadata-only CAD/ADR/BL-to-runtime reconciliation",
+    "authorized graph receipt with write/read-after-write verification",
+    "canonical Obsidian receipt with write/read-after-write verification"
+  ],
+  "next_action": "Owner provides the required authenticated reconciliation and authorized destination receipts; rerun this gate and verify read-after-write before any promotion.",
+  "mutation": {
+    "source_write": false,
+    "graph_write": false,
+    "obsidian_write": false,
+    "production_activation": false
+  },
+  "ledger_event": "EVT-2a38b1362e8a",
+  "cad_id": "CAD-EVT-8624d8f21dd8",
+  "adr_id": "ADR-EVT-8624d8f21dd8",
+  "bl_id": "BL-EVT-8624d8f21dd8",
+  "ledger_status": "OPEN",
+  "raw_payload_included": false
+}

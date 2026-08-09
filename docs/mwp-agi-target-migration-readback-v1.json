@@ -1,0 +1,31 @@
+{
+  "artifact_id": "mwp-agi-target-migration-readback-v1",
+  "mwp_id": "MWP-UOSH-001",
+  "status": "AGI_TARGET_PUSH_COMPLETE_PUBLIC_HERMES_BRANCH_RETAINED_ROLLBACK_ONLY",
+  "mode": "metadata-only-migration-readback",
+  "target": {
+    "repository": "https://github.com/supertedai/AGI.git",
+    "branch": "mwp/uosh-automation-01",
+    "commit": "9a7f085ec",
+    "files_imported": 216,
+    "scope": "mwp-uosh/ MWP control, receipts, mappings, reconciler and ASI_CAD_V0.1 source"
+  },
+  "source": {
+    "repository": "https://github.com/supertedai/hermes-agent.git",
+    "branch": "mwp/uosh-automation-01",
+    "role": "rollback/source quarantine only",
+    "deletion": "NOT_PERFORMED_BY_OWNER_INSTRUCTION"
+  },
+  "verification": {
+    "AGI_clone": "clean before import",
+    "staged_diff_check": "blocked only by intentional Markdown trailing spaces",
+    "commit": "created successfully",
+    "push": "created remote branch successfully",
+    "pull_request_url": "https://github.com/supertedai/AGI/pull/new/mwp/uosh-automation-01",
+    "CAD_source_included": true,
+    "MWP_artifacts_included": true,
+    "secrets_included_in_generated_package": false
+  },
+  "next_action": "Treat AGI branch as canonical target; stop all future publication to hermes-agent; perform AGI remote read-after-write and then owner-gate any cleanup of the old branch.",
+  "raw_payload_included": false
+}

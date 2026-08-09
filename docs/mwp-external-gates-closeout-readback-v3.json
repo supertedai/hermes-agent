@@ -1,0 +1,43 @@
+{
+  "artifact_id": "mwp-external-gates-closeout-readback-v3",
+  "mwp_id": "MWP-UOSH-001",
+  "status": "IDENTITY_COMPLETE_ROLE_PROVIDER_PARTIAL_DOWNSTREAM_BLOCKED",
+  "mode": "metadata-only-fail-closed-readback",
+  "gates": {
+    "desktop-session-visibility": "COMPLETE",
+    "live-identity": {
+      "status": "COMPLETE",
+      "receipt": "docs/mwp-live-identity-receipt-v2.json"
+    },
+    "active-role-provider": {
+      "status": "PARTIAL_BLOCKED_LIVE_RESOLVER",
+      "receipt": "docs/mwp-role-provider-current-turn-readback-v2.json",
+      "observed": {"model_id":"gpt-5.6-luna","provider_id":"openai-api"},
+      "missing": ["role_id","api_mode","llm_instance_id","fallback health/transition","runtime resolver receipt"]
+    },
+    "kanban-child-lease": {
+      "status": "PREFLIGHT_VERIFIED_BLOCKED",
+      "receipt": "docs/mwp-kanban-child-preflight-v1.json",
+      "child_creation": false,
+      "lease_claim": false,
+      "heartbeat": false,
+      "worker_activation": false
+    },
+    "full-projection": {
+      "status": "PLAN_READY_BLOCKED_AUTHORITY",
+      "receipt": "docs/mwp-graph-projection-plan-v1.json",
+      "bounded_projection": "COMPLETE_ONE_MORTEN_RELATION",
+      "full_projection": false,
+      "graph_write": false
+    },
+    "freshness-monitor": {
+      "status": "COMPLETE_READ_ONLY_ACTIVE",
+      "receipt": "docs/mwp-freshness-monitor-runtime-receipt-v1.json"
+    }
+  },
+  "coverage": {"CAD":30,"ADR":7,"BL":16,"source_to_lane":"COMPLETE_PARTIAL_AUTHORITY"},
+  "overall_status": "OPEN_ROLE_PROVIDER_BLOCKS_KANBAN_AND_FULL_PROJECTION",
+  "next_action": "Obtain authoritative active-turn role/provider resolver receipt; then re-run Kanban preflight and create at most one dependency-scoped child only after all required receipts are positive.",
+  "writes_allowed": false,
+  "raw_payload_included": false
+}

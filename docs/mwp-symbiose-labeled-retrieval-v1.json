@@ -1,0 +1,33 @@
+{
+  "mwp_id": "MWP-UOSH-001",
+  "case_id": "CASE-SYMBIOSE-02",
+  "work_package": "SYMBIOSE-02C",
+  "dataset_id": "symbiose-labeled-retrieval-v1",
+  "version": 1,
+  "mode": "evaluation-schema-and-shadow",
+  "cases": [
+    {
+      "case_id": "positive-homo-fluxus",
+      "query_class": "known-concept",
+      "query_ref": "Homo Fluxus",
+      "expected_neighbor_judgment": "PENDING_OWNER_LABEL",
+      "relevance_labels": [],
+      "negative": false
+    },
+    {
+      "case_id": "negative-unknown-control",
+      "query_class": "unknown-control",
+      "query_ref": "__mwp_unknown_retrieval_case_v1__",
+      "expected_neighbor_judgment": "PENDING_OWNER_LABEL",
+      "relevance_labels": [],
+      "negative": true
+    }
+  ],
+  "required_labels": ["relevant", "irrelevant", "deprecated", "stale", "provenance_complete"],
+  "metrics": ["precision_at_k", "recall_at_k", "negative_false_positive_rate", "stale_hit_rate", "provenance_completeness"],
+  "gate": {
+    "status": "BLOCKED_PENDING_OWNER_LABELS",
+    "reason": "retrieval service returns chunks for both positive and unknown-control cases; expected-neighbor truth set is not yet authoritative"
+  },
+  "raw_payload_included": false
+}

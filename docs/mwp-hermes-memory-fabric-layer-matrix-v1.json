@@ -1,0 +1,39 @@
+{
+  "schema": "mwp.hermes_memory_fabric.layer_matrix.v1",
+  "status": "OPEN",
+  "authority": "MWP-UOSH-001",
+  "runtime_waist": "hermes-agent-engine",
+  "hermes_native_baseline": {
+    "built_in": ["MEMORY.md", "USER.md", "SQLite session store", "SQLite FTS5 session search", "built_in_learning_loop"],
+    "provider_lifecycle": ["background_prefetch_before_turn", "provider_context_injection", "sync_turn_after_response", "session_end_extraction_when_supported", "built_in_memory_write_mirroring"],
+    "provider_selection": "one external provider may be active alongside built-in memory",
+    "latency_rule": "prefetch is background/non-blocking; provider failure must not stall normal chat"
+  },
+  "holographic_provider_boundary": {
+    "classification": "external_provider_plugin_not_hermes_core",
+    "observed_capabilities": ["SQLite fact store", "FTS5 search", "trust scoring", "HRR compositional retrieval"],
+    "canonicality": "provider implementation until MWP authority/readback proves otherwise"
+  },
+  "opus_mwp_layers": "architectural projection model; not evidence of equivalent Hermes-core native layers",
+  "raw_payload_included": false,
+  "layers": [
+    {"layer_id":"chat-session","plane":"chat","canonical_owner":"hermes-session-authority","store_class":"session-store","hermes_path":"engine.turn","projection_targets":["context","cortex","agent"],"status":"DECLARED_NOT_LIVE_VERIFIED"},
+    {"layer_id":"chat-extracted-facts","plane":"chat","canonical_owner":"opus-memory-fabric","store_class":"canonical-fact","hermes_path":"engine.memory_provider","projection_targets":["cortex","agent","context"],"status":"UNVERIFIED"},
+    {"layer_id":"conversation-working-model","plane":"chat","canonical_owner":"hermes-engine","store_class":"working-memory","hermes_path":"engine.context","projection_targets":["cortex","agent"],"status":"DECLARED_NOT_LIVE_VERIFIED"},
+    {"layer_id":"opus-working-memory","plane":"system","canonical_owner":"cortex","store_class":"working-memory","hermes_path":"engine.memory_provider","projection_targets":["context","agent"],"status":"UNVERIFIED"},
+    {"layer_id":"cortex-world-model","plane":"system","canonical_owner":"cortex-memory-authority","store_class":"world-model","hermes_path":"engine.cortex_route","projection_targets":["context","agent"],"status":"UNVERIFIED"},
+    {"layer_id":"goals-learning","plane":"system","canonical_owner":"mwp-cortex-authority","store_class":"goal-learning","hermes_path":"engine.governed_path","projection_targets":["cortex","agent"],"status":"PARTIAL"},
+    {"layer_id":"agent-role-memory","plane":"agent","canonical_owner":"agent-scoped-memory-authority","store_class":"agent-memory","hermes_path":"engine.agent_binding","projection_targets":["context","cortex"],"status":"UNVERIFIED"},
+    {"layer_id":"agent-task-memory","plane":"agent","canonical_owner":"mwp-task-authority","store_class":"task-memory","hermes_path":"engine.task_route","projection_targets":["agent","cortex"],"status":"UNVERIFIED"},
+    {"layer_id":"evidence-provenance","plane":"cross-plane","canonical_owner":"mwp-evidence-authority","store_class":"receipt-event","hermes_path":"engine.receipt_hooks","projection_targets":["all"],"status":"DECLARED_NOT_LIVE_VERIFIED"},
+    {"layer_id":"semantic-indexes","plane":"cross-plane","canonical_owner":"projection-services","store_class":"graph-vector-fts-gnn-hrr","hermes_path":"engine.memory_provider","projection_targets":["context"],"status":"BLOCKED_UNTIL_CANONICAL_READBACK"},
+    {"layer_id":"context-projection","plane":"cross-plane","canonical_owner":"hermes-engine","store_class":"runtime-projection","hermes_path":"engine.context_assembly","projection_targets":["current-turn"],"status":"DECLARED_NOT_RUNTIME_EFFECT_VERIFIED"}
+  ],
+  "required_roundtrips": [
+    "chat_to_cortex",
+    "chat_to_agent",
+    "agent_to_cortex",
+    "cortex_to_agent",
+    "memory_fabric_to_hermes_context"
+  ]
+}

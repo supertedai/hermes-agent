@@ -1,0 +1,38 @@
+{
+  "mwp_id": "MWP-UOSH-001",
+  "case_id": "CASE-IDENTITY-01",
+  "artifact_id": "mwp-identity-broker-route-readback-v2",
+  "mode": "read-only-route-and-auth-boundary-probe",
+  "status": "ROUTE_VERIFIED_AUTH_READBACK_PENDING",
+  "broker": {
+    "host": "192.168.40.14",
+    "port": 9120,
+    "source": "/Users/hermes/symbiose-chat-prototype/hermes_ws_proxy.py",
+    "pid": 24475
+  },
+  "routes": {
+    "/api/health": {"http_status": 401, "auth_required": true},
+    "/api/mwp/identity": {"http_status": 401, "auth_required": true},
+    "/api/auth/ws-ticket": {"source_route_present": true, "not_invoked": true},
+    "/ws": {"source_route_present": true},
+    "/api/ws": {"source_route_present": true}
+  },
+  "identity_contract": [
+    "authenticated user_id",
+    "client_session_id",
+    "durable_session_id",
+    "device_id/device_class",
+    "transport_origin",
+    "ssh_hop",
+    "provenance"
+  ],
+  "gate": {
+    "route_discovered": true,
+    "auth_boundary_verified": true,
+    "authenticated_readback": "PENDING",
+    "identity_write": false,
+    "credentials_used": false
+  },
+  "next_action": "complete existing Desktop login and ws-ticket flow, then run metadata-only /api/mwp/identity readback",
+  "raw_payload_included": false
+}

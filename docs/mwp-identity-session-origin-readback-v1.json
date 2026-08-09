@@ -1,0 +1,13 @@
+{
+  "mwp_id": "MWP-UOSH-001",
+  "artifact_id": "mwp-identity-session-origin-readback-v1",
+  "mode": "metadata-only-remote-runtime-discovery",
+  "status": "SESSION_ORIGIN_PRESENT_GUI_READBACK_PENDING",
+  "host": "Morpheus.local",
+  "runtime": {"firefox_process": true, "hermes_desktop_process": true, "ssh_control_master_to_box15": true},
+  "gui_readback": {"osascript_exit": 1, "tab_urls": "not_read", "cookies": "not_read", "tokens": "not_read", "tcc_or_gui_bridge": "unavailable"},
+  "debugger_ports": {"9220": 404, "9219": 404, "9131": 404, "9119": 200, "8000": 502},
+  "gate": {"shared_auth_source": "PRESENT_OWNER_ASSERTED", "authenticated_identity_readback": "PENDING", "credentials_used": false, "identity_write": false},
+  "next_action": "use an owner-approved GUI/browser bridge or authenticated broker session attachment to read /api/mwp/identity metadata-only",
+  "raw_payload_included": false
+}

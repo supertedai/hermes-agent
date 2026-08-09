@@ -1,0 +1,41 @@
+{
+  "artifact_id": "mwp-role-provider-route-gap-readback-v1",
+  "mwp_id": "MWP-UOSH-001",
+  "status": "BLOCKED_BACKEND_RESOLVER_ROUTE_NOT_EXPOSED",
+  "mode": "metadata-only-public-route-discovery",
+  "surface": "https://ai.byopus.com",
+  "observations": {
+    "/api/status": {"http_status": 200, "version": "opus-broker", "auth_required": true, "auth_providers": ["basic"]},
+    "/api/auth/providers": {"http_status": 200, "providers": ["basic"]},
+    "/api/mwp/runtime": {"authenticated_browser_result": 404},
+    "/api/mwp/role-provider": {"authenticated_browser_result": 404}
+  },
+  "current_turn_metadata": {
+    "model_id": "gpt-5.6-luna",
+    "provider_id": "openai-api",
+    "role_id": null,
+    "api_mode": null,
+    "llm_instance_id": null,
+    "fallback_health": null
+  },
+  "classification": {
+    "identity": "COMPLETE",
+    "role_provider": "BLOCKED_ROUTE_NOT_EXPOSED",
+    "desktop_bug": "NOT_INDICATED",
+    "config_write": false,
+    "restart": false,
+    "task_write": false
+  },
+  "required_backend_fix": [
+    "authenticated metadata-only active-turn resolver route",
+    "role_id",
+    "provider_id",
+    "model_id",
+    "api_mode",
+    "llm_instance_id",
+    "fallback health/transition",
+    "freshness timestamp"
+  ],
+  "next_action": "Backend/control-plane owner must expose or document the authoritative active-turn resolver; keep Kanban, worker and graph writes blocked until then.",
+  "raw_payload_included": false
+}

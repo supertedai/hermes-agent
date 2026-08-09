@@ -1,0 +1,84 @@
+{
+  "mwp_id": "MWP-UOSH-001",
+  "artifact_id": "mwp-adaptive-fleet-registry-readback-v1",
+  "mode": "metadata-only-adaptive-census",
+  "status": "REGISTRY_CAPTURED_RUNTIME_PARTIAL",
+  "sources": {
+    "agent_registry": "~/.hermes/symbiose/agents.json",
+    "capability_surface": "~/.hermes/symbiose/kompetanse.json",
+    "worker_config_surface": "~/.hermes/symbiose/fleet_worker.json",
+    "ownership_census": "~/.hermes/symbiose/ownership.json",
+    "domain_surface": "~/.hermes/symbiose/domains.json"
+  },
+  "registry": {
+    "registered_agents": 69,
+    "measured_capability_agents": 14,
+    "unmeasured_agents": 55,
+    "kind_counts": {
+      "core-role": 23,
+      "domain-steward": 15,
+      "domain-steward-pending": 11,
+      "fleet-worker": 7,
+      "auto-detected": 3,
+      "dynamic-expert": 2,
+      "superseded-draft": 6,
+      "human-principal": 1,
+      "unknown": 1
+    },
+    "runtime_declared": {
+      "claude-subagent": 53,
+      "hermes-agent": 5,
+      "raw-120b-completion": 5,
+      "glm-cortex": 1,
+      "human": 1,
+      "unknown": 4
+    }
+  },
+  "fleet_surface_census": {
+    "total": 676,
+    "tabs": 61,
+    "tiles": 173,
+    "services": 442,
+    "owned": 676,
+    "unowned": 0,
+    "coverage_pct": 100.0
+  },
+  "graph_drift": {
+    "graph_live": 678,
+    "census_total": 676,
+    "graph_only": 2,
+    "fresh_graph_only": 2,
+    "stale_graph_only": 0,
+    "denominator_matches": true
+  },
+  "adaptive_requirements": {
+    "agent_list_hardcoded": false,
+    "discovery_source_present": true,
+    "capability_evidence_separate_from_registry": true,
+    "ownership_separate_from_runtime": true,
+    "live_liveness_per_agent": "PROJECTED_FROM_REGISTRY",
+    "dynamic_role_provider_binding": "MISSING",
+    "adaptive_selection_gate": "IMPLEMENTED_SHADOW_TESTED",
+    "projection_module": "agent/mwp_fleet_projection.py",
+    "projection_tests": "tests/test_mwp_fleet_projection.py",
+    "actual_projection": {
+      "snapshot_at": "2026-08-06T13:25:41Z",
+      "registry_records": 69,
+      "live_verified": 5,
+      "stale": 7,
+      "declared_only": 10,
+      "no_capability_evidence": 47,
+      "candidate_count": 5,
+      "candidate_ids": ["faber", "helios", "hermes-bugfix", "hermes-graphwrite", "hermes-pilot-001"],
+      "freshness_gate_seconds": 900,
+      "fleet_endpoint_http_status": 200,
+      "fleet_total": 362,
+      "candidate_ids_in_problem_or_stale": 0,
+      "role_provider_receipts": "missing"
+    }
+  },
+  "global_gate": "OPEN_RUNTIME_CAPABILITY_LANE",
+  "mutation": {"registry_write": false, "agent_activation": false, "scheduler_write": false},
+  "next_permitted_action": "build adaptive capability/liveness projection with per-agent freshness and role-provider receipt",
+  "raw_payload_included": false
+}

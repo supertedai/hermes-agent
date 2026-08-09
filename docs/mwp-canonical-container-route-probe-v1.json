@@ -1,0 +1,25 @@
+{
+  "artifact_id": "mwp-canonical-container-route-probe-v1",
+  "mwp_id": "MWP-UOSH-001",
+  "status": "BLOCKED_ROUTE_NOT_DEPLOYED",
+  "surface": "byopus-ai / efc-unified-api",
+  "container": "efc-unified-api",
+  "host_port": 8010,
+  "container_port": 8080,
+  "routes": {
+    "/api/mwp/runtime": 404,
+    "/api/mwp/role-provider": 404
+  },
+  "health": {
+    "path": "/health",
+    "http_status": 200,
+    "service_status": "DEGRADED_EVENT_LOOP_BLOCKED_RECENTLY"
+  },
+  "source_target": "/home/byopus/AGI/apis/unified_api",
+  "required_action": "deploy canonical MWP runtime router into /home/byopus/AGI and restart efc-unified-api",
+  "authority": "owner_deploy_required",
+  "writes_performed": false,
+  "rollback_required": false,
+  "provenance": "read-only probe from .15 to .12:8010",
+  "freshness": "live"
+}

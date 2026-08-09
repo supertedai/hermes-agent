@@ -1,0 +1,50 @@
+{
+  "mwp_id": "MWP-UOSH-001",
+  "case_id": "CASE-SYMBIOSE-02",
+  "work_package": "SYMBIOSE-02B",
+  "artifact_id": "symbiose-relation-shadow-diff-v1",
+  "mode": "shadow-only",
+  "normalization": {"from": "Supports", "to": "SUPPORTS"},
+  "observed": {
+    "http_status": 200,
+    "relation_rows": 12,
+    "relation_id_hash_count": 12,
+    "latency_ms": 5311.7,
+    "from_label_counts": {
+      "Claim": 6,
+      "Concept": 6,
+      "Hypothesis": 6,
+      "SupportedClaim": 6,
+      "SupportedHypothesis": 6
+    },
+    "to_label_counts": {
+      "Claim": 2,
+      "CosmosFramework": 2,
+      "Framework": 2,
+      "Hypothesis": 2,
+      "Mechanism": 2,
+      "Model": 2,
+      "PrivateConcept": 2,
+      "Theory": 2
+    }
+  },
+  "diff": {
+    "change_count": 12,
+    "original_relation_preserved": true,
+    "target_relation": "SUPPORTS",
+    "shadow_write": false,
+    "live_write": false
+  },
+  "rollback": {
+    "required_before_promotion": true,
+    "mapping": "hashed relation ID -> original relation type Supports"
+  },
+  "gates": {
+    "owner": "OPEN",
+    "provenance": "OPEN",
+    "canonical_id": "OPEN",
+    "rollback": "OPEN",
+    "promotion": "BLOCKED"
+  },
+  "raw_payload_included": false
+}

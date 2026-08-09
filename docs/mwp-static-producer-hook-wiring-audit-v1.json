@@ -1,0 +1,366 @@
+{
+  "artifact_id": "mwp-static-producer-hook-wiring-audit-v1",
+  "lanes": [
+    {
+      "authority_status": "UNVERIFIED",
+      "lane": "Hermes MemoryManager",
+      "markers": {
+        "agent/memory_provider.py": {
+          "ingest": false,
+          "prefetch_all": false,
+          "principal_id": false,
+          "provenance": true,
+          "queue_prefetch_all": false,
+          "read_after_write": false,
+          "rollback": false,
+          "sync_all": false,
+          "tenant_id": false,
+          "tombstone": false
+        },
+        "agent/mwp_memory_manager_receipt_adapter.py": {
+          "ingest": true,
+          "prefetch_all": false,
+          "principal_id": true,
+          "provenance": true,
+          "queue_prefetch_all": false,
+          "read_after_write": false,
+          "rollback": false,
+          "sync_all": false,
+          "tenant_id": true,
+          "tombstone": false
+        }
+      },
+      "runtime_status": "UNVERIFIED",
+      "source_paths_existing": [
+        "agent/memory_provider.py",
+        "agent/mwp_memory_manager_receipt_adapter.py"
+      ],
+      "source_paths_missing": [
+        "agent-layer/hermes-agent/agent/memory_manager.py"
+      ],
+      "source_status": "SOURCE_PRESENT"
+    },
+    {
+      "authority_status": "UNVERIFIED",
+      "lane": "ingest/Jetstream",
+      "markers": {
+        "agent/mwp_ingest_contract.py": {
+          "ingest": true,
+          "prefetch_all": false,
+          "principal_id": true,
+          "provenance": true,
+          "queue_prefetch_all": false,
+          "read_after_write": false,
+          "rollback": false,
+          "sync_all": false,
+          "tenant_id": true,
+          "tombstone": true
+        },
+        "agent/mwp_jetstream_ingest_adapter.py": {
+          "ingest": true,
+          "prefetch_all": false,
+          "principal_id": true,
+          "provenance": true,
+          "queue_prefetch_all": false,
+          "read_after_write": false,
+          "rollback": false,
+          "sync_all": false,
+          "tenant_id": true,
+          "tombstone": false
+        },
+        "agent/mwp_jetstream_worldmodel_router.py": {
+          "ingest": false,
+          "prefetch_all": false,
+          "principal_id": false,
+          "provenance": true,
+          "queue_prefetch_all": false,
+          "read_after_write": false,
+          "rollback": false,
+          "sync_all": false,
+          "tenant_id": false,
+          "tombstone": false
+        }
+      },
+      "runtime_status": "UNVERIFIED",
+      "source_paths_existing": [
+        "agent/mwp_ingest_contract.py",
+        "agent/mwp_jetstream_ingest_adapter.py",
+        "agent/mwp_jetstream_worldmodel_router.py"
+      ],
+      "source_paths_missing": [],
+      "source_status": "SOURCE_PRESENT"
+    },
+    {
+      "authority_status": "UNVERIFIED",
+      "lane": "Cortex/world-model",
+      "markers": {
+        "agent/mwp_jetstream_worldmodel_router.py": {
+          "ingest": false,
+          "prefetch_all": false,
+          "principal_id": false,
+          "provenance": true,
+          "queue_prefetch_all": false,
+          "read_after_write": false,
+          "rollback": false,
+          "sync_all": false,
+          "tenant_id": false,
+          "tombstone": false
+        },
+        "agent/mwp_world_model_gates.py": {
+          "ingest": false,
+          "prefetch_all": false,
+          "principal_id": false,
+          "provenance": false,
+          "queue_prefetch_all": false,
+          "read_after_write": false,
+          "rollback": true,
+          "sync_all": false,
+          "tenant_id": false,
+          "tombstone": false
+        },
+        "agent/mwp_world_model_topology.py": {
+          "ingest": false,
+          "prefetch_all": false,
+          "principal_id": false,
+          "provenance": true,
+          "queue_prefetch_all": false,
+          "read_after_write": false,
+          "rollback": false,
+          "sync_all": false,
+          "tenant_id": false,
+          "tombstone": false
+        }
+      },
+      "runtime_status": "UNVERIFIED",
+      "source_paths_existing": [
+        "agent/mwp_world_model_gates.py",
+        "agent/mwp_world_model_topology.py",
+        "agent/mwp_jetstream_worldmodel_router.py"
+      ],
+      "source_paths_missing": [],
+      "source_status": "SOURCE_PRESENT"
+    },
+    {
+      "authority_status": "UNVERIFIED",
+      "lane": "CRUD/canonical-truth",
+      "markers": {
+        "agent/mwp_cross_surface_truth.py": {
+          "ingest": false,
+          "prefetch_all": false,
+          "principal_id": true,
+          "provenance": true,
+          "queue_prefetch_all": false,
+          "read_after_write": true,
+          "rollback": true,
+          "sync_all": false,
+          "tenant_id": true,
+          "tombstone": false
+        },
+        "agent/mwp_p2_write_preflight.py": {
+          "ingest": false,
+          "prefetch_all": false,
+          "principal_id": false,
+          "provenance": false,
+          "queue_prefetch_all": false,
+          "read_after_write": false,
+          "rollback": false,
+          "sync_all": false,
+          "tenant_id": false,
+          "tombstone": false
+        },
+        "agent/mwp_receipt_pipeline.py": {
+          "ingest": false,
+          "prefetch_all": false,
+          "principal_id": false,
+          "provenance": false,
+          "queue_prefetch_all": false,
+          "read_after_write": false,
+          "rollback": false,
+          "sync_all": false,
+          "tenant_id": false,
+          "tombstone": false
+        }
+      },
+      "runtime_status": "UNVERIFIED",
+      "source_paths_existing": [
+        "agent/mwp_cross_surface_truth.py",
+        "agent/mwp_p2_write_preflight.py",
+        "agent/mwp_receipt_pipeline.py"
+      ],
+      "source_paths_missing": [],
+      "source_status": "SOURCE_PRESENT"
+    },
+    {
+      "authority_status": "UNVERIFIED",
+      "lane": "agents/stewards/delegation",
+      "markers": {
+        "agent/mwp_control_plane.py": {
+          "ingest": false,
+          "prefetch_all": false,
+          "principal_id": true,
+          "provenance": true,
+          "queue_prefetch_all": false,
+          "read_after_write": false,
+          "rollback": true,
+          "sync_all": false,
+          "tenant_id": false,
+          "tombstone": false
+        },
+        "agent/mwp_fleet_projection.py": {
+          "ingest": false,
+          "prefetch_all": false,
+          "principal_id": false,
+          "provenance": false,
+          "queue_prefetch_all": false,
+          "read_after_write": false,
+          "rollback": false,
+          "sync_all": false,
+          "tenant_id": false,
+          "tombstone": false
+        },
+        "agent/mwp_orchestrator_adapter.py": {
+          "ingest": false,
+          "prefetch_all": false,
+          "principal_id": false,
+          "provenance": false,
+          "queue_prefetch_all": false,
+          "read_after_write": false,
+          "rollback": false,
+          "sync_all": false,
+          "tenant_id": false,
+          "tombstone": false
+        },
+        "agent/mwp_responses_adapter.py": {
+          "ingest": false,
+          "prefetch_all": false,
+          "principal_id": false,
+          "provenance": false,
+          "queue_prefetch_all": false,
+          "read_after_write": false,
+          "rollback": false,
+          "sync_all": false,
+          "tenant_id": false,
+          "tombstone": false
+        }
+      },
+      "runtime_status": "UNVERIFIED",
+      "source_paths_existing": [
+        "agent/mwp_fleet_projection.py",
+        "agent/mwp_orchestrator_adapter.py",
+        "agent/mwp_responses_adapter.py",
+        "agent/mwp_control_plane.py"
+      ],
+      "source_paths_missing": [],
+      "source_status": "SOURCE_PRESENT"
+    },
+    {
+      "authority_status": "UNVERIFIED",
+      "lane": "learning/promotion",
+      "markers": {
+        "agent/mwp_memory_learning_gates.py": {
+          "ingest": false,
+          "prefetch_all": false,
+          "principal_id": false,
+          "provenance": true,
+          "queue_prefetch_all": false,
+          "read_after_write": false,
+          "rollback": false,
+          "sync_all": false,
+          "tenant_id": false,
+          "tombstone": false
+        },
+        "scripts/mwp_autoresearch_promotion_gate.py": {
+          "ingest": false,
+          "prefetch_all": false,
+          "principal_id": false,
+          "provenance": true,
+          "queue_prefetch_all": false,
+          "read_after_write": false,
+          "rollback": true,
+          "sync_all": false,
+          "tenant_id": false,
+          "tombstone": false
+        }
+      },
+      "runtime_status": "UNVERIFIED",
+      "source_paths_existing": [
+        "agent/mwp_memory_learning_gates.py",
+        "scripts/mwp_autoresearch_promotion_gate.py"
+      ],
+      "source_paths_missing": [],
+      "source_status": "SOURCE_PRESENT"
+    },
+    {
+      "authority_status": "UNVERIFIED",
+      "lane": "surfaces/daemon routes",
+      "markers": {
+        "agent/continuous_pipeline.py": {
+          "ingest": false,
+          "prefetch_all": true,
+          "principal_id": false,
+          "provenance": true,
+          "queue_prefetch_all": true,
+          "read_after_write": false,
+          "rollback": true,
+          "sync_all": true,
+          "tenant_id": false,
+          "tombstone": false
+        },
+        "apps/desktop": {
+          "ingest": false,
+          "prefetch_all": false,
+          "principal_id": false,
+          "provenance": false,
+          "queue_prefetch_all": false,
+          "read_after_write": false,
+          "rollback": false,
+          "sync_all": false,
+          "tenant_id": false,
+          "tombstone": false
+        },
+        "gateway/platforms/tui.py": {
+          "ingest": false,
+          "prefetch_all": false,
+          "principal_id": false,
+          "provenance": false,
+          "queue_prefetch_all": false,
+          "read_after_write": false,
+          "rollback": false,
+          "sync_all": false,
+          "tenant_id": false,
+          "tombstone": false
+        },
+        "hermes_cli": {
+          "ingest": true,
+          "prefetch_all": false,
+          "principal_id": false,
+          "provenance": true,
+          "queue_prefetch_all": false,
+          "read_after_write": false,
+          "rollback": true,
+          "sync_all": false,
+          "tenant_id": false,
+          "tombstone": false
+        }
+      },
+      "runtime_status": "UNVERIFIED",
+      "source_paths_existing": [
+        "agent/continuous_pipeline.py",
+        "gateway/platforms/tui.py",
+        "hermes_cli",
+        "apps/desktop"
+      ],
+      "source_paths_missing": [],
+      "source_status": "SOURCE_PRESENT"
+    }
+  ],
+  "mode": "read-only-source-census",
+  "mwp_id": "MWP-UOSH-001",
+  "next_action": "compare source hooks with one metadata-only receipt per producer and live principal/tenant/scope readback",
+  "policy": {
+    "promotion_safe": false,
+    "source_does_not_equal_runtime": true,
+    "writes_allowed": false
+  },
+  "status": "STATIC_SOURCE_WIRING_RUNTIME_UNVERIFIED"
+}

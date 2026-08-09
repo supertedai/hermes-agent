@@ -1,0 +1,40 @@
+{
+  "gate": "GAP-H10-ASI-SEMANTIC-BOUNDARY-001",
+  "status": "DECLARED_TAXONOMY_V2_REVIEW_REQUIRED",
+  "home": "morten:theory-cosmos / theory.cosmos.efc-asi / H10",
+  "artifact": "docs/mwp-h10-taxonomy-v2.md",
+  "lane_count": 12,
+  "lanes": [
+    {"id":"H10.0","name":"Author identity & provenance","authority":"ORCID/citation identity","claim_boundary":"identity is not evidence"},
+    {"id":"H10.1","name":"Programme narrative & public concepts","authority":"energyflow-cosmology.com","claim_boundary":"public narrative is not empirical evidence"},
+    {"id":"H10.2","name":"Ontology & foundations","authority":"EFC master/ontology packages","claim_boundary":"ontology is not observation/runtime"},
+    {"id":"H10.3","name":"Physical EFC model & cosmology","authority":"master specification/equations","claim_boundary":"equations are not validation verdicts"},
+    {"id":"H10.4","name":"EBE & regime architecture","authority":"EBE/L0-L3 packages","claim_boundary":"validity protocol is not truth claim"},
+    {"id":"H10.5","name":"Measurement & comparison methodology","authority":"RCMP/likelihood/model ledgers","claim_boundary":"method is not result"},
+    {"id":"H10.6","name":"Empirical validation, predictions & falsification","authority":"public ledgers/DOIs/roadmap","claim_boundary":"consistent_with is not confirms"},
+    {"id":"H10.7","name":"Consciousness, cognition & meta-models","authority":"dedicated packages/meta references","claim_boundary":"model is not clinical/runtime consciousness evidence"},
+    {"id":"H10.8","name":"Symbiosis & structural intelligence","authority":"Symbiosis/VAAI packages","claim_boundary":"architecture intent is not live Opus capability"},
+    {"id":"H10.9","name":"ASI OS & ASI map","authority":"MWP/CAD/ASI artifacts","claim_boundary":"map is not capability grant"},
+    {"id":"H10.10","name":"Computational pipelines & reproducibility","authority":"Git/pipelines/configs/CI","claim_boundary":"generated output is not independently validated evidence"},
+    {"id":"H10.11","name":"Publication, DOI & public-artifact governance","authority":"maintenance/CI/Figshare","claim_boundary":"publication is not scientific truth"}
+  ],
+  "source_surfaces": {
+    "orcid": "https://orcid.org/0009-0002-4860-5095",
+    "figshare_author_profile": "https://figshare.com/authors/Morten_Magnusson/20477774",
+    "programme_website": "https://energyflow-cosmology.com/",
+    "authorial_website": "https://www.magnusson.as/",
+    "repository": "https://github.com/supertedai/EFC",
+    "public_repo_surface": "https://github.com/supertedai/EFC/tree/main/docs/public"
+  },
+  "global_invariants": [
+    "one canonical home lane per TheoryHomeRecord",
+    "derived projections may appear on multiple GUI surfaces",
+    "claim status and runtime status are separate axes",
+    "public publish requires validate-review-publish-readback",
+    "graph write requires authenticated authority and read-after-write",
+    "steward proposal does not grant owner/ASI authority"
+  ],
+  "status_vocabulary": ["DEFINITION","ONTOLOGY","HYPOTHESIS","MODEL_EQUATION","METHODOLOGY","PREDICTION_SEALED","PREDICTION_TESTED","EVIDENCE_INTERNAL","EVIDENCE_EXTERNAL","CONSISTENT_WITH","CONFRONTED_EXTERNAL","FALSIFIED_VARIANT","VALIDATION_PENDING","ARCHIVED","ARCHITECTURE_INTENT","RUNTIME_DECLARED","RUNTIME_LIVE_VERIFIED"],
+  "next_action": "Reclassify the 178 TheoryHomeRecords against H10.0-H10.11 using index/schema/DOI/ledger/public metadata; retain UNCLASSIFIED where evidence is insufficient.",
+  "mutation": {"graph_write": false, "public_publish": false, "agent_activation": false}
+}

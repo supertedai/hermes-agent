@@ -1,0 +1,20 @@
+{
+  "mwp_id": "MWP-UOSH-001",
+  "artifact_id": "mwp-kanban-child-authority-readback-v1",
+  "mode": "canonical-read-only",
+  "status": "PARENT_READY_CHILD_AUTHORITY_PENDING",
+  "database": {"path": "/home/agent/.hermes/kanban.db", "integrity": "ok"},
+  "parent": {"task_id": "t_fe6a5950", "row_status": "ready", "events": ["created", "promoted"]},
+  "counts": {"tasks": 1, "children": 0, "task_runs": 0, "task_links": 0, "task_comments": 0},
+  "gates": {
+    "identity": "BLOCKED_AUTHENTICATED_READBACK",
+    "role_provider": "BLOCKED_RUNTIME_RECEIPT",
+    "child_creation": "NOT_ATTEMPTED",
+    "lease": "MISSING",
+    "heartbeat": "MISSING",
+    "worker_activation": false
+  },
+  "next_action": "after identity and role/provider gates, create first dependency-scoped child through canonical Hermes CLI",
+  "mutation": {"sqlite_write": false, "cli_mutation": false, "worker_started": false},
+  "raw_payload_included": false
+}

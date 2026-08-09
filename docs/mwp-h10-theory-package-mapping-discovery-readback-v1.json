@@ -1,0 +1,46 @@
+{
+  "gate": "GAP-THEORY-PACKAGE-MAPPING-001",
+  "status": "DECLARED_HEURISTIC_DISCOVERY",
+  "mode": "metadata-only",
+  "scope": {
+    "tenant_id": "morten:theory-cosmos",
+    "domain_id": "theory.cosmos.efc-asi",
+    "home_class": "H10",
+    "source_repo": "https://github.com/supertedai/EFC",
+    "local_checkout": "/home/agent/agent-layer/symbiose-workspace/EFC"
+  },
+  "inventory": {
+    "top_level_readme_packages": 166,
+    "nested_readmes": 13,
+    "public_files": 28,
+    "heuristic_lane_counts": {
+      "efc_validation_prediction": 119,
+      "rcmp_methodology": 9,
+      "consciousness_meta_cognition": 14,
+      "efc_core_cosmos": 17,
+      "ebe_regime": 7
+    }
+  },
+  "classification_rule": "README/path keyword discovery only; not an authoritative claim/evidence/prediction classification",
+  "important_sources": [
+    "EFC/AGENTS.md",
+    "EFC/docs/public/README.md",
+    "EFC/docs/papers/efc/The-Regime-Consistent-Measurement-Principle-RCMP-A-Methodological-Framework-for-Multi-Scale-Physics/MANIFEST.md",
+    "EFC/docs/papers/efc/validity-aware-ai/docs/paper_unified_architecture_statement.md"
+  ],
+  "missing": [
+    "one TheoryHomeRecord per package",
+    "authoritative lane and claim-status classification",
+    "DOI/commit/public-surface provenance per package",
+    "theory vs methodology vs evidence vs prediction separation",
+    "consciousness/meta and ASI OS package boundaries",
+    "graph projection status and rollback references"
+  ],
+  "next_action": "Replace heuristic counts with package-level TheoryHomeRecords using index/schema/DOI/ledger metadata, then reconcile to H10 lanes before any graph write or steward activation.",
+  "mutation": {
+    "repo_artifact_write": true,
+    "graph_write": false,
+    "public_publish": false,
+    "agent_activation": false
+  }
+}

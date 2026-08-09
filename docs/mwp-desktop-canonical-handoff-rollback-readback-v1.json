@@ -1,0 +1,30 @@
+{
+  "artifact_id": "mwp-desktop-canonical-handoff-rollback-readback-v1",
+  "mwp_id": "MWP-UOSH-001",
+  "status": "ROLLED_BACK_TO_KNOWN_GOOD_SSH_BASELINE",
+  "reason": "canonical remote profile broke remote/browser path and threatened thread/Home continuity",
+  "host": ".13",
+  "restored": {
+    "connection_file": "/Users/morpheus/Library/Application Support/Opus/connection.json",
+    "restored_from": "/Users/morpheus/Library/Application Support/Opus/connection.json.pre-canonical-handoff-20260809-165243",
+    "mode": "ssh",
+    "remote_host": "192.168.40.15",
+    "remote_user": "agent",
+    "profiles": [],
+    "active_profile_json": "absent",
+    "active_desktop_restart": false,
+    "home_or_threads_switched": false
+  },
+  "rollback_backups": {
+    "pre_rollback_connection": "/Users/morpheus/Library/Application Support/Opus/connection.json.before-rollback-20260809-171403",
+    "pre_rollback_active_profile": "/Users/morpheus/Library/Application Support/Opus/active-profile.json.before-rollback-20260809-171403"
+  },
+  "live_readback": {
+    "ssh_target_reachable": true,
+    "ssh_target_hostname": "agent-Veriton-N1502G",
+    "canonical_remote_activation": false,
+    "writes_allowed": false
+  },
+  "decision": "stop_remote_mutations_until_thread-parity-safe canonical handoff is independently proven",
+  "next_action": "preserve SSH baseline; investigate canonical browser/session/thread store parity read-only"
+}

@@ -1,0 +1,21 @@
+{
+  "artifact_id": "mwp-hermes-local-surface-source-readback-v1",
+  "mwp_id": "MWP-UOSH-001",
+  "phase": "P3",
+  "status": "SURFACE_ACTIVITY_CONFIRMED_LIFECYCLE_RECEIPTS_OPEN",
+  "mode": "read-only-local-state-db-metadata-audit",
+  "source": "/home/agent/.hermes/state.db",
+  "query_only": true,
+  "raw_content_returned": false,
+  "surface_activity": [
+    {"source":"api_server","sessions":3456,"lifecycle_receipt":"UNVERIFIED"},
+    {"source":"cli","sessions":1198,"lifecycle_receipt":"UNVERIFIED"},
+    {"source":"cron","sessions":398,"lifecycle_receipt":"UNVERIFIED"},
+    {"source":"desktop","sessions":77,"lifecycle_receipt":"UNVERIFIED"},
+    {"source":"tui","sessions":14,"lifecycle_receipt":"UNVERIFIED"},
+    {"source":"subagent","sessions":7,"lifecycle_receipt":"UNVERIFIED"}
+  ],
+  "authority_interpretation": "all observed sources share local Hermes session authority in this readback; this does not prove cross-host parity or MWP receipt wiring",
+  "writes_allowed": false,
+  "next_action": "attach/observe one metadata-only MemoryManager lifecycle receipt per source without emitting payload or enabling writers"
+}

@@ -1,0 +1,18 @@
+{
+  "graph": {
+    "status": "REACHABLE",
+    "http_status": 200
+  },
+  "symbiose_api": {
+    "status": "REACHABLE",
+    "http_status": 200
+  },
+  "qdrant": {
+    "status": "REACHABLE",
+    "http_status": 200
+  },
+  "obsidian": {
+    "status": "UNVERIFIED",
+    "reason": "no local vault configured or found"
+  }
+}

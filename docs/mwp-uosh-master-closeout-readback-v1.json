@@ -1,0 +1,80 @@
+{
+  "mwp_id": "MWP-UOSH-001",
+  "recorded_at": "2026-08-06",
+  "status": "OPEN_REOPENED_BLOCKED",
+  "operational_autonomy_ready": false,
+  "active_gate": "GAP-KANBAN-AUTHORITY-001",
+  "closeout_rule": "parent closes only when all required rows are green or explicitly blocked with owner/evidence/next_action",
+  "gap_register": "docs/mwp-uosh-gap-register-v1.json",
+  "closeout_sweep": "docs/mwp-uosh-closeout-sweep-v1.json",
+  "final_closeout": "docs/mwp-final-closeout-readback-v2.json",
+  "cases": {
+    "CASE-AUTONOMY-00": {
+      "status": "FOUNDATION_SUBPACKAGE_CLOSED_PARENT_OPEN",
+      "evidence": ["agent/mwp_control_plane.py", "agent/mwp_autocoder_entrypoint.py", "mwp-role-provider-runtime-readback-v1", "mwp-candidate-role-provider-readback-v1", "mwp-candidate-role-provider-verdict-v2", "agent/mwp_role_provider.py", "122 MWP tests"],
+      "blockers": ["default model/provider catalog mismatch", "all five shadow candidates lack independent role/provider receipt"],
+      "next_action": "owner-authorized live role/provider resolver readback; no candidate routing"
+    },
+    "CASE-IDENTITY-01": {
+      "status": "BLOCKED",
+      "evidence": ["/brukere HTTP 200", "/symbiose HTTP 200", "canonical session_identity source contract", "users.json present mode 0600 with 5 entries", "session_identity.json present mode 0600 with 188 entries", "recent sampled session IDs absent from canonical binding", "prompt.submit supports client and durable identity stamping but active authenticated user_id readback is absent", "local stdio identity test covered; remote identity path remains unbound"],
+      "blockers": ["remote Desktop identity route gap; active principal readback blocked"],
+      "next_action": "owner-approved remote identity propagation design plus negative/read-after-write tests"
+    },
+    "CASE-DESKTOP-01": {
+      "status": "OPEN_ARCHITECTURE_GATE",
+      "evidence": ["desktop control-plane case contract", "desktop control inventory: connected backend-owned controls and explicit blocked execution boundary", "typed governed Faber route shadow contract created", "typed route review: compatible with JSON-RPC/MWP adapters; gates unresolved"],
+      "blockers": ["identity, Kanban, role/provider, reviewer/evidence and rollback gates unresolved", "no live typed authenticated Desktop route"],
+      "next_action": "resolve identity/Kanban/role-provider gates before implementing handler"
+    },
+    "AUTOMATION-01": {
+      "status": "PARENT_AUTHORITY_BOOTSTRAPPED_PARENT_BLOCKED",
+      "evidence": ["Kanban implementation identified", "kanban.db exists", "SQLite integrity ok", "task/run/event/link schema present", "mwp-kanban-bootstrap-readback-v2", "canonical task t_fe6a5950"],
+      "blockers": ["no dependency-scoped child tasks or leases yet", "identity and role/provider gates must be assigned before child routing"],
+      "next_action": "create first dependency-scoped child task after identity/role-provider gate assignment"
+    },
+    "CASE-SYMBIOSE-02": {
+      "status": "AUDIT_COMPLETE_SHADOW_REPAIR_BLOCKED",
+      "evidence": [
+        "mwp-symbiose-02a-audit-receipt.json",
+        "mwp-symbiose-canonicalization-decisions-v1.json",
+        "mwp-symbiose-relation-shadow-diff-v1.json",
+        "mwp-symbiose-labeled-retrieval-shadow-receipt-v1",
+        "agent/mwp_world_model_gates.py",
+        "135 MWP tests"
+      ],
+      "blockers": [
+        "rollback handles missing/unverified",
+        "owner labels missing",
+        "stable chunk identity/provenance route missing",
+        "GNN degraded=true",
+        "retrieval precision/recall unverified"
+      ],
+      "next_action": "owner-authorized provenance/rollback readback and labeled retrieval route"
+    }
+  },
+  "closed_subpackages": [
+    "control-plane foundation and wrapper-plan contract",
+    "SYMBIOSE-02A metadata-only graph/provenance audit",
+    "relation normalization shadow map and diff artifact",
+    "retrieval baseline schema and shadow measurement"
+  ],
+  "global_blockers": [
+    "canonical live MWP task authority parent bootstrapped but child lease not instantiated",
+    "active Desktop identity not read back",
+    "role/provider runtime binding not verified",
+    "graph/Qdrant/GNN rollback handles not verified",
+    "GNN collapse gate degraded",
+    "live mutation/promotion owner gate not satisfied",
+    "registry-based projection exists, but independent live liveness and dynamic role/provider receipt are not verified",
+    "304 new topology additions lack canonical owner/evidence mapping"
+  ],
+  "mutation": {
+    "graph_write": false,
+    "qdrant_write": false,
+    "gnn_write": false,
+    "scheduler_write": false,
+    "production_activation": false
+  },
+  "raw_payload_included": false
+}

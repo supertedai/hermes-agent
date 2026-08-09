@@ -1,0 +1,56 @@
+{
+  "artifact_id": "mwp-qdrant-neo4j-gnn-cross-plane-sample-readback-v1",
+  "mwp_id": "MWP-UOSH-001",
+  "phase": "P7",
+  "status": "LIVE_QDRANT_SAMPLE_READBACK_FULL_PARITY_OPEN",
+  "mode": "read-only-http",
+  "qdrant": {
+    "endpoint": "http://192.168.40.12:6333",
+    "collections_http_status": 200,
+    "collection_count": 110,
+    "sample_count": 25,
+    "sample": [
+      {"name":"ab_testing_metrics_morten","status":"green","points":4375,"vector_size":4096,"distance":"Cosine","payload_indexes":0},
+      {"name":"acquisition_event_v1","status":"green","points":0,"vector_size":4096,"distance":"Cosine","payload_indexes":0},
+      {"name":"action_outcome_v1","status":"green","points":0,"vector_size":4096,"distance":"Cosine","payload_indexes":0},
+      {"name":"anomaly_v1","status":"green","points":50,"vector_size":4096,"distance":"Cosine","payload_indexes":0},
+      {"name":"architecture_task_v1","status":"green","points":50,"vector_size":4096,"distance":"Cosine","payload_indexes":0},
+      {"name":"assumption_v1","status":"green","points":50,"vector_size":4096,"distance":"Cosine","payload_indexes":0},
+      {"name":"atlas_entities","status":"green","points":149,"vector_size":4096,"distance":"Cosine","payload_indexes":0},
+      {"name":"behavioral_invariants","status":"green","points":6,"vector_size":4096,"distance":"Cosine","payload_indexes":0},
+      {"name":"biology","status":"green","points":230713,"vector_size":4096,"distance":"Cosine","payload_indexes":0},
+      {"name":"biology_framework_v1","status":"green","points":16,"vector_size":4096,"distance":"Cosine","payload_indexes":0},
+      {"name":"biology_private","status":"green","points":0,"vector_size":4096,"distance":"Cosine","payload_indexes":0},
+      {"name":"canonical_facts","status":"green","points":30,"vector_size":4096,"distance":"Cosine","payload_indexes":0},
+      {"name":"causal_relation_v1","status":"green","points":50,"vector_size":4096,"distance":"Cosine","payload_indexes":0},
+      {"name":"causal_variable_v1","status":"green","points":0,"vector_size":4096,"distance":"Cosine","payload_indexes":0},
+      {"name":"change_proposal_v1","status":"green","points":0,"vector_size":4096,"distance":"Cosine","payload_indexes":0},
+      {"name":"claim_v1","status":"green","points":33884,"vector_size":4096,"distance":"Cosine","payload_indexes":0},
+      {"name":"code_module_v1","status":"green","points":50,"vector_size":4096,"distance":"Cosine","payload_indexes":0},
+      {"name":"coding","status":"green","points":25930,"vector_size":4096,"distance":"Cosine","payload_indexes":0},
+      {"name":"cognitive","status":"green","points":17019,"vector_size":4096,"distance":"Cosine","payload_indexes":0},
+      {"name":"cognitive_framework_v1","status":"green","points":50,"vector_size":4096,"distance":"Cosine","payload_indexes":0},
+      {"name":"cognitive_private","status":"green","points":0,"vector_size":4096,"distance":"Cosine","payload_indexes":0},
+      {"name":"company_v1","status":"green","points":0,"vector_size":4096,"distance":"Cosine","payload_indexes":0},
+      {"name":"conversation_log_v1","status":"green","points":66,"vector_size":4096,"distance":"Cosine","payload_indexes":0},
+      {"name":"country_v1","status":"green","points":0,"vector_size":4096,"distance":"Cosine","payload_indexes":0},
+      {"name":"deprecated_concept_v1","status":"green","points":50,"vector_size":4096,"distance":"Cosine","payload_indexes":0}
+    ],
+    "full_collection_descriptor_audit": "OPEN_AFTER_GATEWAY_BLOCKED_BROAD_LOOP"
+  },
+  "cross_plane_requirements": {
+    "neo4j_canonical_key_version_hash": "required",
+    "qdrant_point_identity_scope_payload_indexes": "required",
+    "gnn_feature_label_checkpoint_provenance": "required",
+    "graph_vector_gnn_freshness_rollback": "required"
+  },
+  "confirmed_sample_findings": [
+    "Qdrant collection count is 110",
+    "sample collections are green with 4096-dimensional cosine vectors",
+    "sample collections expose zero payload indexes",
+    "some sampled collections are empty",
+    "full collection-wide identity/dimension/metric/payload parity is not proven"
+  ],
+  "writes_allowed": false,
+  "next_action": "complete bounded collection batches and compare Qdrant descriptors against Neo4j canonical identity and GNN contracts"
+}

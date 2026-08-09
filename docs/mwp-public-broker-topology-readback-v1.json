@@ -1,0 +1,38 @@
+{
+  "artifact_id": "mwp-public-broker-topology-readback-v1",
+  "mwp_id": "MWP-UOSH-001",
+  "status": "BLOCKED_PUBLIC_BROKER_SEPARATE_FROM_DOT12",
+  "mode": "read-only-public-topology-probe",
+  "evidence": {
+    "hostname": "ai.byopus.com",
+    "dns_cname": "3ju8c5ya2ujonxgzr.3mtsnwvh3e4hndvej.ngrok-cname.com",
+    "resolved_addresses_observed": [
+      "3.120.21.0",
+      "63.179.158.178",
+      "18.195.66.137",
+      "18.192.251.158",
+      "35.159.187.188",
+      "63.179.132.38"
+    ],
+    "public_route": "/api/mwp/runtime",
+    "http_status": 401,
+    "server_header": "Python/3.9 aiohttp/3.13.5",
+    "canonical_dot12_route": {
+      "host_port": "192.168.40.12:8010",
+      "http_status": 200,
+      "model_id": "cco",
+      "served_model_count": 3
+    }
+  },
+  "topology_conclusion": "ai.byopus.com does not currently forward to efc-unified-api on .12:8010; it reaches a separate aiohttp/ngrok broker surface, consistent with the previously observed .14:9120 layer.",
+  "required_fix": "Implement or forward authenticated /api/mwp/runtime on the actual aiohttp/ngrok broker owner, then read-after-write through ai.byopus.com.",
+  "non_claims": [
+    "The .12 route is not treated as public broker authority.",
+    "OpenWebUI residual adapter is not treated as current public authority.",
+    "No credentials, cookies or tokens were read.",
+    "No graph, Kanban or projection write was performed."
+  ],
+  "authority_blocker": "separate broker host/source access required",
+  "rollback_ref": null,
+  "provenance": "DNS + HTTPS header/status probe from .15"
+}

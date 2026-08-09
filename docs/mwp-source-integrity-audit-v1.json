@@ -1,0 +1,38 @@
+{
+  "artifact_id": "mwp-source-integrity-audit-v1",
+  "mwp_id": "MWP-UOSH-001",
+  "status": "BLOCKED_CANONICAL_SOURCE_PATHS_MISSING",
+  "mode": "read-only-source-integrity-audit",
+  "cad": {
+    "source_index_exists": true,
+    "roadmap_exists": true,
+    "cad_component_count": 30,
+    "markdown_file_count": 36
+  },
+  "adr": {
+    "canonical_source_verified": [
+      "ADR-H10-SEMANTIC-BOUNDARY-001",
+      "ADR-TRUTH-001"
+    ],
+    "textual_reference_only": [
+      "ADR-022",
+      "ADR-035",
+      "ADR-038",
+      "ADR-045",
+      "ADR-046"
+    ]
+  },
+  "bl": {
+    "indexed_reference_count": 16,
+    "canonical_source_owner_mapping": "PENDING"
+  },
+  "non_claims": [
+    "No ADR source file was invented.",
+    "No owner or adoption was inferred.",
+    "No projection write was performed.",
+    "No graph or Obsidian authority was promoted."
+  ],
+  "next_action": "Resolve canonical source path, owner, authority and adoption evidence for the five textual ADR references and all indexed BL references before projection.",
+  "rollback_ref": null,
+  "provenance": "local repository read-only existence audit"
+}

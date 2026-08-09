@@ -1,0 +1,34 @@
+{
+  "artifact_id": "mwp-cad-adr-bl-intent-gate-readback-v16",
+  "mwp_id": "MWP-UOSH-001",
+  "gate_id": "cad-adr-bl-intent-registry",
+  "mode": "metadata-only-source-runtime-verification",
+  "status": "BLOCKED",
+  "owner": "Morten / authorized source-of-truth and runtime owners",
+  "evidence": {
+    "local_closeout": "docs/mwp-final-closeout-readback.json",
+    "registry_status": "OPEN",
+    "registry_open_rows": 9,
+    "gate_status": "BLOCKED",
+    "gate_gap": "no single live CAD→ADR→BL→runtime alignment spine; source evidence is static/audit-timestamp only",
+    "git": "local metadata-only readback verified; working tree dirty",
+    "graph": "Neo4j write authority not configured; no write/read-after-write receipt",
+    "obsidian": "mwp-destination-write-preflight-v1 read_after_write=PASS",
+    "tests": "scripts/run_tests.sh targeted suite: 14 passed, 0 failed"
+  },
+  "next_action": "Owner provides authenticated metadata-only CAD/ADR/BL-to-runtime reconciliation and authorized Graph write/read-after-write receipt; rerun this gate and verify receipts before any promotion.",
+  "promotion_rule": "Do not promote static inventory, reachability, collection presence, or local source/runtime evidence to LIVE_VERIFIED.",
+  "mutation": {
+    "source": false,
+    "runtime": false,
+    "graph": false,
+    "obsidian": false,
+    "production": false
+  },
+  "ledger_event": {
+    "status": "OPEN",
+    "provisional": true,
+    "receipts_verified": false
+  },
+  "raw_payload_included": false
+}

@@ -1,0 +1,60 @@
+{
+  "artifact_id": "mwp-role-provider-gate-verification-v1",
+  "mwp_id": "MWP-UOSH-001",
+  "recorded_at": "2026-08-07T15:07:17Z",
+  "mode": "metadata-only-fail-closed",
+  "scope": {
+    "principal": "morten",
+    "installation_id": "mwp-status-quo",
+    "login_surface_id": "current-hermes-chat",
+    "agent_id": "opus"
+  },
+  "gate": "role-provider-runtime-binding",
+  "status": "BLOCKED",
+  "source_evidence": {
+    "validator": "agent/mwp_role_provider.py",
+    "current_turn_readback": "docs/mwp-role-provider-current-turn-readback-v2.json",
+    "runtime_endpoint_readback": "docs/mwp-role-provider-runtime-endpoint-readback-v1.json",
+    "observed_model_id": "gpt-5.6-luna",
+    "observed_provider_id": "openai-api",
+    "catalog_verdict": "CONSISTENT_WITH_CATALOG_BUT_LIVE_RECEIPT_REQUIRED",
+    "runtime_process": "present in metadata-only topology; standard resolver/API route not verified"
+  },
+  "verification": {
+    "command": "scripts/run_tests.sh tests/hermes_cli/test_runtime_provider_resolution.py tests/hermes_cli/test_provider_parity.py tests/test_mwp_role_provider.py -q",
+    "result": "63 passed, 0 failed",
+    "breakdown": {
+      "runtime_provider_resolution": "55 passed",
+      "provider_parity": "2 passed",
+      "mwp_role_provider": "6 passed"
+    }
+  },
+  "missing_authoritative_runtime_evidence": [
+    "role_id",
+    "api_mode",
+    "llm_instance_id",
+    "fallback health/transition",
+    "authenticated runtime resolver receipt",
+    "freshness timestamp bound to the active turn"
+  ],
+  "owner": "Morten / authorized runtime configuration owner",
+  "next_action": "Provide an owner-authorized authenticated metadata-only resolver receipt containing role_id, provider_id, model_id, api_mode, llm_instance_id, fallback health/transition and freshness timestamp; then rerun this gate.",
+  "mutation": {
+    "config_write": false,
+    "restart": false,
+    "task_write": false,
+    "lease_claim": false,
+    "routing": false,
+    "graph_write": false,
+    "production_activation": false
+  },
+  "ledger": {
+    "event_id": "EVT-1b39f678cd90",
+    "cad_id": "CAD-EVT-907396689b2c",
+    "adr_id": "ADR-EVT-907396689b2c",
+    "bl_id": "BL-EVT-907396689b2c",
+    "status": "BLOCKED",
+    "gap": "unverified receipts: graph"
+  },
+  "raw_payload_included": false
+}

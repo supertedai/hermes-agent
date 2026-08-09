@@ -1,0 +1,46 @@
+{
+  "mwp_id": "MWP-UOSH-001",
+  "gate_id": "cad-adr-bl-intent-registry",
+  "artifact_id": "mwp-cad-adr-bl-intent-gate-readback-v26",
+  "mode": "metadata-only-source-runtime-verification",
+  "status": "BLOCKED",
+  "scope": {
+    "principal": "morten",
+    "installation_id": "mwp-status-quo",
+    "login_surface_id": "current-hermes-chat",
+    "agent_id": "opus",
+    "system_scope": "mwp-cad-adr-bl-intent"
+  },
+  "fresh_evidence": {
+    "topology_snapshot": "docs/mwp-local-topology-readback.json",
+    "topology_inventory_hash": "89f8e4b39b0a2a1f4c66c39de3e794f3a81bc7d76266570cc03ad6784e041e9f",
+    "topology_item_count": 65,
+    "topology_delta": {"added": [], "removed": [], "changed": []},
+    "closeout_snapshot": "docs/mwp-final-closeout-readback.json",
+    "closeout_status": "OPEN",
+    "registry_open_rows": 8,
+    "receipt_statuses": {"git": "VERIFIED", "graph": "BLOCKED", "obsidian": "VERIFIED"},
+    "git_head": "96b51c4bcff981e1088be0f52cfb3e13fd79a94c",
+    "git_worktree": "dirty",
+    "local_source": "agent/mwp_asi_alignment_registry.py",
+    "local_runtime_observation": "metadata-only topology confirms local listeners, processes and active hermes-dashboard.service; no authoritative CAD-to-ADR-to-BL-to-runtime reconciliation was established",
+    "local_test_result": "14 passed, 0 failed",
+    "test_command": "scripts/run_tests.sh tests/test_mwp_asi_alignment_registry.py tests/test_mwp_asi_closeout.py tests/test_mwp_receipt_adapters.py tests/test_mwp_receipt_coordinator.py -q"
+  },
+  "blocker": "External authoritative CAD/ADR/BL reconciliation and graph write/read-after-write authority are unavailable. Local source, runtime inventory, and passing tests do not establish LIVE_VERIFIED.",
+  "owner": "Morten / authorized CAD, ADR, BL source-of-truth and runtime owners",
+  "evidence_required": [
+    "authenticated metadata-only CAD-to-ADR-to-BL-to-runtime reconciliation",
+    "owner and canonical version for each mapped record",
+    "authorized graph receipt with write/read-after-write verification"
+  ],
+  "next_action": "Owner supplies the bounded authenticated reconciliation and graph authority receipt; rerun this gate and retain BLOCKED until all projection and read-after-write evidence is verified.",
+  "mutation": {
+    "source_write": false,
+    "graph_write": false,
+    "obsidian_write": false,
+    "production_activation": false
+  },
+  "ledger_status": "OPEN",
+  "raw_payload_included": false
+}

@@ -1,0 +1,39 @@
+{
+  "artifact_id": "mwp-chat-dogfooding-acceleration-gate-v1",
+  "mwp_id": "MWP-UOSH-001",
+  "status": "READY_AFTER_RUNTIME_AUTHORITY",
+  "purpose": "allow Hermes chat itself to consume governed MWP/Memory Fabric context and emit metadata-only learning receipts once runtime gates close",
+  "benefit": "reduce repeated explanation/tool friction and accelerate future MWP work through implicit scoped recall and feedback",
+  "chat_read_path": [
+    "implicit turn-start prefetch",
+    "Hermes local hot-path fallback",
+    "MWP/Memory Fabric scoped enrichment",
+    "provenance/confidence/freshness labels",
+    "ranked context projection into current turn"
+  ],
+  "chat_write_path": [
+    "implicit turn observation",
+    "metadata-only lifecycle receipt",
+    "async governed candidate ingest",
+    "promotion only after canonical authority/evaluation",
+    "rollback/correction available"
+  ],
+  "required_before_activation": [
+    "authenticated principal and tenant/session binding",
+    "P1 canonical broker/session/thread parity",
+    "P2 canonical CRUD/read-after-write/rollback",
+    "Hermes MemoryManager receipt bridge runtime wiring",
+    "measured latency at or within approved Hermes local baseline",
+    "scope isolation and stale/freshness labels",
+    "cross-surface projection parity",
+    "no raw payload in metadata receipts"
+  ],
+  "current_status": {
+    "Hermes_chat_memory": "ACTIVE_LOCAL_BASELINE",
+    "MWP_graph_context_in_this_chat": "NOT_RUNTIME_VERIFIED",
+    "dogfooding": "BLOCKED_UNTIL_GATES",
+    "writes_allowed": false
+  },
+  "activation_rule": "never silently treat graph persistence or local artifact presence as chat runtime authority",
+  "next_action": "close P1/P2 and runtime receipt gates, then run a bounded shadow dogfooding turn before promotion"
+}

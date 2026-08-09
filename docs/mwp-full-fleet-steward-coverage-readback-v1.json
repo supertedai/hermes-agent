@@ -1,0 +1,44 @@
+{
+  "mwp_id": "MWP-UOSH-001",
+  "artifact_id": "mwp-full-fleet-steward-coverage-readback-v1",
+  "mode": "metadata-only-dynamic-coverage",
+  "status": "FULL_REGISTRY_COVERAGE_RUNTIME_PARTIAL",
+  "snapshot_at": "2026-08-06T14:42:47.516225+00:00",
+  "registry_total": 69,
+  "kind_counts": {
+    "auto-detected": 3,
+    "core-role": 23,
+    "domain-steward": 15,
+    "domain-steward-pending-bl3620": 11,
+    "dynamic-expert": 2,
+    "fleet-worker": 7,
+    "human-principal": 1,
+    "superseded-draft": 6,
+    "unknown": 1
+  },
+  "projection": {
+    "live_verified": 3,
+    "stale": 9,
+    "declared_only": 10,
+    "no_capability_evidence": 47,
+    "candidate_count": 3,
+    "freshness_gate_seconds": 900
+  },
+  "stewards": {
+    "declared_domain_stewards": 15,
+    "pending_domain_stewards": 11,
+    "all_steward_kinds_in_registry": true
+  },
+  "adaptive_scope": {
+    "all_registry_agents_included": true,
+    "all_steward_kinds_included": true,
+    "hardcoded_agent_list": false,
+    "independent_live_liveness": "MISSING",
+    "capacity_load": "MISSING",
+    "role_provider_receipt": "MISSING",
+    "handoff_reassignment": "MISSING"
+  },
+  "mutation": {"registry_write": false, "agent_activation": false, "task_claim": false},
+  "next_action": "obtain per-agent live liveness and role/provider receipts before routing any candidate",
+  "raw_payload_included": false
+}

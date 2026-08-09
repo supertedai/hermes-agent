@@ -1,0 +1,30 @@
+{
+  "gate": "canonical-world-model-hub",
+  "status": "BLOCKED",
+  "scope": {
+    "user_id": "morten",
+    "installation_id": "mwp-status-quo",
+    "login_surface_id": "current-hermes-chat",
+    "agent_id": "opus"
+  },
+  "api": {
+    "host": ".12:8010",
+    "openapi_status": 200,
+    "matching_world_model_routes": []
+  },
+  "measured_routes": {
+    "/api/v1/learning/status": {"http_status": 200, "status": "active"},
+    "/learning/status": {"http_status": 200, "status": "active"},
+    "/conversation/health": {"http_status": 200, "status": "ok"},
+    "/learning/unified": {"http_status": 200, "response_shape": "metadata-only"}
+  },
+  "not_proven": [
+    "WorldModelExperience per user/agent/source/freshness",
+    "WorldModelScore per user/agent/source/freshness",
+    "canonical hub ownership",
+    "world-model write/readback"
+  ],
+  "owner": "canonical world-model/Cortex runtime owner on .12/.13",
+  "evidence": "direct .12:8010 OpenAPI and parameterless GET route readback",
+  "next_action": "publish authenticated metadata-only WorldModelExperience/Score read route with user_id, agent_id, source, recorded_at, freshness and provenance"
+}

@@ -1,0 +1,43 @@
+{
+  "mwp_id": "MWP-UOSH-001",
+  "case_id": "CASE-SYMBIOSE-02",
+  "work_package": "SYMBIOSE-02C",
+  "artifact_id": "symbiose-retrieval-baseline-v1",
+  "dataset_id": "symbiose-shadow-eval-v1",
+  "mode": "read-only-baseline",
+  "collection": "efc",
+  "cases": {
+    "positive": {
+      "query_class": "known-concept",
+      "http_status": 200,
+      "chunk_count": 5,
+      "total_chunks": 5,
+      "latency_ms": 76.7
+    },
+    "negative": {
+      "query_class": "unknown-control",
+      "http_status": 200,
+      "chunk_count": 5,
+      "total_chunks": 5,
+      "latency_ms": 66.6
+    }
+  },
+  "interpretation": {
+    "service_health": "PASS",
+    "positive_retrieval": "OBSERVED",
+    "negative_false_positive_signal": "PRESENT",
+    "precision_at_k": "UNVERIFIED",
+    "recall_at_k": "UNVERIFIED",
+    "stale_hit_rate": "UNVERIFIED",
+    "provenance_completeness": "UNVERIFIED",
+    "quality_gate": "BLOCKED_PENDING_LABELED_EVAL_SET"
+  },
+  "mutation": {
+    "qdrant_write": false,
+    "collection_promotion": false,
+    "graph_write": false,
+    "gnn_write": false
+  },
+  "next_permitted_action": "attach labeled expected-neighbor and negative-case judgments before comparing shadow retrieval",
+  "raw_payload_included": false
+}

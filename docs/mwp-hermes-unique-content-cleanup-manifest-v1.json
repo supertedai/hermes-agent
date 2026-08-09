@@ -1,0 +1,44 @@
+{
+  "artifact_id": "mwp-hermes-unique-content-cleanup-manifest-v1",
+  "status": "REVIEW_REQUIRED_NO_DELETE",
+  "purpose": "Separate project-specific MWP/CAD/ADR/BL/ASI content from the Hermes fork without deleting Hermes core/Desktop functionality.",
+  "source_repository": "https://github.com/supertedai/hermes-agent.git",
+  "source_branch": "mwp/uosh-automation-01",
+  "canonical_destination": "https://github.com/supertedai/AGI.git",
+  "destination_branch": "mwp/uosh-automation-01",
+  "include_patterns": [
+    "docs/mwp-*.json",
+    "docs/mwp-*.md",
+    "docs/ADR-H10-SEMANTIC-BOUNDARY-001.md",
+    "docs/ADR-TRUTH-001-cross-surface-canonical-truth.md",
+    "agent/mwp_*.py",
+    "scripts/mwp_cross_surface_reconcile.py",
+    "scripts/mwp_closeout_tick.py",
+    "scripts/mwp_topology_tick.py"
+  ],
+  "explicit_exclusions": [
+    "all Hermes core agent code outside agent/mwp_*.py",
+    "Desktop/Electron code and packaged artifacts",
+    "gateway, provider, auth and session implementation not matching MWP patterns",
+    "upstream Nous/Hermes documentation and installer code",
+    "user/session databases, cookies, tokens, credentials and runtime homes",
+    "unrelated Hermes tests and project files"
+  ],
+  "cleanup_rules": [
+    "Do not delete the Hermes repository.",
+    "Do not delete the Hermes fork or Desktop source.",
+    "Do not mutate the current Hermes branch until AGI remote read-after-write is verified.",
+    "Expand patterns to an exact file list and review before deletion.",
+    "A cleanup commit removes files from the current tree only; history purge is a separate owner-gated operation.",
+    "No history rewrite or force-push is authorized by this manifest."
+  ],
+  "migration_evidence": {
+    "agi_initial_commit": "9a7f085ec",
+    "agi_latest_target_update": "4087d46c5",
+    "mwp_export_sha256": "a38c8ed3fe6a03408a90efc178009edfed775a727e087ce45d5049f9b7d57731",
+    "hermes_branch_retained": true,
+    "deletion_executed": false
+  },
+  "next_action": "Expand include_patterns against the exact Hermes branch tree, compare with AGI import, obtain owner approval for a bounded cleanup commit, and keep history purge separate.",
+  "raw_payload_included": false
+}

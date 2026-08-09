@@ -1,0 +1,112 @@
+{
+  "gate": "GAP-H10-PUBLIC-PUBLISH-WIRE-001",
+  "status": "DECLARED_CAPABILITY_MATRIX_DRY_RUN",
+  "mode": "read-only",
+  "owner": "morten",
+  "operator_proposal": "opus + efc-asi-steward",
+  "pipeline_contract": "docs/mwp-h10-publication-pipeline-contract-v1.md",
+  "source_validation": {
+    "command": "python3 scripts/maintenance/efc_verify.py",
+    "paper_dirs": 165,
+    "errors": 0,
+    "warnings": 1,
+    "warning": "C4 internal-version drift: ledger.json=3.0 vs validation-ledger/index.md=4.2",
+    "status": "PASS_WITH_WARNING"
+  },
+  "destinations": [
+    {
+      "id": "efc_git",
+      "surface": "https://github.com/supertedai/EFC",
+      "authority": "source Git repository",
+      "read_status": "READ_VERIFIED",
+      "write_route": "git push / protected main workflow",
+      "write_status": "OWNER_GATED_NOT_ATTEMPTED",
+      "rollback": "git commit/revert",
+      "notes": "local main ahead of origin/main by 1 commit"
+    },
+    {
+      "id": "efc_maintenance_ci",
+      "surface": "EFC/scripts/maintenance + GitHub Actions",
+      "authority": "validation/CI",
+      "read_status": "EXECUTED_READ_ONLY",
+      "write_route": "maintenance generator/DOI sync; CI auto-commit on development branches",
+      "write_status": "DECLARED_NOT_ACTIVATED_BY_MWP",
+      "rollback": "source commit and generated artifact diff",
+      "notes": "0 errors, 1 C4 warning"
+    },
+    {
+      "id": "figshare_author_profile",
+      "surface": "https://figshare.com/authors/Morten_Magnusson/20477774",
+      "authority": "publication/deposit provenance",
+      "read_status": "HTTP_202_PROFILE_CONTENT_NOT_READ_BACK",
+      "write_route": "Figshare API/deposit workflow",
+      "write_status": "NOT_VERIFIED",
+      "rollback": "Figshare version/deposit metadata",
+      "notes": "no publication count or claim inferred"
+    },
+    {
+      "id": "docs_public",
+      "surface": "EFC/docs/public",
+      "authority": "public artifact source",
+      "read_status": "LOCAL_READ_VERIFIED",
+      "write_route": "Git source + maintenance/CI + protected main",
+      "write_status": "OWNER_GATED_NOT_ATTEMPTED",
+      "rollback": "Git commit/revert and generated artifact regeneration",
+      "notes": "public HTML editorial drift remains partly manual per EFC/AGENTS.md"
+    },
+    {
+      "id": "github_pages",
+      "surface": "https://supertedai.github.io/EFC/public/EFC_Validation_Ledger.html",
+      "authority": "rendered public surface",
+      "read_status": "HTTP_200_READ_VERIFIED",
+      "write_route": "GitHub Pages workflow from repository",
+      "write_status": "NOT_ACTIVATED",
+      "rollback": "source commit/redeploy",
+      "notes": "publish is downstream of Git/main workflow"
+    },
+    {
+      "id": "programme_website",
+      "surface": "https://energyflow-cosmology.com/",
+      "authority": "public narrative/reference surface",
+      "read_status": "HTTP_200_READ_VERIFIED",
+      "write_route": "CMS/API route not discovered",
+      "write_status": "BLOCKED_WRITE_ROUTE",
+      "rollback": "CMS revision/backup route not read back"
+    },
+    {
+      "id": "authorial_website",
+      "surface": "https://www.magnusson.as/",
+      "authority": "authorial programme/reference surface",
+      "read_status": "HTTP_403_READ_BLOCKED",
+      "write_route": "CMS/API route not discovered",
+      "write_status": "BLOCKED_READ_AND_WRITE_ROUTE",
+      "rollback": "not verified"
+    },
+    {
+      "id": "orcid",
+      "surface": "https://orcid.org/0009-0002-4860-5095",
+      "authority": "author identity/provenance",
+      "read_status": "DECLARED_OWNER_SOURCE_NOT_FULLY_READ_BACK",
+      "write_route": "ORCID API/profile workflow",
+      "write_status": "NOT_ATTEMPTED",
+      "rollback": "ORCID record history"
+    },
+    {
+      "id": "mwp_graph",
+      "surface": "Symbiose/graph projection",
+      "authority": "typed graph projection",
+      "read_status": "LIVE_READ_PARTIAL",
+      "write_route": "Neo4j writer authority",
+      "write_status": "BLOCKED",
+      "rollback": "not configured/read back"
+    }
+  ],
+  "dry_run_result": {
+    "source_validation": "PASS_WITH_WARNING",
+    "automatic_all_surface_update": "NOT_READY",
+    "safe_automatic_scope_now": ["metadata discovery", "EFC verifier", "drift report", "propose patch/receipt"],
+    "owner_gated_scope": ["git push", "Figshare deposit/update", "public HTML narrative edits", "website CMS writes", "graph write"]
+  },
+  "next_action": "Resolve C4 version warning, discover/verify Figshare and website writer/readback adapters, then run a no-claim-change propagation dry-run with a complete receipt.",
+  "mutation": {"git_write": false,"figshare_write": false,"website_write": false,"graph_write": false,"agent_activation": false}
+}

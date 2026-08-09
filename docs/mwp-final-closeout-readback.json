@@ -1,0 +1,194 @@
+{
+  "scope": {
+    "user_id": "morten",
+    "installation_id": "mwp-status-quo",
+    "login_surface_id": "current-hermes-chat",
+    "agent_id": "opus"
+  },
+  "registry": {
+    "registry_id": "mwp-asi-status-quo-v1",
+    "source_snapshot": "mwp topology refresh",
+    "status": "OPEN",
+    "row_count": 9,
+    "open_rows": 8,
+    "rows": [
+      {
+        "key": "cad-adr-bl-intent-registry",
+        "asi_capability": "ASI architecture intent and governance",
+        "intent_refs": ".12 planning/cad/CAD-0..CAD-Ø; planning/ADR-042..059; BL ledger",
+        "implementation": "CAD/ADR/BL documents and planning registry",
+        "git_source": ".12 repo planning/ and git-deploy hygiene",
+        "daemon_or_sync": "brain_vault_graph_sync; adr047_backfill_attribution",
+        "service_route": "read-only file/graph inventory",
+        "scope": "system architecture",
+        "evidence": "static inventory: CAD=30, ADR=19, BL-related files=215",
+        "freshness": "audit timestamp only",
+        "drift": "not continuously reconciled",
+        "rollback_gate": "metadata-only; no mutation",
+        "status": "BLOCKED",
+        "gap": "BLOCKED; owner=external CAD/ADR/BL authority (not identified in local checkout); evidence=static inventory only (CAD=30, ADR=19, BL-related files=215), no live CAD→ADR→BL→runtime reconciliation or graph write receipt; next_action=authority owner must provide a bounded canonical alignment readback with source refs, runtime receipt and graph read-after-write before promotion"
+      },
+      {
+        "key": "git-deploy-daemon-status",
+        "asi_capability": "source-of-truth and deployment integrity",
+        "intent_refs": "ADR-043; ADR-053; docs/GIT_DEPLOY_HYGIENE.md",
+        "implementation": "git deploy drift scripts/tests and repository mirrors",
+        "git_source": "Mac .13 source / .12 runtime mirror",
+        "daemon_or_sync": "efc_repo_sync_daemon; git_repo_pull_daemon; daemon_status_exporter",
+        "service_route": "git/deploy drift checks",
+        "scope": "installation and fleet",
+        "evidence": "drift test families and sync daemons found; no current end-to-end readback",
+        "freshness": "not live-verified in this registry build",
+        "drift": "PARTIAL",
+        "rollback_gate": "update protection and deploy drift gates",
+        "status": "PARTIAL",
+        "gap": "source/commit/container/runtime tuple needs one live receipt"
+      },
+      {
+        "key": "daemon-bl-health-alignment",
+        "asi_capability": "autonomous daemon governance",
+        "intent_refs": "BL-183; BL-243; BL-160/161",
+        "implementation": "daemon integration and health auditors",
+        "git_source": ".12 tools/ daemon sources",
+        "daemon_or_sync": "daemon_bl_integration_auditor; daemon_health_orchestrator_daemon; daemon_watchdog",
+        "service_route": "heartbeat/watchdog/status exports",
+        "scope": "daemon and service fleet",
+        "evidence": "source and tests found; candidate inventory includes historical backups",
+        "freshness": "not normalized into current registry",
+        "drift": "UNKNOWN",
+        "rollback_gate": "watchdog/restart policies require separate gate",
+        "status": "PARTIAL",
+        "gap": "active-vs-archived daemon registry and live status need reconciliation"
+      },
+      {
+        "key": "per-user-topology",
+        "asi_capability": "user/install/login-surface topology awareness",
+        "intent_refs": "ADR-049; ADR-055; MWP perfect-topology contract",
+        "implementation": "mwp_user_topology_startup scanner",
+        "git_source": "Hermes runtime + MWP projection",
+        "daemon_or_sync": "startup scan; future discovery/heartbeat gate",
+        "service_route": "Life Contract, memory, learning, cognitive and host probes",
+        "scope": "installation + login surface + user + agent",
+        "evidence": "metadata-only topology context readback",
+        "freshness": "FRESH",
+        "drift": "{\"added\": [], \"changed\": [], \"removed\": []}",
+        "rollback_gate": "BLOCKED/UNKNOWN prevents green promotion",
+        "status": "CONNECTED_READ_ONLY",
+        "gap": "remote inventory remains partial"
+      },
+      {
+        "key": "life-contract-domain-agent",
+        "asi_capability": "user-scoped agent/domain orchestration",
+        "intent_refs": "ADR-047 phase 5; ADR-055; BL-3624",
+        "implementation": "Life Contract API, steward_binding, agent roster",
+        "git_source": ".12 unified API",
+        "daemon_or_sync": "life_contract_aggregator; user provisioning; post-creation validator",
+        "service_route": "life-contract facts/steward-context/deploy-domain-agent",
+        "scope": "user + domain + steward-agent",
+        "evidence": "9 resolved domains in latest Morten readback; IOT unresolved",
+        "freshness": "live readback",
+        "drift": "BLOCKED",
+        "rollback_gate": "post-creation round-trip required",
+        "status": "BLOCKED",
+        "gap": "IOT binding and live writer/provisioner round-trip not closed"
+      },
+      {
+        "key": "world-model-hub-alignment",
+        "asi_capability": "canonical shared world model",
+        "intent_refs": "CAD/ADR ASI architecture; world_model_hub; BL world-model work",
+        "implementation": "WorldModelExperience/WorldModelScore/world_model_hub",
+        "git_source": ".12 tools and graph schema",
+        "daemon_or_sync": "world-model, prediction, learning and GNN daemons",
+        "service_route": "Neo4j graph read paths and cognitive/world-model routes",
+        "scope": "system + user + agent",
+        "evidence": "static graph-read references; no complete live round-trip",
+        "freshness": "UNVERIFIED",
+        "drift": "UNKNOWN",
+        "rollback_gate": "read-only audit; no promotion",
+        "status": "UNVERIFIED",
+        "gap": "canonical hub, provenance, freshness and agent source alignment not live-proven"
+      },
+      {
+        "key": "chat-cortex-shared-readview",
+        "asi_capability": "chat and Cortex shared working world model",
+        "intent_refs": "CAD/ADR ASI architecture; MWP world-model contract",
+        "implementation": "ConversationWorkingModel and OpusWorkingMemory references",
+        "git_source": ".12 source references",
+        "daemon_or_sync": "memory_bus/working-memory consumers",
+        "service_route": "no verified OpenAPI round-trip route",
+        "scope": "login surface + user + session",
+        "evidence": "static references only",
+        "freshness": "UNKNOWN",
+        "drift": "UNKNOWN",
+        "rollback_gate": "must remain UNVERIFIED until round-trip",
+        "status": "UNVERIFIED",
+        "gap": "chat→Cortex and Cortex→chat readback not live-proven"
+      },
+      {
+        "key": "lateral-agent-bus",
+        "asi_capability": "agent-to-agent lateral coordination",
+        "intent_refs": "ASI agent architecture target",
+        "implementation": "candidate peer/lateral bridges only",
+        "git_source": ".12 source references",
+        "daemon_or_sync": "no canonical live lateral sync owner identified",
+        "service_route": "no verified agent-bus route",
+        "scope": "agent + user + installation/login surface",
+        "evidence": "no live evidence found in read-only audit",
+        "freshness": "UNKNOWN",
+        "drift": "UNKNOWN",
+        "rollback_gate": "no actuation until provenance/consent gate exists",
+        "status": "UNKNOWN",
+        "gap": "canonical lateral bus contract and live evidence missing"
+      },
+      {
+        "key": "asi-control-spine",
+        "asi_capability": "end-to-end ASI progress control",
+        "intent_refs": "CAD/ADR/BL aggregate target",
+        "implementation": "MWP registry and continuation matrix",
+        "git_source": "MWP projection of authoritative sources",
+        "daemon_or_sync": "no single control-plane sync daemon yet",
+        "service_route": "metadata-only MWP readback",
+        "scope": "system + installation + login surface + user + agent",
+        "evidence": "status-quo registry created from bounded audit evidence",
+        "freshness": "registry snapshot",
+        "drift": "OPEN",
+        "rollback_gate": "fail-closed continuation",
+        "status": "OPEN",
+        "gap": "must connect CAD/ADR/BL→git→daemon→runtime→world-model→Opus evidence"
+      }
+    ]
+  },
+  "receipts": [
+    {
+      "destination": "git",
+      "status": "VERIFIED",
+      "ref": "repo=/home/agent/agent-layer/mwp-uosh-automation-01;head=dc369d8e386743ce158a1b0c7b2df4c40252869d;dirty=yes"
+    },
+    {
+      "destination": "graph",
+      "status": "BLOCKED",
+      "ref": "Neo4j write authority not configured"
+    },
+    {
+      "destination": "obsidian",
+      "status": "VERIFIED",
+      "ref": "mwp-destination-write-preflight-v1:read_after_write=PASS"
+    }
+  ],
+  "closeout": {
+    "status": "OPEN",
+    "continue_loop": true,
+    "blocker_count": 9,
+    "blockers": [
+      "registry:cad-adr-bl-intent-registry:BLOCKED",
+      "registry:git-deploy-daemon-status:PARTIAL",
+      "registry:daemon-bl-health-alignment:PARTIAL",
+      "registry:life-contract-domain-agent:BLOCKED",
+      "registry:world-model-hub-alignment:UNVERIFIED",
+      "registry:chat-cortex-shared-readview:UNVERIFIED",
+      "registry:lateral-agent-bus:UNKNOWN",
+      "registry:asi-control-spine:OPEN",
+      "receipt:BLOCKED"
+    ]
+  }
+}

@@ -1,0 +1,23 @@
+{
+  "mwp_id": "MWP-UOSH-001",
+  "artifact_id": "mwp-kanban-cross-host-authority-readback-v3",
+  "mode": "metadata-only-read-after-write",
+  "status": "CANONICAL_PARENT_REPAIRED_CHILD_LEASE_BLOCKED",
+  "topology": {"box13": "bridge", "box15": "canonical GUI Kanban authority", "box15_db": "/home/agent/.hermes-gui/kanban.db"},
+  "write": {"route": ".13→.15 kanban_apply.py", "ok": true, "insert": 1, "update": 0, "skip": 0, "direct_sqlite_write": false},
+  "canonical_parent": {
+    "task_id": "mwp-uosh-001-parent-authority-gate-v1",
+    "title": "MWP-UOSH-001 — canonical parent authority",
+    "status": "blocked",
+    "sticky_blocked_event": true,
+    "assignee": "",
+    "claim_lock": null,
+    "claim_expires": null,
+    "last_heartbeat_at": null,
+    "worker_pid": null
+  },
+  "remaining": {"children": 0, "runs": 0, "lease": null, "heartbeat": null, "worker_activation": false},
+  "id_mapping": {"local_box12_task_id": "t_fe6a5950", "canonical_box15_task_id": "mwp-uosh-001-parent-authority-gate-v1", "mapping": "idempotency_key becomes canonical task id"},
+  "next_action": "after identity and role/provider gates, create first dependency-scoped child through canonical .15 authority",
+  "raw_payload_included": false
+}

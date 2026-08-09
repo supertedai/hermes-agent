@@ -1,0 +1,37 @@
+{
+  "mwp_id": "MWP-UOSH-001",
+  "artifact_id": "mwp-final-closeout-readback-v2",
+  "mode": "metadata-only-terminal-closeout",
+  "status": "BLOCKED_CLOSED",
+  "meaning": "all lanes have terminal COMPLETE or explicit BLOCKED owner/evidence/next_action; parent is not operationally green",
+  "complete_lanes": [
+    "control-plane foundation",
+    "Kanban parent authority bootstrap",
+    "fleet/steward registry coverage",
+    "adaptive projection and validators",
+    "role/provider catalog validator",
+    "identity/context contracts",
+    "world-model gate validator",
+    "memory/learning gate validator",
+    "origin/IOT gate validator",
+    "topology baseline reconciliation",
+    "Desktop/Faber shadow contract"
+  ],
+  "blocked_lanes": [
+    {"id": "GAP-IDENTITY-REMOTE-001", "owner": "Desktop/gateway authority", "evidence": "mwp-identity-broker-discovery-readback-v1", "next_action": "authoritative box14 broker route or approved remote propagation design"},
+    {"id": "GAP-KANBAN-AUTHORITY-001", "owner": "owner/orchestrator", "evidence": "task t_fe6a5950; parent blocked; no child lease", "next_action": "create dependency-scoped child after identity/provider gates"},
+    {"id": "GAP-ROLE-PROVIDER-001", "owner": "runtime/provider authority", "evidence": "candidate verdict v2; all current candidates UNVERIFIED", "next_action": "live role/provider resolver receipt"},
+    {"id": "GAP-FLEET-ADAPTIVE-001", "owner": "adaptive fleet authority", "evidence": "candidate liveness readback; fleet HTTP 200 but agent_id correlation absent", "next_action": "runtime agent identity mapping, capacity and handoff receipts"},
+    {"id": "GAP-CORTEX-WORLDMODEL-001", "owner": "Cortex/world-model authority", "evidence": "context contract; no live round-trip", "next_action": "metadata-only Chat-Cortex-agent-world-model probe"},
+    {"id": "GAP-MEMORY-LEARNING-001", "owner": "memory/learning authority", "evidence": "memory gate validator; promotion readback absent", "next_action": "shadow retrieved-used-effect-promotion measurement"},
+    {"id": "GAP-GRAPH-QDRANT-GNN-001", "owner": "graph/Qdrant/GNN authority", "evidence": "world-model gate validator; handles/labels/quality absent", "next_action": "snapshot/checkpoint/rollback and labeled evaluation"},
+    {"id": "GAP-DESKTOP-FABER-001", "owner": "Desktop/Faber authority", "evidence": "typed route shadow-only", "next_action": "wire only after identity/Kanban/provider/reviewer/rollback gates"},
+    {"id": "GAP-DEVICE-ORIGIN-001", "owner": "identity/transport authority", "evidence": "origin validator; live device binding absent", "next_action": "authenticated device-origin readback"},
+    {"id": "GAP-IOT-STEWARD-001", "owner": "IOT domain authority", "evidence": "IOT validator; steward/writer readback absent", "next_action": "canonical steward and read-after-write probe"},
+    {"id": "GAP-TOPOLOGY-DRIFT-001", "owner": "topology/runtime authority", "evidence": "64/64 baseline preserved; 304 additions unmapped", "next_action": "owner-map additions and rerun heartbeat"}
+  ],
+  "live_mutations": {"kanban_child": false, "identity": false, "provider": false, "graph": false, "qdrant": false, "gnn": false, "desktop_route": false, "production": false},
+  "parent_closeout_rule_satisfied": true,
+  "operational_autonomy_ready": false,
+  "raw_payload_included": false
+}

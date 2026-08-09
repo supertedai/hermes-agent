@@ -1,0 +1,1357 @@
+{
+  "artifact_id": "mwp-qdrant-full-descriptor-audit-v1",
+  "collection_count_listed": 110,
+  "descriptor_count_ok": 110,
+  "descriptor_error_count": 0,
+  "descriptors": [
+    {
+      "name": "ab_testing_metrics_morten",
+      "payload_index_count": 0,
+      "points": 4377,
+      "status": "green",
+      "vectors": [
+        {
+          "distance": "Cosine",
+          "size": 4096
+        }
+      ]
+    },
+    {
+      "name": "acquisition_event_v1",
+      "payload_index_count": 0,
+      "points": 0,
+      "status": "green",
+      "vectors": [
+        {
+          "distance": "Cosine",
+          "size": 4096
+        }
+      ]
+    },
+    {
+      "name": "action_outcome_v1",
+      "payload_index_count": 0,
+      "points": 0,
+      "status": "green",
+      "vectors": [
+        {
+          "distance": "Cosine",
+          "size": 4096
+        }
+      ]
+    },
+    {
+      "name": "anomaly_v1",
+      "payload_index_count": 0,
+      "points": 50,
+      "status": "green",
+      "vectors": [
+        {
+          "distance": "Cosine",
+          "size": 4096
+        }
+      ]
+    },
+    {
+      "name": "architecture_task_v1",
+      "payload_index_count": 0,
+      "points": 50,
+      "status": "green",
+      "vectors": [
+        {
+          "distance": "Cosine",
+          "size": 4096
+        }
+      ]
+    },
+    {
+      "name": "assumption_v1",
+      "payload_index_count": 0,
+      "points": 50,
+      "status": "green",
+      "vectors": [
+        {
+          "distance": "Cosine",
+          "size": 4096
+        }
+      ]
+    },
+    {
+      "name": "atlas_entities",
+      "payload_index_count": 0,
+      "points": 149,
+      "status": "green",
+      "vectors": [
+        {
+          "distance": "Cosine",
+          "size": 4096
+        }
+      ]
+    },
+    {
+      "name": "behavioral_invariants",
+      "payload_index_count": 0,
+      "points": 6,
+      "status": "green",
+      "vectors": [
+        {
+          "distance": "Cosine",
+          "size": 4096
+        }
+      ]
+    },
+    {
+      "name": "biology",
+      "payload_index_count": 0,
+      "points": 230713,
+      "status": "green",
+      "vectors": [
+        {
+          "distance": "Cosine",
+          "size": 4096
+        }
+      ]
+    },
+    {
+      "name": "biology_framework_v1",
+      "payload_index_count": 0,
+      "points": 16,
+      "status": "green",
+      "vectors": [
+        {
+          "distance": "Cosine",
+          "size": 4096
+        }
+      ]
+    },
+    {
+      "name": "biology_private",
+      "payload_index_count": 0,
+      "points": 0,
+      "status": "green",
+      "vectors": [
+        {
+          "distance": "Cosine",
+          "size": 4096
+        }
+      ]
+    },
+    {
+      "name": "canonical_facts",
+      "payload_index_count": 0,
+      "points": 30,
+      "status": "green",
+      "vectors": [
+        {
+          "distance": "Cosine",
+          "size": 4096
+        }
+      ]
+    },
+    {
+      "name": "causal_relation_v1",
+      "payload_index_count": 0,
+      "points": 50,
+      "status": "green",
+      "vectors": [
+        {
+          "distance": "Cosine",
+          "size": 4096
+        }
+      ]
+    },
+    {
+      "name": "causal_variable_v1",
+      "payload_index_count": 0,
+      "points": 0,
+      "status": "green",
+      "vectors": [
+        {
+          "distance": "Cosine",
+          "size": 4096
+        }
+      ]
+    },
+    {
+      "name": "change_proposal_v1",
+      "payload_index_count": 0,
+      "points": 0,
+      "status": "green",
+      "vectors": [
+        {
+          "distance": "Cosine",
+          "size": 4096
+        }
+      ]
+    },
+    {
+      "name": "claim_v1",
+      "payload_index_count": 0,
+      "points": 33884,
+      "status": "green",
+      "vectors": [
+        {
+          "distance": "Cosine",
+          "size": 4096
+        }
+      ]
+    },
+    {
+      "name": "code_module_v1",
+      "payload_index_count": 0,
+      "points": 50,
+      "status": "green",
+      "vectors": [
+        {
+          "distance": "Cosine",
+          "size": 4096
+        }
+      ]
+    },
+    {
+      "name": "coding",
+      "payload_index_count": 0,
+      "points": 25978,
+      "status": "green",
+      "vectors": [
+        {
+          "distance": "Cosine",
+          "size": 4096
+        }
+      ]
+    },
+    {
+      "name": "cognitive",
+      "payload_index_count": 0,
+      "points": 17019,
+      "status": "green",
+      "vectors": [
+        {
+          "distance": "Cosine",
+          "size": 4096
+        }
+      ]
+    },
+    {
+      "name": "cognitive_framework_v1",
+      "payload_index_count": 0,
+      "points": 50,
+      "status": "green",
+      "vectors": [
+        {
+          "distance": "Cosine",
+          "size": 4096
+        }
+      ]
+    },
+    {
+      "name": "cognitive_private",
+      "payload_index_count": 0,
+      "points": 0,
+      "status": "green",
+      "vectors": [
+        {
+          "distance": "Cosine",
+          "size": 4096
+        }
+      ]
+    },
+    {
+      "name": "company_v1",
+      "payload_index_count": 0,
+      "points": 0,
+      "status": "green",
+      "vectors": [
+        {
+          "distance": "Cosine",
+          "size": 4096
+        }
+      ]
+    },
+    {
+      "name": "conversation_log_v1",
+      "payload_index_count": 0,
+      "points": 66,
+      "status": "green",
+      "vectors": [
+        {
+          "distance": "Cosine",
+          "size": 4096
+        }
+      ]
+    },
+    {
+      "name": "country_v1",
+      "payload_index_count": 0,
+      "points": 0,
+      "status": "green",
+      "vectors": [
+        {
+          "distance": "Cosine",
+          "size": 4096
+        }
+      ]
+    },
+    {
+      "name": "deprecated_concept_v1",
+      "payload_index_count": 0,
+      "points": 50,
+      "status": "green",
+      "vectors": [
+        {
+          "distance": "Cosine",
+          "size": 4096
+        }
+      ]
+    },
+    {
+      "name": "doc_variable_v1",
+      "payload_index_count": 0,
+      "points": 0,
+      "status": "green",
+      "vectors": [
+        {
+          "distance": "Cosine",
+          "size": 4096
+        }
+      ]
+    },
+    {
+      "name": "doi_v1",
+      "payload_index_count": 0,
+      "points": 50,
+      "status": "green",
+      "vectors": [
+        {
+          "distance": "Cosine",
+          "size": 4096
+        }
+      ]
+    },
+    {
+      "name": "doubt_flag_v1",
+      "payload_index_count": 0,
+      "points": 50,
+      "status": "green",
+      "vectors": [
+        {
+          "distance": "Cosine",
+          "size": 4096
+        }
+      ]
+    },
+    {
+      "name": "doubt_insight_v1",
+      "payload_index_count": 0,
+      "points": 50,
+      "status": "green",
+      "vectors": [
+        {
+          "distance": "Cosine",
+          "size": 4096
+        }
+      ]
+    },
+    {
+      "name": "drift_alert_v1",
+      "payload_index_count": 0,
+      "points": 51,
+      "status": "green",
+      "vectors": [
+        {
+          "distance": "Cosine",
+          "size": 4096
+        }
+      ]
+    },
+    {
+      "name": "dsmdisorder_v1",
+      "payload_index_count": 0,
+      "points": 50,
+      "status": "green",
+      "vectors": [
+        {
+          "distance": "Cosine",
+          "size": 4096
+        }
+      ]
+    },
+    {
+      "name": "earth_framework_v1",
+      "payload_index_count": 0,
+      "points": 20,
+      "status": "green",
+      "vectors": [
+        {
+          "distance": "Cosine",
+          "size": 4096
+        }
+      ]
+    },
+    {
+      "name": "earth_systems",
+      "payload_index_count": 0,
+      "points": 2725,
+      "status": "green",
+      "vectors": [
+        {
+          "distance": "Cosine",
+          "size": 4096
+        }
+      ]
+    },
+    {
+      "name": "earth_systems_private",
+      "payload_index_count": 0,
+      "points": 240536,
+      "status": "green",
+      "vectors": [
+        {
+          "distance": "Cosine",
+          "size": 4096
+        }
+      ]
+    },
+    {
+      "name": "economy",
+      "payload_index_count": 0,
+      "points": 4076,
+      "status": "green",
+      "vectors": [
+        {
+          "distance": "Cosine",
+          "size": 4096
+        }
+      ]
+    },
+    {
+      "name": "economy_framework_v1",
+      "payload_index_count": 0,
+      "points": 50,
+      "status": "green",
+      "vectors": [
+        {
+          "distance": "Cosine",
+          "size": 4096
+        }
+      ]
+    },
+    {
+      "name": "economy_private",
+      "payload_index_count": 0,
+      "points": 0,
+      "status": "green",
+      "vectors": [
+        {
+          "distance": "Cosine",
+          "size": 4096
+        }
+      ]
+    },
+    {
+      "name": "efc",
+      "payload_index_count": 0,
+      "points": 277022,
+      "status": "green",
+      "vectors": [
+        {
+          "distance": "Cosine",
+          "size": 4096
+        }
+      ]
+    },
+    {
+      "name": "efc_insight_v1",
+      "payload_index_count": 0,
+      "points": 1,
+      "status": "green",
+      "vectors": [
+        {
+          "distance": "Cosine",
+          "size": 4096
+        }
+      ]
+    },
+    {
+      "name": "efc_validation_v1",
+      "payload_index_count": 0,
+      "points": 78,
+      "status": "green",
+      "vectors": [
+        {
+          "distance": "Cosine",
+          "size": 4096
+        }
+      ]
+    },
+    {
+      "name": "entity_merge_proposal_v1",
+      "payload_index_count": 0,
+      "points": 50,
+      "status": "green",
+      "vectors": [
+        {
+          "distance": "Cosine",
+          "size": 4096
+        }
+      ]
+    },
+    {
+      "name": "equation_v1",
+      "payload_index_count": 0,
+      "points": 803,
+      "status": "green",
+      "vectors": [
+        {
+          "distance": "Cosine",
+          "size": 4096
+        }
+      ]
+    },
+    {
+      "name": "estate_asset_v1",
+      "payload_index_count": 0,
+      "points": 0,
+      "status": "green",
+      "vectors": [
+        {
+          "distance": "Cosine",
+          "size": 4096
+        }
+      ]
+    },
+    {
+      "name": "evidence_legacy_signal_v1",
+      "payload_index_count": 0,
+      "points": 0,
+      "status": "green",
+      "vectors": [
+        {
+          "distance": "Cosine",
+          "size": 4096
+        }
+      ]
+    },
+    {
+      "name": "evidence_v1",
+      "payload_index_count": 0,
+      "points": 12234,
+      "status": "green",
+      "vectors": [
+        {
+          "distance": "Cosine",
+          "size": 4096
+        }
+      ]
+    },
+    {
+      "name": "external_publication_v1",
+      "payload_index_count": 0,
+      "points": 50,
+      "status": "green",
+      "vectors": [
+        {
+          "distance": "Cosine",
+          "size": 4096
+        }
+      ]
+    },
+    {
+      "name": "external_science",
+      "payload_index_count": 0,
+      "points": 205,
+      "status": "green",
+      "vectors": [
+        {
+          "distance": "Cosine",
+          "size": 4096
+        }
+      ]
+    },
+    {
+      "name": "face_embeddings",
+      "payload_index_count": 4,
+      "points": 0,
+      "status": "green",
+      "vectors": [
+        {
+          "distance": "Cosine",
+          "size": 512
+        }
+      ]
+    },
+    {
+      "name": "family_member_v1",
+      "payload_index_count": 0,
+      "points": 50,
+      "status": "green",
+      "vectors": [
+        {
+          "distance": "Cosine",
+          "size": 4096
+        }
+      ]
+    },
+    {
+      "name": "feedback_event_v1",
+      "payload_index_count": 0,
+      "points": 62,
+      "status": "green",
+      "vectors": [
+        {
+          "distance": "Cosine",
+          "size": 4096
+        }
+      ]
+    },
+    {
+      "name": "finding_v1",
+      "payload_index_count": 0,
+      "points": 50,
+      "status": "green",
+      "vectors": [
+        {
+          "distance": "Cosine",
+          "size": 4096
+        }
+      ]
+    },
+    {
+      "name": "food",
+      "payload_index_count": 0,
+      "points": 48354,
+      "status": "green",
+      "vectors": [
+        {
+          "distance": "Cosine",
+          "size": 4096
+        }
+      ]
+    },
+    {
+      "name": "food_class_v1",
+      "payload_index_count": 0,
+      "points": 100,
+      "status": "green",
+      "vectors": [
+        {
+          "distance": "Cosine",
+          "size": 4096
+        }
+      ]
+    },
+    {
+      "name": "food_framework_v1",
+      "payload_index_count": 0,
+      "points": 33,
+      "status": "green",
+      "vectors": [
+        {
+          "distance": "Cosine",
+          "size": 4096
+        }
+      ]
+    },
+    {
+      "name": "food_private",
+      "payload_index_count": 0,
+      "points": 0,
+      "status": "green",
+      "vectors": [
+        {
+          "distance": "Cosine",
+          "size": 4096
+        }
+      ]
+    },
+    {
+      "name": "frameworks_content",
+      "payload_index_count": 0,
+      "points": 3854,
+      "status": "green",
+      "vectors": [
+        {
+          "distance": "Cosine",
+          "size": 4096
+        }
+      ]
+    },
+    {
+      "name": "gene_v1",
+      "payload_index_count": 0,
+      "points": 50,
+      "status": "green",
+      "vectors": [
+        {
+          "distance": "Cosine",
+          "size": 4096
+        }
+      ]
+    },
+    {
+      "name": "go_term_v1",
+      "payload_index_count": 0,
+      "points": 50,
+      "status": "green",
+      "vectors": [
+        {
+          "distance": "Cosine",
+          "size": 4096
+        }
+      ]
+    },
+    {
+      "name": "gpu_daemon_heartbeat_v1",
+      "payload_index_count": 0,
+      "points": 1,
+      "status": "green",
+      "vectors": [
+        {
+          "distance": "Cosine",
+          "size": 4096
+        }
+      ]
+    },
+    {
+      "name": "hypothesis_v1",
+      "payload_index_count": 0,
+      "points": 686,
+      "status": "green",
+      "vectors": [
+        {
+          "distance": "Cosine",
+          "size": 4096
+        }
+      ]
+    },
+    {
+      "name": "ingest_event_v1",
+      "payload_index_count": 0,
+      "points": 50,
+      "status": "green",
+      "vectors": [
+        {
+          "distance": "Cosine",
+          "size": 4096
+        }
+      ]
+    },
+    {
+      "name": "intervention_v1",
+      "payload_index_count": 0,
+      "points": 50,
+      "status": "green",
+      "vectors": [
+        {
+          "distance": "Cosine",
+          "size": 4096
+        }
+      ]
+    },
+    {
+      "name": "iot_pattern_v1",
+      "payload_index_count": 0,
+      "points": 71,
+      "status": "green",
+      "vectors": [
+        {
+          "distance": "Cosine",
+          "size": 4096
+        }
+      ]
+    },
+    {
+      "name": "measurement_v1",
+      "payload_index_count": 0,
+      "points": 52,
+      "status": "green",
+      "vectors": [
+        {
+          "distance": "Cosine",
+          "size": 4096
+        }
+      ]
+    },
+    {
+      "name": "mechanism_v1",
+      "payload_index_count": 0,
+      "points": 50,
+      "status": "green",
+      "vectors": [
+        {
+          "distance": "Cosine",
+          "size": 4096
+        }
+      ]
+    },
+    {
+      "name": "medicine",
+      "payload_index_count": 0,
+      "points": 13677,
+      "status": "green",
+      "vectors": [
+        {
+          "distance": "Cosine",
+          "size": 4096
+        }
+      ]
+    },
+    {
+      "name": "medicine_clinical",
+      "payload_index_count": 0,
+      "points": 37488,
+      "status": "green",
+      "vectors": [
+        {
+          "distance": "Cosine",
+          "size": 4096
+        }
+      ]
+    },
+    {
+      "name": "memory_event_v1",
+      "payload_index_count": 0,
+      "points": 50,
+      "status": "green",
+      "vectors": [
+        {
+          "distance": "Cosine",
+          "size": 4096
+        }
+      ]
+    },
+    {
+      "name": "memory_reflection_v1",
+      "payload_index_count": 0,
+      "points": 51,
+      "status": "green",
+      "vectors": [
+        {
+          "distance": "Cosine",
+          "size": 4096
+        }
+      ]
+    },
+    {
+      "name": "meta_goal_v1",
+      "payload_index_count": 0,
+      "points": 50,
+      "status": "green",
+      "vectors": [
+        {
+          "distance": "Cosine",
+          "size": 4096
+        }
+      ]
+    },
+    {
+      "name": "meta_principle_v1",
+      "payload_index_count": 0,
+      "points": 50,
+      "status": "green",
+      "vectors": [
+        {
+          "distance": "Cosine",
+          "size": 4096
+        }
+      ]
+    },
+    {
+      "name": "model_v1",
+      "payload_index_count": 0,
+      "points": 50,
+      "status": "green",
+      "vectors": [
+        {
+          "distance": "Cosine",
+          "size": 4096
+        }
+      ]
+    },
+    {
+      "name": "naics_industry_group_v1",
+      "payload_index_count": 0,
+      "points": 50,
+      "status": "green",
+      "vectors": [
+        {
+          "distance": "Cosine",
+          "size": 4096
+        }
+      ]
+    },
+    {
+      "name": "naics_national_industry_v1",
+      "payload_index_count": 0,
+      "points": 50,
+      "status": "green",
+      "vectors": [
+        {
+          "distance": "Cosine",
+          "size": 4096
+        }
+      ]
+    },
+    {
+      "name": "observations",
+      "payload_index_count": 5,
+      "points": 233847,
+      "status": "green",
+      "vectors": [
+        {
+          "distance": "Cosine",
+          "size": 8
+        }
+      ]
+    },
+    {
+      "name": "opus_goal_v1",
+      "payload_index_count": 0,
+      "points": 0,
+      "status": "green",
+      "vectors": [
+        {
+          "distance": "Cosine",
+          "size": 4096
+        }
+      ]
+    },
+    {
+      "name": "opus_loop_job_v1",
+      "payload_index_count": 0,
+      "points": 0,
+      "status": "green",
+      "vectors": [
+        {
+          "distance": "Cosine",
+          "size": 4096
+        }
+      ]
+    },
+    {
+      "name": "pipeline_event_v1",
+      "payload_index_count": 0,
+      "points": 50,
+      "status": "green",
+      "vectors": [
+        {
+          "distance": "Cosine",
+          "size": 4096
+        }
+      ]
+    },
+    {
+      "name": "plan_item_v1",
+      "payload_index_count": 0,
+      "points": 0,
+      "status": "green",
+      "vectors": [
+        {
+          "distance": "Cosine",
+          "size": 4096
+        }
+      ]
+    },
+    {
+      "name": "prediction_v1",
+      "payload_index_count": 0,
+      "points": 50,
+      "status": "green",
+      "vectors": [
+        {
+          "distance": "Cosine",
+          "size": 4096
+        }
+      ]
+    },
+    {
+      "name": "private",
+      "payload_index_count": 0,
+      "points": 3768177,
+      "status": "green",
+      "vectors": [
+        {
+          "distance": "Cosine",
+          "size": 4096
+        }
+      ]
+    },
+    {
+      "name": "private_chunk_v1",
+      "payload_index_count": 0,
+      "points": 50,
+      "status": "green",
+      "vectors": [
+        {
+          "distance": "Cosine",
+          "size": 4096
+        }
+      ]
+    },
+    {
+      "name": "private_concept_v1",
+      "payload_index_count": 0,
+      "points": 30,
+      "status": "green",
+      "vectors": [
+        {
+          "distance": "Cosine",
+          "size": 4096
+        }
+      ]
+    },
+    {
+      "name": "private_idea_v1",
+      "payload_index_count": 0,
+      "points": 50,
+      "status": "green",
+      "vectors": [
+        {
+          "distance": "Cosine",
+          "size": 4096
+        }
+      ]
+    },
+    {
+      "name": "publication_v1",
+      "payload_index_count": 0,
+      "points": 1586,
+      "status": "green",
+      "vectors": [
+        {
+          "distance": "Cosine",
+          "size": 4096
+        }
+      ]
+    },
+    {
+      "name": "reasoning_patterns",
+      "payload_index_count": 0,
+      "points": 50,
+      "status": "green",
+      "vectors": [
+        {
+          "distance": "Cosine",
+          "size": 4096
+        }
+      ]
+    },
+    {
+      "name": "research_cycle_result_v1",
+      "payload_index_count": 0,
+      "points": 50,
+      "status": "green",
+      "vectors": [
+        {
+          "distance": "Cosine",
+          "size": 4096
+        }
+      ]
+    },
+    {
+      "name": "result_v1",
+      "payload_index_count": 0,
+      "points": 50,
+      "status": "green",
+      "vectors": [
+        {
+          "distance": "Cosine",
+          "size": 4096
+        }
+      ]
+    },
+    {
+      "name": "routing_quarantine",
+      "payload_index_count": 0,
+      "points": 26,
+      "status": "green",
+      "vectors": [
+        {
+          "distance": "Cosine",
+          "size": 4096
+        }
+      ]
+    },
+    {
+      "name": "self_knowledge_fact_v1",
+      "payload_index_count": 0,
+      "points": 0,
+      "status": "green",
+      "vectors": [
+        {
+          "distance": "Cosine",
+          "size": 4096
+        }
+      ]
+    },
+    {
+      "name": "semantic_mesh",
+      "payload_index_count": 0,
+      "points": 1312,
+      "status": "green",
+      "vectors": [
+        {
+          "distance": "Cosine",
+          "size": 4096
+        }
+      ]
+    },
+    {
+      "name": "session_v1",
+      "payload_index_count": 0,
+      "points": 50,
+      "status": "green",
+      "vectors": [
+        {
+          "distance": "Cosine",
+          "size": 4096
+        }
+      ]
+    },
+    {
+      "name": "signal_candidate_v1",
+      "payload_index_count": 0,
+      "points": 50,
+      "status": "green",
+      "vectors": [
+        {
+          "distance": "Cosine",
+          "size": 4096
+        }
+      ]
+    },
+    {
+      "name": "skill_proposal_v1",
+      "payload_index_count": 0,
+      "points": 0,
+      "status": "green",
+      "vectors": [
+        {
+          "distance": "Cosine",
+          "size": 4096
+        }
+      ]
+    },
+    {
+      "name": "structural_shift_v1",
+      "payload_index_count": 0,
+      "points": 50,
+      "status": "green",
+      "vectors": [
+        {
+          "distance": "Cosine",
+          "size": 4096
+        }
+      ]
+    },
+    {
+      "name": "structural_variable_v1",
+      "payload_index_count": 0,
+      "points": 0,
+      "status": "green",
+      "vectors": [
+        {
+          "distance": "Cosine",
+          "size": 4096
+        }
+      ]
+    },
+    {
+      "name": "supported_claim_v1",
+      "payload_index_count": 0,
+      "points": 50,
+      "status": "green",
+      "vectors": [
+        {
+          "distance": "Cosine",
+          "size": 4096
+        }
+      ]
+    },
+    {
+      "name": "supported_hypothesis_v1",
+      "payload_index_count": 0,
+      "points": 50,
+      "status": "green",
+      "vectors": [
+        {
+          "distance": "Cosine",
+          "size": 4096
+        }
+      ]
+    },
+    {
+      "name": "surface_v1",
+      "payload_index_count": 0,
+      "points": 0,
+      "status": "green",
+      "vectors": [
+        {
+          "distance": "Cosine",
+          "size": 4096
+        }
+      ]
+    },
+    {
+      "name": "symbiose_skills",
+      "payload_index_count": 0,
+      "points": 407,
+      "status": "green",
+      "vectors": [
+        {
+          "distance": "Cosine",
+          "size": 4096
+        }
+      ]
+    },
+    {
+      "name": "system_note_v1",
+      "payload_index_count": 0,
+      "points": 11,
+      "status": "green",
+      "vectors": [
+        {
+          "distance": "Cosine",
+          "size": 4096
+        }
+      ]
+    },
+    {
+      "name": "taxon_v1",
+      "payload_index_count": 0,
+      "points": 50,
+      "status": "green",
+      "vectors": [
+        {
+          "distance": "Cosine",
+          "size": 4096
+        }
+      ]
+    },
+    {
+      "name": "trend_v1",
+      "payload_index_count": 0,
+      "points": 0,
+      "status": "green",
+      "vectors": [
+        {
+          "distance": "Cosine",
+          "size": 4096
+        }
+      ]
+    },
+    {
+      "name": "user_documents",
+      "payload_index_count": 2,
+      "points": 1883,
+      "status": "green",
+      "vectors": [
+        {
+          "distance": "Cosine",
+          "size": 4096
+        }
+      ]
+    },
+    {
+      "name": "validation_candidate_v1",
+      "payload_index_count": 0,
+      "points": 50,
+      "status": "green",
+      "vectors": [
+        {
+          "distance": "Cosine",
+          "size": 4096
+        }
+      ]
+    },
+    {
+      "name": "value_chain_hazard_v1",
+      "payload_index_count": 0,
+      "points": 0,
+      "status": "green",
+      "vectors": [
+        {
+          "distance": "Cosine",
+          "size": 4096
+        }
+      ]
+    },
+    {
+      "name": "variable_v1",
+      "payload_index_count": 0,
+      "points": 50,
+      "status": "green",
+      "vectors": [
+        {
+          "distance": "Cosine",
+          "size": 4096
+        }
+      ]
+    },
+    {
+      "name": "why_chain_decisions",
+      "payload_index_count": 0,
+      "points": 1876,
+      "status": "green",
+      "vectors": [
+        {
+          "distance": "Cosine",
+          "size": 4096
+        }
+      ]
+    },
+    {
+      "name": "why_chain_decisions_patterns",
+      "payload_index_count": 0,
+      "points": 3,
+      "status": "green",
+      "vectors": [
+        {
+          "distance": "Cosine",
+          "size": 4096
+        }
+      ]
+    },
+    {
+      "name": "work_thread_v1",
+      "payload_index_count": 0,
+      "points": 50,
+      "status": "green",
+      "vectors": [
+        {
+          "distance": "Cosine",
+          "size": 4096
+        }
+      ]
+    }
+  ],
+  "endpoint": "http://192.168.40.12:6333",
+  "errors": [],
+  "mode": "read-only-http",
+  "mwp_id": "MWP-UOSH-001",
+  "next_action": "compare full Qdrant descriptors with Neo4j canonical identity, scope/provenance and GNN contracts",
+  "payload_index_count_distribution": {
+    "0": 107,
+    "2": 1,
+    "4": 1,
+    "5": 1
+  },
+  "phase": "P7",
+  "qdrant_version": {
+    "commit": "db8fa43fcb6aedec1e739487e17a99731b74590a",
+    "title": "qdrant - vector search engine",
+    "version": "1.18.3"
+  },
+  "status": "FULL_QDRANT_DESCRIPTOR_AUDIT_READ_ONLY",
+  "status_counts": {
+    "green": 110
+  },
+  "total_points": 4965726,
+  "vector_signatures": {
+    "[{\"distance\": \"Cosine\", \"size\": 4096}]": 108,
+    "[{\"distance\": \"Cosine\", \"size\": 512}]": 1,
+    "[{\"distance\": \"Cosine\", \"size\": 8}]": 1
+  },
+  "writes_allowed": false,
+  "zero_point_collections": 23
+}

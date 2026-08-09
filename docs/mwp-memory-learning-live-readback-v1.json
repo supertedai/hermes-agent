@@ -1,0 +1,25 @@
+{
+  "mwp_id": "MWP-UOSH-001",
+  "artifact_id": "mwp-memory-learning-live-readback-v1",
+  "mode": "metadata-only-live-memory-learning-probe",
+  "status": "LIVE_SURFACE_CAUSAL_CHAIN_INCOMPLETE",
+  "endpoint_probes": {
+    "/api/v1/learning/status": {"http_status": 200, "shape_keys": ["current_parameters", "recent_changes", "recent_rejections", "signal_counts", "status", "timestamp"]},
+    "/learning/status": {"http_status": 200, "shape_keys": ["components", "failed_repairs", "graph_learning", "learned_patterns", "learning_present", "overall_success_rate", "scope_note", "status", "successful_repairs", "total_experiences", "total_repairs"]},
+    "/api/v1/learning/shadow-tests": {"http_status": 200, "shape_keys": ["active_test_count", "tests", "timestamp"]},
+    "/learning/experiences?limit=1": {"http_status": 200, "shape_keys": ["experiences", "showing", "total"]},
+    "/signals/learning/events?hours=1&limit=1": {"http_status": 200, "shape_keys": ["by_type", "events", "time_range_hours", "total_events"]},
+    "/api/v1/memory/layers": {"http_status": 200, "shape_keys": ["layers", "principal_exists", "reach", "summary", "user"]},
+    "/memory/memory/episode/timeline?hours=1": {"http_status": 500}
+  },
+  "causal_chain_metadata": {
+    "retrieval_id": false,
+    "insight_used": false,
+    "effect_measurement": false,
+    "learning_signal_link": false,
+    "promotion_receipt": false,
+    "scope_owner_provenance": "partial"
+  },
+  "gate": {"memory_surface": "PRESENT", "learning_promotion": "BLOCKED", "raw_payload_included": false, "mutation": false},
+  "next_action": "add metadata-only retrieval/use/effect/promotion correlation and repair timeline 500 before promotion"
+}

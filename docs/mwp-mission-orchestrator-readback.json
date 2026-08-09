@@ -1,0 +1,242 @@
+{
+  "status": "RUNNING",
+  "ready_lane_ids": [
+    "git-deploy-daemon-status",
+    "daemon-bl-health-alignment",
+    "world-model-hub-alignment",
+    "chat-cortex-shared-readview",
+    "lateral-agent-bus",
+    "asi-control-spine"
+  ],
+  "readbacks": {
+    "cad-adr-bl-intent-registry": {
+      "loop_id": "cad-adr-bl-intent-registry",
+      "status": "BLOCKED",
+      "ticks": 0,
+      "blocker": "BLOCKED; owner=external CAD/ADR/BL authority (not identified in local checkout); evidence=static inventory only (CAD=30, ADR=19, BL-related files=215), no live CAD→ADR→BL→runtime reconciliation or graph write receipt; next_action=authority owner must provide a bounded canonical alignment readback with source refs, runtime receipt and graph read-after-write before promotion",
+      "next_action": "BLOCKED; owner=external CAD/ADR/BL authority (not identified in local checkout); evidence=static inventory only (CAD=30, ADR=19, BL-related files=215), no live CAD→ADR→BL→runtime reconciliation or graph write receipt; next_action=authority owner must provide a bounded canonical alignment readback with source refs, runtime receipt and graph read-after-write before promotion",
+      "last_readback": {
+        "task_id": "cad-adr-bl-intent-registry",
+        "parent_task_id": "mwp-closeout-parent",
+        "lane": "system",
+        "task_state": "BLOCKED",
+        "dependencies": []
+      }
+    },
+    "git-deploy-daemon-status": {
+      "loop_id": "git-deploy-daemon-status",
+      "status": "RUNNING",
+      "ticks": 0,
+      "blocker": "",
+      "next_action": "dispatch or continue this independent lane",
+      "last_readback": {
+        "task_id": "git-deploy-daemon-status",
+        "parent_task_id": "mwp-closeout-parent",
+        "lane": "system",
+        "task_state": "READY",
+        "dependencies": []
+      }
+    },
+    "daemon-bl-health-alignment": {
+      "loop_id": "daemon-bl-health-alignment",
+      "status": "RUNNING",
+      "ticks": 0,
+      "blocker": "",
+      "next_action": "dispatch or continue this independent lane",
+      "last_readback": {
+        "task_id": "daemon-bl-health-alignment",
+        "parent_task_id": "mwp-closeout-parent",
+        "lane": "system",
+        "task_state": "READY",
+        "dependencies": []
+      }
+    },
+    "per-user-topology": {
+      "loop_id": "per-user-topology",
+      "status": "COMPLETE",
+      "ticks": 0,
+      "blocker": "",
+      "next_action": "parent may join this lane",
+      "last_readback": {
+        "task_id": "per-user-topology",
+        "parent_task_id": "mwp-closeout-parent",
+        "lane": "system",
+        "task_state": "CLOSED",
+        "dependencies": []
+      }
+    },
+    "life-contract-domain-agent": {
+      "loop_id": "life-contract-domain-agent",
+      "status": "BLOCKED",
+      "ticks": 0,
+      "blocker": "IOT binding and live writer/provisioner round-trip not closed",
+      "next_action": "IOT binding and live writer/provisioner round-trip not closed",
+      "last_readback": {
+        "task_id": "life-contract-domain-agent",
+        "parent_task_id": "mwp-closeout-parent",
+        "lane": "system",
+        "task_state": "BLOCKED",
+        "dependencies": []
+      }
+    },
+    "world-model-hub-alignment": {
+      "loop_id": "world-model-hub-alignment",
+      "status": "RUNNING",
+      "ticks": 0,
+      "blocker": "",
+      "next_action": "dispatch or continue this independent lane",
+      "last_readback": {
+        "task_id": "world-model-hub-alignment",
+        "parent_task_id": "mwp-closeout-parent",
+        "lane": "system",
+        "task_state": "READY",
+        "dependencies": []
+      }
+    },
+    "chat-cortex-shared-readview": {
+      "loop_id": "chat-cortex-shared-readview",
+      "status": "RUNNING",
+      "ticks": 0,
+      "blocker": "",
+      "next_action": "dispatch or continue this independent lane",
+      "last_readback": {
+        "task_id": "chat-cortex-shared-readview",
+        "parent_task_id": "mwp-closeout-parent",
+        "lane": "system",
+        "task_state": "READY",
+        "dependencies": []
+      }
+    },
+    "lateral-agent-bus": {
+      "loop_id": "lateral-agent-bus",
+      "status": "RUNNING",
+      "ticks": 0,
+      "blocker": "",
+      "next_action": "dispatch or continue this independent lane",
+      "last_readback": {
+        "task_id": "lateral-agent-bus",
+        "parent_task_id": "mwp-closeout-parent",
+        "lane": "system",
+        "task_state": "READY",
+        "dependencies": []
+      }
+    },
+    "asi-control-spine": {
+      "loop_id": "asi-control-spine",
+      "status": "RUNNING",
+      "ticks": 0,
+      "blocker": "",
+      "next_action": "dispatch or continue this independent lane",
+      "last_readback": {
+        "task_id": "asi-control-spine",
+        "parent_task_id": "mwp-closeout-parent",
+        "lane": "system",
+        "task_state": "READY",
+        "dependencies": []
+      }
+    }
+  },
+  "chips": [
+    {
+      "type": "mission.chip",
+      "payload": {
+        "task_id": "cad-adr-bl-intent-registry",
+        "parent_task_id": "mwp-closeout-parent",
+        "lane": "system",
+        "status": "BLOCKED",
+        "blocker": "BLOCKED; owner=external CAD/ADR/BL authority (not identified in local checkout); evidence=static inventory only (CAD=30, ADR=19, BL-related files=215), no live CAD→ADR→BL→runtime reconciliation or graph write receipt; next_action=authority owner must provide a bounded canonical alignment readback with source refs, runtime receipt and graph read-after-write before promotion",
+        "next_action": "BLOCKED; owner=external CAD/ADR/BL authority (not identified in local checkout); evidence=static inventory only (CAD=30, ADR=19, BL-related files=215), no live CAD→ADR→BL→runtime reconciliation or graph write receipt; next_action=authority owner must provide a bounded canonical alignment readback with source refs, runtime receipt and graph read-after-write before promotion"
+      }
+    },
+    {
+      "type": "mission.chip",
+      "payload": {
+        "task_id": "git-deploy-daemon-status",
+        "parent_task_id": "mwp-closeout-parent",
+        "lane": "system",
+        "status": "RUNNING",
+        "blocker": "",
+        "next_action": "dispatch or continue this independent lane"
+      }
+    },
+    {
+      "type": "mission.chip",
+      "payload": {
+        "task_id": "daemon-bl-health-alignment",
+        "parent_task_id": "mwp-closeout-parent",
+        "lane": "system",
+        "status": "RUNNING",
+        "blocker": "",
+        "next_action": "dispatch or continue this independent lane"
+      }
+    },
+    {
+      "type": "mission.chip",
+      "payload": {
+        "task_id": "per-user-topology",
+        "parent_task_id": "mwp-closeout-parent",
+        "lane": "system",
+        "status": "COMPLETE",
+        "blocker": "",
+        "next_action": "parent may join this lane"
+      }
+    },
+    {
+      "type": "mission.chip",
+      "payload": {
+        "task_id": "life-contract-domain-agent",
+        "parent_task_id": "mwp-closeout-parent",
+        "lane": "system",
+        "status": "BLOCKED",
+        "blocker": "IOT binding and live writer/provisioner round-trip not closed",
+        "next_action": "IOT binding and live writer/provisioner round-trip not closed"
+      }
+    },
+    {
+      "type": "mission.chip",
+      "payload": {
+        "task_id": "world-model-hub-alignment",
+        "parent_task_id": "mwp-closeout-parent",
+        "lane": "system",
+        "status": "RUNNING",
+        "blocker": "",
+        "next_action": "dispatch or continue this independent lane"
+      }
+    },
+    {
+      "type": "mission.chip",
+      "payload": {
+        "task_id": "chat-cortex-shared-readview",
+        "parent_task_id": "mwp-closeout-parent",
+        "lane": "system",
+        "status": "RUNNING",
+        "blocker": "",
+        "next_action": "dispatch or continue this independent lane"
+      }
+    },
+    {
+      "type": "mission.chip",
+      "payload": {
+        "task_id": "lateral-agent-bus",
+        "parent_task_id": "mwp-closeout-parent",
+        "lane": "system",
+        "status": "RUNNING",
+        "blocker": "",
+        "next_action": "dispatch or continue this independent lane"
+      }
+    },
+    {
+      "type": "mission.chip",
+      "payload": {
+        "task_id": "asi-control-spine",
+        "parent_task_id": "mwp-closeout-parent",
+        "lane": "system",
+        "status": "RUNNING",
+        "blocker": "",
+        "next_action": "dispatch or continue this independent lane"
+      }
+    }
+  ],
+  "metadata_only": true,
+  "source": "docs/mwp-final-closeout-readback.json"
+}

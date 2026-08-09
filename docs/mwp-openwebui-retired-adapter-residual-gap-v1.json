@@ -1,0 +1,41 @@
+{
+  "artifact_id": "mwp-openwebui-retired-adapter-residual-gap-v1",
+  "mwp_id": "MWP-UOSH-001",
+  "status": "OPEN_HISTORICAL_RESIDUAL_NOT_CURRENT_AUTHORITY",
+  "mode": "read-only-topology-audit",
+  "live_evidence": {
+    "openwebui_container": "NOT_FOUND_IN_RUNNING_CONTAINERS",
+    "nginx_mcp": "RUNNING",
+    "symbiose_openai_adapter": {
+      "container": "efc-symbiose-openai-adapter",
+      "host_port": 8200,
+      "status": "UP 11 DAYS",
+      "command": "symbiose_openai_adapter.py --serve 8200"
+    },
+    "symbiose_rawmaterial": {
+      "container": "efc-symbiose-rawmaterial",
+      "host_port": 8300,
+      "status": "UP 2 DAYS"
+    },
+    "adapter_pre_containers": [
+      "efc-symbiose-openai-adapter-pre-vpq",
+      "efc-symbiose-openai-adapter-pre-bl2379",
+      "efc-symbiose-openai-adapter-pre-bl1469"
+    ]
+  },
+  "historical_evidence": [
+    "compose comments mark OpenWebUI as retired under ADR-043/BL-3385",
+    "legacy OpenWebUI data volume and feedback collector references remain",
+    "adapter code still contains OpenWebUI-specific task/follow-up paths"
+  ],
+  "interpretation": "OpenWebUI residual code and an active OpenAI-compatible adapter remain, but no evidence currently binds them to the canonical ai.byopus.com chat turn.",
+  "non_claims": [
+    "No container was stopped.",
+    "No volume was deleted.",
+    "No adapter was disabled.",
+    "Residual code is not treated as live authority."
+  ],
+  "next_action": "Trace current ai.byopus.com request path and identify whether adapter:8200 is a live backend or an independent legacy/native-AI surface.",
+  "writes_performed": false,
+  "rollback_ref": null
+}

@@ -1,0 +1,76 @@
+{
+  "gate": "mwp-h10-theory-cosmos-efc-asi-os-steward",
+  "status": "DECLARED_STEWARD_PROPOSAL_RUNTIME_GATED",
+  "mode": "metadata-only-intent",
+  "scope": {
+    "principal": "morten",
+    "tenant_id": "morten:theory-cosmos",
+    "domain_id": "theory.cosmos.efc-asi",
+    "home_class": "H10",
+    "system_operator": "opus",
+    "login_surface_id": "current-hermes-chat"
+  },
+  "artifact": "docs/mwp-h10-theory-cosmos-efc-asi-os-steward-contract-v1.md",
+  "sources": {
+    "repository": "https://github.com/supertedai/EFC",
+    "public_surface": "https://github.com/supertedai/EFC/tree/main/docs/public",
+    "programme_website": "https://energyflow-cosmology.com/",
+    "authorial_website": "https://www.magnusson.as/",
+    "figshare_author_profile": "https://figshare.com/authors/Morten_Magnusson/20477774",
+    "author_identity": "https://orcid.org/0009-0002-4860-5095",
+    "local_checkout": "/home/agent/agent-layer/symbiose-workspace/EFC",
+    "public_readme": "EFC/docs/public/README.md",
+    "agent_contract": "EFC/AGENTS.md",
+    "rcmp_manifest": "EFC/docs/papers/efc/The-Regime-Consistent-Measurement-Principle-RCMP-A-Methodological-Framework-for-Multi-Scale-Physics/MANIFEST.md",
+    "unified_architecture": "EFC/docs/papers/efc/validity-aware-ai/docs/paper_unified_architecture_statement.md"
+  },
+  "scope_definition": [
+    "EFC",
+    "EBE",
+    "S0/S1 ontology and entropy balance",
+    "L0-L3 regime architecture",
+    "RCMP",
+    "consciousness/autopoiesis/cognition interfaces",
+    "ASI OS",
+    "ASI map",
+    "Symbiose/graph theory projections",
+    "public validation and publication surfaces"
+  ],
+  "steward": {
+    "proposed_agent_id": "efc-asi-steward",
+    "role": "theory-cosmos-asi-steward",
+    "status": "PROPOSED_NOT_LIVE_VERIFIED",
+    "binding_required": true,
+    "authority": "propose-first; no self-grant of ASI authority"
+  },
+  "authority": {
+    "owner": "morten",
+    "public_publish": "validate_then_publish_and_ci",
+    "graph_write": "blocked_until_authenticated_writer_and_read_after_write",
+    "claim_promotion": "human/gated",
+    "runtime_activation": "not_authorized"
+  },
+  "evidence_layers": [
+    "EFC publications/own DOI",
+    "third-party external publications",
+    "EFC working notes confronting externals"
+  ],
+  "gates": {
+    "canonical_h10_domain_record": "DECLARED",
+    "steward_runtime_readback": "BLOCKED",
+    "morten_authority_readback": "BLOCKED",
+    "theory_home_reconciliation": "OPEN",
+    "graph_projection_schema_and_provenance": "OPEN",
+    "public_validation_receipt": "REQUIRED",
+    "graph_write": "BLOCKED",
+    "obsidian_write": "BLOCKED"
+  },
+  "next_action": "Run metadata-only TheoryHomeRecord reconciliation over EFC root, docs/public, docs/papers/efc, RCMP, EBE/S0/S1/L0-L3, consciousness/meta and ASI OS/map references; do not activate the proposed steward or write graph records from discovery alone.",
+  "mutation": {
+    "repo_artifact_write": true,
+    "graph_write": false,
+    "obsidian_write": false,
+    "agent_activation": false,
+    "public_publish": false
+  }
+}

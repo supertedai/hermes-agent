@@ -1,0 +1,69 @@
+{
+  "mwp_id": "MWP-UOSH-001",
+  "case_id": "CASE-SYMBIOSE-02",
+  "work_package": "SYMBIOSE-02B-02D",
+  "dataset_id": "symbiose-shadow-eval-v1",
+  "version": 1,
+  "mode": "metadata-only-shadow",
+  "queries": [
+    {
+      "id": "q-concept-identity",
+      "purpose": "duplicate and label inventory",
+      "target": "graph",
+      "query_shape": "exact concept identity search",
+      "concept": "Homo Fluxus",
+      "expected_fields": ["labels", "source", "owner", "updated_at", "confidence"]
+    },
+    {
+      "id": "q-provenance-completeness",
+      "purpose": "source/owner/freshness aggregate",
+      "target": "graph",
+      "query_shape": "aggregate field presence",
+      "expected_fields": ["rows", "source_count", "owner_count", "updated_count"]
+    },
+    {
+      "id": "q-relation-normalization",
+      "purpose": "relation casing and type drift",
+      "target": "graph",
+      "query_shape": "incident relation type aggregate",
+      "expected_fields": ["relation", "count"]
+    },
+    {
+      "id": "q-retrieval-health",
+      "purpose": "current vector service baseline",
+      "target": "qdrant",
+      "query_shape": "root and collection health",
+      "expected_fields": ["http_status", "version", "collection_route"]
+    },
+    {
+      "id": "q-gnn-collapse",
+      "purpose": "embedding collapse gate",
+      "target": "gnn",
+      "query_shape": "similarity endpoint with fixed top_k",
+      "concept": "Homo Fluxus",
+      "top_k": 5,
+      "expected_fields": ["degraded", "mean_pairwise_cosine", "variance", "result_count"]
+    }
+  ],
+  "negative_cases": [
+    "unknown-concept",
+    "deprecated-only-concept",
+    "missing-source",
+    "missing-owner",
+    "stale-heartbeat",
+    "gnn-degraded"
+  ],
+  "metrics": [
+    "duplicate_hit_rate",
+    "stale_hit_rate",
+    "provenance_completeness",
+    "relation_normalization_conflicts",
+    "precision_at_k",
+    "recall_at_k",
+    "mean_pairwise_cosine",
+    "per_dimension_variance",
+    "latency_ms"
+  ],
+  "promotion_rule": "no promotion when any required metric, provenance field, owner gate or rollback handle is missing",
+  "raw_payload_included": false
+}

@@ -1,0 +1,30 @@
+{
+  "mwp_id": "MWP-UOSH-001",
+  "artifact_id": "mwp-topology-reconciliation-readback-v1",
+  "mode": "read-only-normalized-reconciliation",
+  "status": "BASELINE_PRESERVED_ADDITIONS_UNMAPPED",
+  "previous": {
+    "recorded_at": "2026-08-06T14:16:31Z",
+    "inventory_hash": "36195cbfb64909bd225704c733cb980f10321f9c577c0c1514423744ea9236fd",
+    "item_count": 64
+  },
+  "current": {
+    "normalized_inventory_hash": "96cee52932c13e3aef9a3612191227f12f28ce428f565e7814295e899a37c416",
+    "normalized_item_count": 368
+  },
+  "comparison": {
+    "previous_baseline_items_missing": 0,
+    "previous_baseline_items_preserved": 64,
+    "new_observed_items": 304,
+    "new_items_owner_mapped": false,
+    "format_normalized": true
+  },
+  "interpretation": {
+    "baseline_services_disappeared": false,
+    "topology_fully_reconciled": false,
+    "status": "ADDITIONS_REQUIRE_OWNER_AND_RUNTIME_MAPPING"
+  },
+  "next_action": "map new process/listener/service additions to canonical owner/evidence, then rerun topology heartbeat",
+  "mutation": {"process_change": false, "service_restart": false, "network_write": false},
+  "raw_payload_included": false
+}

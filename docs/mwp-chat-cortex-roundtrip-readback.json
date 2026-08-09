@@ -1,0 +1,25 @@
+{
+  "gate": "chat-cortex-shared-read-view-roundtrip",
+  "status": "BLOCKED",
+  "scope": {
+    "user_id": "morten",
+    "installation_id": "mwp-status-quo",
+    "login_surface_id": "current-hermes-chat",
+    "agent_id": "opus"
+  },
+  "measured": {
+    "/conversation/health": {"http_status": 200, "status": "ok"},
+    "/agi/meta/conversation/{conversation_id}": {"method": "GET", "required_params": ["conversation_id", "user_id"], "readback": "not executed; private content boundary"},
+    "/memory/crud/chat/history": {"method": "GET", "required_params": ["user_id"], "readback": "not executed; private content boundary"},
+    "/memory/crud/read": {"method": "POST", "required_body": true, "readback": "not executed; write/read authority boundary"}
+  },
+  "not_proven": [
+    "ConversationWorkingModel ↔ OpusWorkingMemory shared view",
+    "per-user readback provenance",
+    "Cortex alignment/freshness",
+    "round-trip identity preservation"
+  ],
+  "owner": "canonical conversation/Cortex runtime owner on .12/.13",
+  "evidence": "direct .12:8010 OpenAPI plus /conversation/health",
+  "next_action": "expose metadata-only round-trip endpoint returning conversation_id, user_id, working_model_ref, cortex_ref, recorded_at, freshness and provenance without raw content"
+}

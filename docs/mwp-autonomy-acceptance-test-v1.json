@@ -1,0 +1,63 @@
+{
+  "artifact_id": "mwp-autonomy-acceptance-test-v1",
+  "mwp_id": "MWP-UOSH-001",
+  "status": "CONTRACT_DEFINED_LIVE_AUTHORITY_ACCEPTANCE_PENDING",
+  "mode": "metadata-only-acceptance-contract",
+  "canonical_destination": "https://github.com/supertedai/AGI.git branch mwp/uosh-automation-01",
+  "autonomy_definition": "Autonomous bounded operation across MWP source mapping, reconciliation, receipts, reversible projections and fail-closed escalation; never authority bypass or unrestricted irreversible mutation.",
+  "acceptance_gates": [
+    {
+      "id": "AC-01",
+      "name": "source-discovery-and-mapping",
+      "status": "PASS_BASELINE",
+      "evidence": ["CAD/ADR/BL inventory", "source-task-authority-mapping-v2"],
+      "pass_condition": "New or changed source records are detected, mapped to existing lanes/IDs, and unresolved fields remain BLOCKED."
+    },
+    {
+      "id": "AC-02",
+      "name": "canonical-AGI-reconciliation",
+      "status": "PASS_BASELINE",
+      "evidence": ["AGI target push/readback", "destination preflight corrected to AGI", "external-gates readback"],
+      "pass_condition": "AGI is the only canonical MWP project destination and no future MWP publication targets Hermes."
+    },
+    {
+      "id": "AC-03",
+      "name": "identity-and-device-authority",
+      "status": "BLOCKED_LIVE_RECEIPT",
+      "required_evidence": ["fresh /api/me", "fresh /api/mwp/identity", "principal", "device", "surface", "provenance", "freshness"],
+      "pass_condition": "The active principal/device/surface is live-authenticated and scoped to the operation."
+    },
+    {
+      "id": "AC-04",
+      "name": "active-role-provider-runtime",
+      "status": "BLOCKED_LIVE_RECEIPT",
+      "required_evidence": ["role_id", "provider_id", "model_id", "api_mode", "llm_instance_id", "fallback-health", "freshness"],
+      "pass_condition": "The actual active runtime route is evidenced; local configuration is insufficient."
+    },
+    {
+      "id": "AC-05",
+      "name": "kanban-execution-authority",
+      "status": "BLOCKED_UPSTREAM_PREREQUISITES",
+      "required_evidence": ["parent", "child", "lease", "heartbeat", "worker activation state"],
+      "pass_condition": "A bounded task can be executed only when child/lease/heartbeat are live and scoped."
+    },
+    {
+      "id": "AC-06",
+      "name": "projection-and-rollback",
+      "status": "BLOCKED_FULL_PROJECTION_AUTHORITY",
+      "required_evidence": ["target pre-read", "owner approval", "short-lived grant", "execute receipt", "read-after-write", "rollback reference"],
+      "pass_condition": "Every projection is idempotent, reversible, provenance-bearing and read-after-write verified."
+    },
+    {
+      "id": "AC-07",
+      "name": "freshness-and-drift-loop",
+      "status": "BLOCKED_SCHEDULER_AND_UPSTREAM_BASELINE",
+      "required_evidence": ["AGI-canonical scheduled reconciler", "last-run receipt", "freshness deadlines", "drift alert", "quiet idempotent repeat"],
+      "pass_condition": "The loop runs continuously, reports only changes, and fails closed on stale or divergent surfaces."
+    }
+  ],
+  "completion_rule": "AC-01 through AC-07 must be PASS with receipts; any BLOCKED gate keeps overall autonomy status BLOCKED.",
+  "current_overall_status": "BLOCKED_AT_AC-03_AC-04_AC-05_AC-06_AC-07",
+  "owner_boundary": "Owner approval remains required for irreversible, broad-scope or authority-changing mutations.",
+  "raw_payload_included": false
+}

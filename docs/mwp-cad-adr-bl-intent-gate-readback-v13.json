@@ -1,0 +1,71 @@
+{
+  "gate": "cad-adr-bl-intent-registry",
+  "artifact_id": "mwp-cad-adr-bl-intent-gate-readback-v13",
+  "status": "BLOCKED",
+  "mode": "metadata-only-source-runtime-verification",
+  "scope": {
+    "principal": "morten",
+    "installation_id": "mwp-status-quo",
+    "login_surface_id": "current-hermes-chat",
+    "agent_id": "opus"
+  },
+  "source_evidence": {
+    "implementation": "agent/mwp_asi_alignment_registry.py",
+    "closeout_evaluator": "agent/mwp_asi_closeout.py",
+    "fresh_registry_snapshot": "docs/mwp-final-closeout-readback.json",
+    "fresh_topology": "docs/mwp-local-topology-readback.json",
+    "topology_inventory_hash": "93d13016aba69ebf4194a7dc83e7325de8fc7930bbf067bf8316ebbfd9ed4171",
+    "topology_item_count": 65,
+    "topology_delta": {
+      "added": [],
+      "removed": [],
+      "changed": []
+    },
+    "git_head": "74184e29617fc487382ac5c9f5a85e0aea59a3be",
+    "git_worktree": "dirty",
+    "registry_observation": "cad-adr-bl-intent-registry remains BLOCKED; no authoritative live CAD/ADR/BL-to-runtime alignment spine",
+    "closeout_observation": {
+      "status": "OPEN",
+      "continue_loop": true,
+      "blocker_count": 10,
+      "blockers": [
+        "registry:cad-adr-bl-intent-registry:BLOCKED",
+        "registry:git-deploy-daemon-status:PARTIAL",
+        "registry:daemon-bl-health-alignment:PARTIAL",
+        "registry:life-contract-domain-agent:BLOCKED",
+        "registry:world-model-hub-alignment:UNVERIFIED",
+        "registry:chat-cortex-shared-readview:UNVERIFIED",
+        "registry:lateral-agent-bus:UNKNOWN",
+        "registry:asi-control-spine:OPEN",
+        "receipt:BLOCKED",
+        "receipt:BLOCKED"
+      ]
+    },
+    "test_observation": "scripts/run_tests.sh tests/test_mwp_asi_alignment_registry.py tests/test_mwp_asi_closeout.py tests/test_mwp_change_ledger.py tests/test_mwp_receipt_adapters.py tests/test_mwp_receipt_coordinator.py -q: 18 passed, 0 failed",
+    "runtime_observation": "local metadata-only topology records presence; presence is not CAD/ADR/BL runtime alignment proof"
+  },
+  "owner": "Morten / authorized source-of-truth and runtime owners",
+  "evidence_required": [
+    "authenticated metadata-only CAD/ADR/BL-to-runtime reconciliation",
+    "authorized Graph receipt with write/read-after-write verification",
+    "canonical Obsidian receipt with write/read-after-write verification"
+  ],
+  "blocker": "Authoritative live CAD/ADR/BL source reconciliation and authorized Graph/Obsidian write plus read-after-write receipts are unavailable.",
+  "next_action": "Owner provides authenticated reconciliation and destination authorities; rerun this gate and verify read-after-write before any promotion.",
+  "promotion_rule": "Do not promote DECLARED, REACHABLE, collection presence, local schema integrity, or local task presence to LIVE_VERIFIED. Do not close the parent on partial progress.",
+  "mutation": {
+    "source_write": false,
+    "graph_write": false,
+    "obsidian_write": false,
+    "production_activation": false
+  },
+  "ledger_event": {
+    "event_id": "EVT-ab47d041c79b",
+    "status": "OPEN",
+    "provisional": true,
+    "cad": "CAD-EVT-94b6aab6781d",
+    "adr": "ADR-EVT-94b6aab6781d",
+    "bl": "BL-EVT-94b6aab6781d"
+  },
+  "raw_payload_included": false
+}

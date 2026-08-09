@@ -1,0 +1,15 @@
+{
+  "mwp_id": "MWP-UOSH-001",
+  "artifact_id": "mwp-h10-semantic-validation-readback-v5",
+  "gate": "GAP-H10-ASI-SEMANTIC-BOUNDARY-001",
+  "mode": "proposal-only-final-quarantine-validation",
+  "status": "ALL_RECORDS_SCHEMA_PROPOSABLE_HUMAN_REVIEW_AND_EVALUATION_PENDING",
+  "group": "sealed_prediction_and_empirical",
+  "records": 18,
+  "proposed_layers": {"PREDICTION_ARTIFACT": 14, "EVALUATION_ARTIFACT": 4},
+  "proposed_claim_status": {"PREDICTION": 14, "EVIDENCE_INTERNAL": 2, "VALIDATION_PENDING": 2},
+  "validator": {"schema_valid_proposals": 18, "blocked": 0, "automatic_promotions": 0, "remaining_quarantine": 0},
+  "required_before_promotion": ["human semantic review", "evaluation receipts for predictions", "source/DOI/commit provenance", "runtime/capability separation", "graph/public rollback references"],
+  "mutation": {"theory_record_write": false, "graph_write": false, "steward_activation": false, "public_publish": false},
+  "next_action": "human approval and evidence receipts for all 178 proposals, then EFC source/branch reconciliation"
+}

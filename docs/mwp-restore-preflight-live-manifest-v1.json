@@ -1,0 +1,243 @@
+{
+  "archive": {
+    "bytes": 58205612336,
+    "exists": true,
+    "kind": "file",
+    "mime_guess": "application/x-tar",
+    "mtime": 1786079466.4307485,
+    "path": "/home/byopus/AGI/backups/proton/20260807/symbiose_stack_12/efc_orb_backup_daily_20260807_020001.tar.gz",
+    "sha256": null,
+    "sha256_status": "NOT_COMPUTED_OVER_LIMIT",
+    "status": "PHYSICAL_ARTIFACT_FOUND"
+  },
+  "artifact_id": "mwp-restore-preflight-readback-v1",
+  "full_snapshot": {
+    "bytes": 88254563328,
+    "exists": true,
+    "kind": "file",
+    "mime_guess": null,
+    "mtime": 1786087349.3271568,
+    "path": "/home/byopus/AGI/backups/proton/20260807/symbiose_stack_12/full-snapshot-2026-08-07-00-38-51.snapshot",
+    "sha256": null,
+    "sha256_status": "NOT_COMPUTED_OVER_LIMIT",
+    "status": "PHYSICAL_ARTIFACT_FOUND"
+  },
+  "gnn": {
+    "count": 8,
+    "root": "/home/byopus/AGI/symbiose_gnn_output",
+    "samples": [
+      {
+        "bytes": 2864161,
+        "exists": true,
+        "kind": "file",
+        "mime_guess": "application/vnd.snesdev-page-table",
+        "mtime": 1785402751.5749965,
+        "path": "/home/byopus/AGI/symbiose_gnn_output/multi_tier_gnn_model.pt",
+        "sha256": "495a681c77d99291fd16ee15f1f6be2c04818ba8cef0676acaab00bc5491c084",
+        "sha256_status": "FULL_FILE",
+        "status": "PHYSICAL_ARTIFACT_FOUND"
+      },
+      {
+        "bytes": 667700592,
+        "exists": true,
+        "kind": "file",
+        "mime_guess": "application/vnd.snesdev-page-table",
+        "mtime": 1785906919.5560815,
+        "path": "/home/byopus/AGI/symbiose_gnn_output/v2/features.pt",
+        "sha256": null,
+        "sha256_status": "NOT_COMPUTED_OVER_LIMIT",
+        "status": "PHYSICAL_ARTIFACT_FOUND"
+      },
+      {
+        "bytes": 117854112,
+        "exists": true,
+        "kind": "file",
+        "mime_guess": "application/vnd.snesdev-page-table",
+        "mtime": 1778944210.0,
+        "path": "/home/byopus/AGI/symbiose_gnn_output/v2/features_with_structural.pt",
+        "sha256": null,
+        "sha256_status": "NOT_COMPUTED_OVER_LIMIT",
+        "status": "PHYSICAL_ARTIFACT_FOUND"
+      },
+      {
+        "bytes": 12583948,
+        "exists": true,
+        "kind": "file",
+        "mime_guess": "application/vnd.snesdev-page-table",
+        "mtime": 1785902409.8848855,
+        "path": "/home/byopus/AGI/symbiose_gnn_output/v2/graph.pt",
+        "sha256": "f226cbf87bff38ba777be8ffbe79839ddd62f2a8683cec8794e2e57896230d4b",
+        "sha256_status": "FULL_FILE",
+        "status": "PHYSICAL_ARTIFACT_FOUND"
+      },
+      {
+        "bytes": 16131054,
+        "exists": true,
+        "kind": "file",
+        "mime_guess": "application/vnd.snesdev-page-table",
+        "mtime": 1785912898.1527548,
+        "path": "/home/byopus/AGI/symbiose_gnn_output/v2/model.pt",
+        "sha256": "f88fa41d49a3c6a78460e3028f195ea46b3bff6a1dba69dc54951fcc6290fa87",
+        "sha256_status": "FULL_FILE",
+        "status": "PHYSICAL_ARTIFACT_FOUND"
+      },
+      {
+        "bytes": 40492341,
+        "exists": true,
+        "kind": "file",
+        "mime_guess": "application/vnd.snesdev-page-table",
+        "mtime": 1778944693.0,
+        "path": "/home/byopus/AGI/symbiose_gnn_output/v2/model_sota.pt",
+        "sha256": "c33c005ea7eefac8bc0bcc488e992b391cb8fe39f44e8bb0efa872914a2c19de",
+        "sha256_status": "FULL_FILE",
+        "status": "PHYSICAL_ARTIFACT_FOUND"
+      },
+      {
+        "bytes": 9242503,
+        "exists": true,
+        "kind": "file",
+        "mime_guess": "application/vnd.snesdev-page-table",
+        "mtime": 1778947657.0,
+        "path": "/home/byopus/AGI/symbiose_gnn_output/v2/tucker_head.pt",
+        "sha256": "043eebf0cf40a909d0db0ca63ac8371ae46ea0135d1ff3879de6bfbdffd65725",
+        "sha256_status": "FULL_FILE",
+        "status": "PHYSICAL_ARTIFACT_FOUND"
+      },
+      {
+        "bytes": 15643566,
+        "exists": true,
+        "kind": "file",
+        "mime_guess": "application/vnd.snesdev-page-table",
+        "mtime": 1785047029.767114,
+        "path": "/home/byopus/AGI/symbiose_gnn_output/v2_prev/model.pt",
+        "sha256": "3f2daf3f554ef97016087a38b74dbfea9852225a0028359f0d5344c368b0e00b",
+        "sha256_status": "FULL_FILE",
+        "status": "PHYSICAL_ARTIFACT_FOUND"
+      }
+    ]
+  },
+  "mutation": {
+    "delete": false,
+    "restore": false,
+    "service_restart": false,
+    "writes": false
+  },
+  "promotion": "BLOCKED_UNTIL_MANIFEST_DESTINATION_RESTORE_ROLLBACK_EVIDENCE",
+  "qdrant": {
+    "count": 86,
+    "root": "/home/byopus/AGI/restore/qdrant",
+    "samples": [
+      {
+        "bytes": 351802368,
+        "exists": true,
+        "kind": "file",
+        "mime_guess": null,
+        "mtime": 1783344286.0,
+        "path": "/home/byopus/AGI/restore/qdrant/ab_testing_metrics_morten.snapshot",
+        "sha256": null,
+        "sha256_status": "NOT_COMPUTED_OVER_LIMIT",
+        "status": "PHYSICAL_ARTIFACT_FOUND"
+      },
+      {
+        "bytes": 3101696,
+        "exists": true,
+        "kind": "file",
+        "mime_guess": null,
+        "mtime": 1783344286.0,
+        "path": "/home/byopus/AGI/restore/qdrant/anomaly_v1.snapshot",
+        "sha256": "50470e65c69a98f2a20c94e8a124708f06f635fc6e13e86f5125b92ba8913dcf",
+        "sha256_status": "FULL_FILE",
+        "status": "PHYSICAL_ARTIFACT_FOUND"
+      },
+      {
+        "bytes": 2065408,
+        "exists": true,
+        "kind": "file",
+        "mime_guess": null,
+        "mtime": 1783344286.0,
+        "path": "/home/byopus/AGI/restore/qdrant/architecture_task_v1.snapshot",
+        "sha256": "382801da6958728b553a38573559172de732cca586a320698136ac9bf9e4ad23",
+        "sha256_status": "FULL_FILE",
+        "status": "PHYSICAL_ARTIFACT_FOUND"
+      },
+      {
+        "bytes": 3105792,
+        "exists": true,
+        "kind": "file",
+        "mime_guess": null,
+        "mtime": 1783344286.0,
+        "path": "/home/byopus/AGI/restore/qdrant/assumption_v1.snapshot",
+        "sha256": "756140f546848863787eaed6374154a39fed480be18aa1a6243079def0e3e145",
+        "sha256_status": "FULL_FILE",
+        "status": "PHYSICAL_ARTIFACT_FOUND"
+      },
+      {
+        "bytes": 27709952,
+        "exists": true,
+        "kind": "file",
+        "mime_guess": null,
+        "mtime": 1783344287.0,
+        "path": "/home/byopus/AGI/restore/qdrant/atlas_entities.snapshot",
+        "sha256": "77af763579b59148f37f8132362e3c406929a40612c6504445aadd9867f8eac2",
+        "sha256_status": "FULL_FILE",
+        "status": "PHYSICAL_ARTIFACT_FOUND"
+      },
+      {
+        "bytes": 56510976,
+        "exists": true,
+        "kind": "file",
+        "mime_guess": null,
+        "mtime": 1783344287.0,
+        "path": "/home/byopus/AGI/restore/qdrant/behavioral_invariants.snapshot",
+        "sha256": "983f6aa18383d3e36374ea27afbb3914a4b9fdde95600e2e3050b72b5cabe38c",
+        "sha256_status": "FULL_FILE",
+        "status": "PHYSICAL_ARTIFACT_FOUND"
+      },
+      {
+        "bytes": 854342144,
+        "exists": true,
+        "kind": "file",
+        "mime_guess": null,
+        "mtime": 1783344292.0,
+        "path": "/home/byopus/AGI/restore/qdrant/biology.snapshot",
+        "sha256": null,
+        "sha256_status": "NOT_COMPUTED_OVER_LIMIT",
+        "status": "PHYSICAL_ARTIFACT_FOUND"
+      },
+      {
+        "bytes": 1038336,
+        "exists": true,
+        "kind": "file",
+        "mime_guess": null,
+        "mtime": 1783344293.0,
+        "path": "/home/byopus/AGI/restore/qdrant/biology_framework_v1.snapshot",
+        "sha256": "0c6c550cf93e2093ef267fd9b68a4cdacbd749ea1b57ceb6b3447aec2da89ecb",
+        "sha256_status": "FULL_FILE",
+        "status": "PHYSICAL_ARTIFACT_FOUND"
+      },
+      {
+        "bytes": 129536,
+        "exists": true,
+        "kind": "file",
+        "mime_guess": null,
+        "mtime": 1783344293.0,
+        "path": "/home/byopus/AGI/restore/qdrant/biology_private.snapshot",
+        "sha256": "bc7e6d20e6de6010ebdc20483703f91c2a22bca6d711c1105c0ce5712c3f6e13",
+        "sha256_status": "FULL_FILE",
+        "status": "PHYSICAL_ARTIFACT_FOUND"
+      },
+      {
+        "bytes": 297352192,
+        "exists": true,
+        "kind": "file",
+        "mime_guess": null,
+        "mtime": 1783344294.0,
+        "path": "/home/byopus/AGI/restore/qdrant/canonical_facts.snapshot",
+        "sha256": null,
+        "sha256_status": "NOT_COMPUTED_OVER_LIMIT",
+        "status": "PHYSICAL_ARTIFACT_FOUND"
+      }
+    ]
+  },
+  "status": "PREFLIGHT_ONLY_RESTORE_NOT_ATTEMPTED"
+}
