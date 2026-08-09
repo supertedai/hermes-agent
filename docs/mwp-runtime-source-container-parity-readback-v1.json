@@ -1,0 +1,40 @@
+{
+  "mwp_id": "MWP-UOSH-001",
+  "artifact_id": "mwp-runtime-source-container-parity-readback-v1",
+  "status": "LIVE_ROUTE_PARITY_VERIFIED_RUNTIME_GATES_OPEN",
+  "recorded_at": "2026-08-09T21:12:00+02:00",
+  "source_root": "/home/byopus/AGI",
+  "runtime_root": "/repo",
+  "runtime_container": "efc-unified-api",
+  "restart_count": 0,
+  "hashes": {
+    "apis/unified_api/main.py": "0db9e13236dc90fbc35f4be7b4ca2bca6a4abf38733a89780bff582a1b4b1b04",
+    "apis/unified_api/routers/chat.py": "9b05135c75864f01cf7ff6a898a3128067bad5674a090ffa42dd3959d21a4d7e",
+    "apis/unified_api/routers/mwp_runtime.py": "a51f8d550c177c5ebe907487f69d165b0d522249d280b85dc7f8f76576bc399e",
+    "apis/unified_api/routers/mwp_role_provider.py": "9637a124ed7c23ede87b96b7993d364dd7492672dd261d627917d21b049908ca"
+  },
+  "routes": {
+    "/health": {"http_status": 200},
+    "/api/mwp/runtime": {"http_status": 200, "status": "NO_ACTIVE_TURN"},
+    "/api/mwp/role-provider": {"http_status": 200, "status": "DECLARED_NOT_LIVE_SELECTED", "writes_allowed": false},
+    "/chat/health": {"http_status": 200},
+    "/neo4j/status": {"http_status": 200}
+  },
+  "source_runtime_parity": "VERIFIED_HOST_TO_REPO",
+  "build_receipt": {
+    "tests": "prior governed MWP suite green",
+    "compile": "PASS",
+    "restart_readback": "PASS",
+    "delayed_route_readback": "PASS"
+  },
+  "still_blocked": [
+    "selected provider/model receipt from a real GPT Luna Desktop turn",
+    "Cortex/world-model receipt",
+    "completed-turn or terminal timeout receipt",
+    "graph write/read-after-write",
+    "current Obsidian projection/readback",
+    "full Git-to-graph-to-Obsidian reconciler"
+  ],
+  "raw_payload_included": false,
+  "promotion": "BLOCKED_UNTIL_END_TO_END_CANARY"
+}
