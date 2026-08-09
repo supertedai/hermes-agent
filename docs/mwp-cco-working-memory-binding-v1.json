@@ -1,0 +1,36 @@
+{
+  "mwp_id": "MWP-UOSH-001",
+  "artifact_id": "mwp-cco-working-memory-binding-v1",
+  "status": "OPEN_RUNTIME_GATED",
+  "adr_ref": "ADR-HERMES-CCO-WORKING-MEMORY-001",
+  "bl_ref": "BL-HERMES-CCO-WORKING-MEMORY-001",
+  "authority": {
+    "runtime_waist": "Hermes",
+    "governance": "MWP",
+    "durable_memory": "approved Memory Fabric authority",
+    "context_projection": "Hermes MemoryManager",
+    "model_selection": "live provider/response receipt required"
+  },
+  "model_roles": {
+    "cco": {"role": "chat_candidate", "live_registry": true, "active_turn_selected": "UNVERIFIED"},
+    "gpt-oss-120b": {"role": "secondary_world_model_or_worker", "chat_hot_path": false},
+    "cogito-v2-preview-deepseek-671b-moe": {"role": "declared_reasoner_candidate", "active_turn_selected": "UNVERIFIED"}
+  },
+  "memory_lifecycle": [
+    "prefetch_all_scoped",
+    "context_assembly",
+    "turn_capture",
+    "sync_all",
+    "queue_prefetch_all",
+    "retrieval_use_effect",
+    "promotion_or_rollback"
+  ],
+  "receipt_required": [
+    "conversation_id", "session_id", "principal_id", "tenant_id", "system_scope",
+    "role_id", "agent_id", "provider_ref", "declared_model_ref", "selected_model_ref",
+    "working_memory_ref", "cortex_ref", "memory_layer_id", "recorded_at",
+    "freshness_seconds", "provenance_ref", "runtime_effect_ref", "rollback_ref", "status"
+  ],
+  "promotion": "BLOCKED_UNTIL_RETRIEVAL_USE_EFFECT_READ_AFTER_WRITE_ROLLBACK",
+  "raw_payload_included": false
+}
