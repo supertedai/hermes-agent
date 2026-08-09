@@ -1,0 +1,39 @@
+{
+  "job_id": "MWP-JOB-20260809-EVIDENCE-DISCIPLINE-001",
+  "request": "Demonstrate governed handling for every smallest job",
+  "parent_mwp": "MWP-UOSH-001",
+  "adr_ref": "ADR-MWP-CANONICAL-EVIDENCE-LEDGER-001",
+  "bl_ref": "BL-MWP-CANONICAL-EVIDENCE-LEDGER-001",
+  "scope": {
+    "surface": "current Hermes chat",
+    "principal": "morten",
+    "tenant": "UNVERIFIED",
+    "target": "local governed evidence artifact",
+    "operation": "metadata-only preflight/readback"
+  },
+  "preflight": {
+    "mwp_scope": "PRESENT",
+    "adr": "PRESENT",
+    "bl": "PRESENT",
+    "lease": "NOT_REQUIRED_FOR_LOCAL_METADATA_DRAFT; REQUIRED_BEFORE_REMOTE_MUTATION",
+    "source_preread": "PRESENT",
+    "rollback_ref": "NOT_APPLICABLE_NO_REMOTE_MUTATION"
+  },
+  "execution": {
+    "mutation": false,
+    "remote_mutation": false,
+    "graph_write": false,
+    "obsidian_write": false,
+    "git_scope": "this receipt only"
+  },
+  "evidence": {
+    "status": "COMPLETE_LOCAL_METADATA_RECEIPT",
+    "read_after_write": "LOCAL_FILE_READBACK_PENDING",
+    "provenance_ref": "current-chat-user-request",
+    "raw_payload_included": false
+  },
+  "gate": {
+    "remote_next_action": "STOP_UNTIL_MWP_JOB_LEASE_AND_FULL_BUILD_GRAPH_OBSIDIAN_RECEIPT_CHAIN_EXISTS",
+    "promotion": "BLOCKED"
+  }
+}
