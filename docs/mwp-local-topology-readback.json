@@ -1,7 +1,7 @@
 {
-  "recorded_at": "2026-08-09T17:00:15Z",
-  "inventory_hash": "da72cfa2c022baffcc58e412401e9feef7976f77e80ecb75fb656fcab1511aae",
-  "item_count": 69,
+  "recorded_at": "2026-08-09T17:23:10Z",
+  "inventory_hash": "b51003e06ca1f0fd2bf707e922ba29afbdb249b2377267e1e73b5e882deb91fc",
+  "item_count": 70,
   "items": [
     {
       "source": "listeners",
@@ -168,6 +168,12 @@
     {
       "source": "process",
       "key": "ibus-daemon",
+      "status": "LIVE",
+      "detail": "matched topology process"
+    },
+    {
+      "source": "process",
+      "key": "node",
       "status": "LIVE",
       "detail": "matched topology process"
     },
@@ -419,7 +425,9 @@
     }
   ],
   "drift": {
-    "added": [],
+    "added": [
+      "process:node"
+    ],
     "removed": [],
     "changed": []
   }

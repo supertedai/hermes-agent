@@ -3,6 +3,7 @@
   "ready_lane_ids": [
     "git-deploy-daemon-status",
     "daemon-bl-health-alignment",
+    "per-user-topology",
     "world-model-hub-alignment",
     "chat-cortex-shared-readview",
     "lateral-agent-bus",
@@ -53,15 +54,15 @@
     },
     "per-user-topology": {
       "loop_id": "per-user-topology",
-      "status": "COMPLETE",
+      "status": "RUNNING",
       "ticks": 0,
       "blocker": "",
-      "next_action": "parent may join this lane",
+      "next_action": "dispatch or continue this independent lane",
       "last_readback": {
         "task_id": "per-user-topology",
         "parent_task_id": "mwp-closeout-parent",
         "lane": "system",
-        "task_state": "CLOSED",
+        "task_state": "READY",
         "dependencies": []
       }
     },
@@ -176,9 +177,9 @@
         "task_id": "per-user-topology",
         "parent_task_id": "mwp-closeout-parent",
         "lane": "system",
-        "status": "COMPLETE",
+        "status": "RUNNING",
         "blocker": "",
-        "next_action": "parent may join this lane"
+        "next_action": "dispatch or continue this independent lane"
       }
     },
     {

@@ -10,7 +10,7 @@
     "source_snapshot": "mwp topology refresh",
     "status": "OPEN",
     "row_count": 9,
-    "open_rows": 8,
+    "open_rows": 9,
     "rows": [
       {
         "key": "cad-adr-bl-intent-registry",
@@ -71,10 +71,10 @@
         "scope": "installation + login surface + user + agent",
         "evidence": "metadata-only topology context readback",
         "freshness": "FRESH",
-        "drift": "{\"added\": [], \"changed\": [], \"removed\": []}",
+        "drift": "{\"added\": [\"process:node\"], \"changed\": [], \"removed\": []}",
         "rollback_gate": "BLOCKED/UNKNOWN prevents green promotion",
-        "status": "CONNECTED_READ_ONLY",
-        "gap": "remote inventory remains partial"
+        "status": "DRIFTED",
+        "gap": "topology drift detected; reconcile changed items"
       },
       {
         "key": "life-contract-domain-agent",
@@ -162,7 +162,7 @@
     {
       "destination": "git",
       "status": "VERIFIED",
-      "ref": "repo=/home/agent/agent-layer/mwp-uosh-automation-01;head=dc369d8e386743ce158a1b0c7b2df4c40252869d;dirty=yes"
+      "ref": "repo=/home/agent/agent-layer/mwp-uosh-automation-01;head=f0b94d7df17244fce4d1f0ec013cdd8dc47b58f1;dirty=yes"
     },
     {
       "destination": "graph",
@@ -178,11 +178,12 @@
   "closeout": {
     "status": "OPEN",
     "continue_loop": true,
-    "blocker_count": 9,
+    "blocker_count": 10,
     "blockers": [
       "registry:cad-adr-bl-intent-registry:BLOCKED",
       "registry:git-deploy-daemon-status:PARTIAL",
       "registry:daemon-bl-health-alignment:PARTIAL",
+      "registry:per-user-topology:DRIFTED",
       "registry:life-contract-domain-agent:BLOCKED",
       "registry:world-model-hub-alignment:UNVERIFIED",
       "registry:chat-cortex-shared-readview:UNVERIFIED",
