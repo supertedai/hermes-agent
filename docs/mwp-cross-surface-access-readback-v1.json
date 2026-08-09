@@ -1,0 +1,54 @@
+{
+  "artifact": "mwp-cross-surface-access-readback-v1",
+  "recorded_at": "2026-08-09T18:40:00+02:00",
+  "metadata_only": true,
+  "surfaces": {
+    "mwp_git": {
+      "status": "WRITABLE_DIRTY_SCOPED_ALLOWLIST_READY",
+      "repo": "/home/agent/agent-layer/mwp-uosh-automation-01",
+      "origin": "git@github.com:supertedai/AGI.git",
+      "allowlisted_artifacts": 102,
+      "isolated_worktree": "/tmp/mwp-g2-landing",
+      "staged": 0,
+      "commit_or_push": false,
+      "reason": ".13 GitHub surface authority is owner-confirmed; runtime CLI handoff is open"
+    },
+    "hermes_git": {
+      "status": "WRITABLE_DIRTY",
+      "repo": "/home/agent/agent-layer/hermes-agent",
+      "commit_or_push": false,
+      "reason": "no blind staging of unrelated WIP"
+    },
+    "remote_agi": {
+      "status": "SSH_WRITABLE",
+      "host": "box12",
+      "path": "/home/byopus/AGI",
+      "commit_or_push": false,
+      "reason": "runtime/source access available; GitHub landing still needs .13 CLI handoff"
+    },
+    "graph": {
+      "status": "READ_VERIFIED_ORCHESTRATOR_CANARY_ROLLBACK_VERIFIED",
+      "evidence": "http://127.0.0.1:8010/neo4j/status -> 200 connected",
+      "orchestrator_canary": {"write": 200, "rollback": 200, "read_after_delete_remaining": 0},
+      "canonical_writer_audit_receipts": 0,
+      "write_authority": "UNVERIFIED",
+      "graph_write": false
+    },
+    "lateral_bus_http": {
+      "status": "NOT_LIVE",
+      "evidence": "fresh /lateral-bus/status -> 404",
+      "source_artifacts": "present on box12 but live route wiring absent",
+      "write_authority": "UNVERIFIED"
+    },
+    "obsidian": {
+      "status": "ACTIVE_VAULT_PROJECTION_VERIFIED",
+      "vault": "/Users/morpheus/Documents/Brain",
+      "projection": "/Users/morpheus/Documents/Brain/MWP/receipts/mwp-g4-projection-readback-v1.md",
+      "projection_read_after_write": true,
+      "write": true,
+      "canonical_authority": false
+    }
+  },
+  "rollback": "orchestrator graph canary rolled back; Obsidian projection is a single scoped file with delete rollback; no Git commit/push performed",
+  "next_action": "bind .13 GitHub surface authority to runtime CLI, then scoped commit/push/read-after-write; separately resolve canonical writer audit path and lateral-bus route"
+}
