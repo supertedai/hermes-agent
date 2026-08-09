@@ -1,4 +1,4 @@
-# ADR-HERMES-CCO-WORKING-MEMORY-001 — CCO chat-model behind Hermes working memory
+# ADR-HERMES-CCO-WORKING-MEMORY-001 — GPT Luna in Hermes Desktop behind MWP working memory
 
 **Status:** `ACCEPTED_ARCHITECTURE / RUNTIME_GATED / LIVE_PROVIDER_READBACK`
 **Parent:** `MWP-UOSH-001 → CAD-HERMES-MEMORY-FABRIC-001 → ADR-HERMES-MEMORY-FABRIC-001`
@@ -6,28 +6,28 @@
 
 ## Context
 
-The live provider registry currently exposes `cco` at the canonical chat endpoint. Hermes working memory is a lifecycle/context capability, not a model and not a competing canonical store. The environment also declares a local `gpt-oss-120b` world-model/worker and a `cogito-v2-preview-deepseek-671b-moe` reasoner, but neither is evidence of the active chat provider.
+The canonical user chat/control surface is Hermes Desktop running GPT Luna. CCO is a separately available backend model at the `.11:8001` runtime endpoint; it is not the user's current Desktop chat model and must not silently replace GPT Luna. Hermes working memory is a lifecycle/context capability, not a model and not a competing canonical store. The environment also declares a local `gpt-oss-120b` world-model/worker and a `cogito-v2-preview-deepseek-671b-moe` reasoner, but neither is evidence of the active Hermes Desktop chat provider.
 
 Recent live logs showed slow synchronous dispatch leaves and model/provider fields missing from active-turn receipts. A model name must not be inferred from environment configuration, a worker declaration or a slow auxiliary call.
 
 ## Decision
 
-1. **CCO remains the current chat-model candidate** only when live model-selection/response evidence identifies `cco` for the turn.
-2. **Hermes remains the only runtime waist.** `MemoryManager` owns scoped prefetch, context assembly, turn capture, `sync_all` and queued enrichment.
-3. **MWP owns governance and durable memory promotion:** principal, tenant, scope, provenance, authority, lease, receipt, rollback and promotion gates.
-4. `gpt-oss-120b` and `cogito-v2-preview-deepseek-671b-moe` are secondary declared workers until a separate live provider/role receipt proves their selection. They must not block normal CCO chat without a bounded gate.
-5. Working memory is injected through Hermes lifecycle hooks; it is not written as raw prompt content into a metadata receipt and is not promoted merely because it was prefetched.
-6. Model attribution is split explicitly:
-
-```text
+1. **GPT Luna in Hermes Desktop remains the current user chat/control model.** Its live provider/model identity must be read from the Hermes Desktop/session receipt; it is not inferred from `.11` runtime environment variables.
+2. **CCO is an optional downstream backend candidate**, usable only when an explicit governed route selects it and records the selection. It must not replace GPT Luna or take over Desktop control.
+3. **Hermes remains the only runtime waist.** `MemoryManager` owns scoped prefetch, context assembly, turn capture, `sync_all` and queued enrichment.
+4. **MWP owns governance and durable memory promotion:** principal, tenant, scope, provenance, authority, lease, receipt, rollback and promotion gates.
+5. `gpt-oss-120b` and `cogito-v2-preview-deepseek-671b-moe` are secondary declared workers until a separate live provider/role receipt proves their selection. They must not block normal GPT Luna/Hermes Desktop chat.
+6. Working memory is injected through Hermes lifecycle hooks; it is not written as raw prompt content into a metadata receipt and is not promoted merely because it was prefetched.
+7. Model attribution is split explicitly:
 declared_model_ref
 selected_model_ref
 provider_ref
+hermes_desktop_surface_ref
 working_memory_ref
 cortex_ref
 ```
 
-A declared ref is not a selected/live ref.
+The current Desktop control path is GPT Luna through Hermes. A `.11` model such as CCO is a separate downstream candidate and requires explicit route evidence.
 
 ## Required turn lifecycle
 

@@ -8,7 +8,7 @@
 
 | Gate | Requirement | Status |
 |---|---|---|
-| C1 | Live provider registry and selected provider are separately read back | `PARTIAL` |
+| C1 | Hermes Desktop GPT Luna/session provider and any downstream selected provider are separately read back | `PARTIAL` |
 | C2 | Hermes MemoryManager scoped prefetch/context/sync hooks are wired | `PARTIAL` |
 | C3 | Active-turn receipt has identity, role, model/provider, memory and Cortex refs | `BLOCKED` |
 | C4 | Synchronous model/dispatch leaves have bounded timeout and terminal receipt | `PARTIAL` |

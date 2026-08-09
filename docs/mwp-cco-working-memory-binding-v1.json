@@ -9,10 +9,12 @@
     "governance": "MWP",
     "durable_memory": "approved Memory Fabric authority",
     "context_projection": "Hermes MemoryManager",
-    "model_selection": "live provider/response receipt required"
+    "desktop_chat_control": "GPT Luna in Hermes Desktop",
+    "downstream_model_selection": "explicit governed route and live receipt required"
   },
   "model_roles": {
-    "cco": {"role": "chat_candidate", "live_registry": true, "active_turn_selected": "UNVERIFIED"},
+    "gpt-luna": {"role": "Hermes Desktop chat/control model", "current_user_surface": true},
+    "cco": {"role": "optional downstream backend candidate", "live_registry": true, "active_turn_selected": "UNVERIFIED", "desktop_replacement": false},
     "gpt-oss-120b": {"role": "secondary_world_model_or_worker", "chat_hot_path": false},
     "cogito-v2-preview-deepseek-671b-moe": {"role": "declared_reasoner_candidate", "active_turn_selected": "UNVERIFIED"}
   },
