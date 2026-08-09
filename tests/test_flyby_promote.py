@@ -52,7 +52,7 @@ def passing_preflight():
             adr_status="accepted",
             bl_status="open",
             obsidian_status="fresh",
-            source_refs={k: k for k in ("git", "lease", "cad", "adr", "bl", "obsidian")},
+            source_refs={k: k for k in ("git", "commit", "lease", "cad", "adr", "bl", "graph", "obsidian")},
         )
     )
 
@@ -112,7 +112,7 @@ def test_the_promoters_own_unknowns_are_what_block_preflight():
             adr_status=goal.evidence["adr_status"],
             bl_status="open",
             obsidian_status="fresh",
-            source_refs={k: k for k in ("git", "lease", "cad", "adr", "bl", "obsidian")},
+            source_refs={k: k for k in ("git", "commit", "lease", "cad", "adr", "bl", "graph", "obsidian")},
         )
     )
     assert result.status is PreflightStatus.BLOCK

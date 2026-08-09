@@ -33,6 +33,8 @@ def passing_preflight():
                 "adr": "ADR-038",
                 "bl": "BL-3254",
                 "obsidian": "Brain/Change Log.md",
+                "commit": "commit:local",
+                "graph": "graph:read-after-write",
             },
         )
     )
@@ -179,3 +181,35 @@ def test_reviewer_must_match_current_diff_before_landing():
         landing=lambda evidence: LandingEvidence("sha", ReviewVerdict.PASS, "tests", "readback", "smoke", "rollback", "log", "state", "closer"),
     )
     assert matched.goal.state is GoalState.LANDED
+
+
+def test_preflight_blocks_partial_holistic_gate():
+    evidence = PreflightInput(
+        git_clean=True,
+        lease_clear=True,
+        cad_status="verified",
+        adr_status="accepted",
+        bl_status="open",
+        obsidian_status="fresh",
+        source_refs={"git":"g", "commit":"c", "lease":"l", "cad":"c", "adr":"a", "bl":"b", "graph":"gr", "obsidian":"o"},
+        holistic_verdict="PARTIAL",
+        holistic_ref="gate:123",
+    )
+    result = PreflightGate().evaluate(evidence)
+    assert result.status is PreflightStatus.BLOCK
+    assert any("holistic gate is PARTIAL" in reason for reason in result.reasons)
+
+
+def test_preflight_accepts_complete_holistic_gate():
+    evidence = PreflightInput(
+        git_clean=True,
+        lease_clear=True,
+        cad_status="verified",
+        adr_status="accepted",
+        bl_status="open",
+        obsidian_status="fresh",
+        source_refs={"git":"g", "commit":"c", "lease":"l", "cad":"c", "adr":"a", "bl":"b", "graph":"gr", "obsidian":"o"},
+        holistic_verdict="COMPLETE",
+        holistic_ref="gate:complete",
+    )
+    assert PreflightGate().evaluate(evidence).status is PreflightStatus.PASS

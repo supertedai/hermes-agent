@@ -28,6 +28,8 @@ def evidence(*, clean: bool = True):
             "adr": "ADR-038",
             "bl": "BL-3254",
             "obsidian": "Brain/Change Log.md",
+            "commit": "commit:local",
+            "graph": "graph:read-after-write",
         },
     )
 

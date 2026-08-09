@@ -64,6 +64,8 @@ class PreflightInput:
     bl_status: str
     obsidian_status: str
     source_refs: Mapping[str, str] = field(default_factory=dict)
+    holistic_verdict: str = ""
+    holistic_ref: str = ""
 
 
 @dataclass(frozen=True)
@@ -78,7 +80,7 @@ class PreflightGate:
 
     def evaluate(self, evidence: PreflightInput) -> PreflightResult:
         reasons: list[str] = []
-        required_refs = ("git", "lease", "cad", "adr", "bl", "obsidian")
+        required_refs = ("git", "commit", "lease", "cad", "adr", "bl", "graph", "obsidian")
         missing_refs = tuple(ref for ref in required_refs if not evidence.source_refs.get(ref))
         if missing_refs:
             reasons.append("missing authoritative source refs: " + ", ".join(missing_refs))
@@ -94,6 +96,14 @@ class PreflightGate:
             reasons.append(f"BL status is not actionable: {evidence.bl_status}")
         if evidence.obsidian_status.lower() not in {"fresh", "verified", "accepted"}:
             reasons.append(f"Brain/Obsidian status is not fresh: {evidence.obsidian_status}")
+        if evidence.holistic_verdict:
+            verdict = evidence.holistic_verdict.upper()
+            if verdict == "BLOCKED":
+                reasons.append(f"holistic gate is BLOCKED: {evidence.holistic_ref or 'no readback ref'}")
+            elif verdict == "PARTIAL":
+                reasons.append(f"holistic gate is PARTIAL: {evidence.holistic_ref or 'no readback ref'}")
+            elif verdict != "COMPLETE":
+                reasons.append(f"holistic gate verdict is not recognized: {evidence.holistic_verdict}")
         status = PreflightStatus.PASS if not reasons else PreflightStatus.BLOCK
         return PreflightResult(status, tuple(reasons), evidence)
 
