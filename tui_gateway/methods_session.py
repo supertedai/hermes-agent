@@ -184,7 +184,15 @@ def _(rid, params: dict) -> dict:
             # workers) rather than allow-listing a fixed set of platform names
             # that goes stale whenever a new platform is added or a user names
             # their own source.
-            deny = frozenset({"kanban", "tool"})
+            deny = frozenset({"kanban", "tool", "subagent", "cron", "api_server", "cli"})  # BL-3599 + BL-4000 (Symbiose)
+            # BL-4000: api_server (3880) og cli (1214) er 100 % EIERLOESE — maalt mot
+            # .14s session_owner. Mortens EGNE oekter er KUN desktop/tui. De to kildene
+            # fylte chat-lista hans med backend-kjoeringer («dette er backend system»).
+            # HVORFOR HER og ikke i .14-proxyen: proxyens visnings-filter (BL-3630) sitter
+            # paa websocket-stien (session.list), mens desktop i remote-modus henter lista
+            # fra HTTP-ruter proxyen ikke ruter i det hele tatt (BL-4002) — saa det filteret
+            # blir aldri spurt. Her treffer det ALLE klienter, umiddelbart, uansett rute.
+            # user_id duger ikke som akse: den er NULL for absolutt alt, ogsaa Mortens egne.
 
             limit = int(params.get("limit", 200) or 200)
             # Over-fetch modestly so per-source filtering doesn't leave us
@@ -243,7 +251,15 @@ def _(rid, params: dict) -> dict:
         if db is None:
             return _ok(rid, {"session_id": None})
         try:
-            deny = frozenset({"kanban", "tool"})
+            deny = frozenset({"kanban", "tool", "subagent", "cron", "api_server", "cli"})  # BL-3599 + BL-4000 (Symbiose)
+            # BL-4000: api_server (3880) og cli (1214) er 100 % EIERLOESE — maalt mot
+            # .14s session_owner. Mortens EGNE oekter er KUN desktop/tui. De to kildene
+            # fylte chat-lista hans med backend-kjoeringer («dette er backend system»).
+            # HVORFOR HER og ikke i .14-proxyen: proxyens visnings-filter (BL-3630) sitter
+            # paa websocket-stien (session.list), mens desktop i remote-modus henter lista
+            # fra HTTP-ruter proxyen ikke ruter i det hele tatt (BL-4002) — saa det filteret
+            # blir aldri spurt. Her treffer det ALLE klienter, umiddelbart, uansett rute.
+            # user_id duger ikke som akse: den er NULL for absolutt alt, ogsaa Mortens egne.
             # Over-fetch by a generous bounded amount so heavy sub-agent
             # users (lots of recent ``tool`` rows) don't get a false
             # "no eligible session" answer.  ``session.list`` uses a
