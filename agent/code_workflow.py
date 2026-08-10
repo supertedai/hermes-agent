@@ -853,6 +853,68 @@ class LandingEvidence:
     brain_change_log: str
     selfstate: str
     commit_closer: str = ""
+    #: BL-4029 steg 11: filene denne landingen faktisk roerer.
+    #:
+    #: Feltet fantes ikke, og fravaeret var selve hullet: ADR-062 V4 sjekk 2 sier
+    #: «landingssettet subset lease-settet, verifisert ved commit» -- men systemet
+    #: kunne ikke UTTRYKKE hvilke filer en landing roerer, saa sjekken var ikke bare
+    #: uimplementert, den var uuttrykkbar.
+    #:
+    #: Tomt sett er IKKE «ingen filer». Det er «ukjent», og :class:`LandingScopeGate`
+    #: blokkerer paa det -- se der for hvorfor.
+    landing_set: tuple[str, ...] = ()
+
+
+class LandingScopeGate:
+    """Steg 11: lander denne endringen NOEYAKTIG det den har lov til?
+
+    ADR-062 V4 sjekk 2, og den eneste mekaniske sjekken som forhindrer skaden
+    CLAUDE.md dokumenterer (``ae832c8a4``): at en commit sveiper med seg en parallell
+    stroems arbeid.
+
+    **Det skjedde i denne oekten, for meg.** En `git add` av EN fil ble til en commit
+    med 219 -- fordi indeksen deles mellom sesjoner i arbeidstreet, og `git commit`
+    uten stier tar alt som ligger der. Eksplisitt `git add` er IKKE nok; det var
+    regelen jeg fulgte da det skjedde.
+
+    Sjekken er en delmengde-test, ikke en likhets-test: en landing kan roere FAERRE
+    filer enn den leaset (helt legitimt -- man tar lease foer man vet hva som trengs),
+    men aldri FLERE.
+
+    TOMT LANDINGSSETT BLOKKERER. En commit uten kjent filsett er ikke «trygg fordi den
+    er tom» -- den er UKJENT, og en ukjent mengde kan ikke vaere en delmengde av noe.
+    Det er dagens gjennomgaaende laerdom i én gate: fravaer av data er ikke et positivt
+    funn.
+    """
+
+    def evaluate(self, landing_set: Sequence[str],
+                 lease_set: Sequence[str]) -> PreflightResult:
+        reasons: list[str] = []
+        landing = {str(p).strip() for p in landing_set if str(p).strip()}
+        leased = {str(p).strip() for p in lease_set if str(p).strip()}
+
+        if not landing:
+            reasons.append(
+                "landing set is empty or unknown — a commit whose file set is not "
+                "known cannot be proven to be within the lease")
+        if not leased:
+            reasons.append("lease set is empty — nothing was leased to land into")
+
+        outside = sorted(landing - leased)
+        if outside:
+            reasons.append(
+                "landing set is not a subset of the lease set; would land unleased "
+                f"files: {', '.join(outside[:10])}"
+                + (f" (+{len(outside) - 10} more)" if len(outside) > 10 else ""))
+
+        status = PreflightStatus.PASS if not reasons else PreflightStatus.BLOCK
+        # Evidensen her er den faktiske sammenligningen, ikke en gjenfortelling av den.
+        ev = PreflightInput(
+            git_clean=True, lease_clear=not reasons,
+            cad_status="", adr_status="", bl_status="", obsidian_status="",
+            source_refs={"lease": ",".join(sorted(leased)[:5])},
+        )
+        return PreflightResult(status, tuple(reasons), ev)
 
 
 class DefinitionOfDone:
@@ -1102,6 +1164,15 @@ class GovernedCodeRunner:
                 return blocked(current, f"review verdict: {verdict.value}", "reviewer", "address review findings")
             if prelanding_evidence is None:
                 return blocked(current, "prelanding DoD evidence missing", "postcommit", "prepare and verify DoD evidence before landing")
+            # BL-4029 steg 11 / ADR-062 V4 sjekk 2. Plassert FOER DefinitionOfDone,
+            # fordi et landingssett utenfor leasen skal stoppe kjeden uansett hvor
+            # komplett resten av evidensen er. En perfekt DoD paa en commit som
+            # sveiper andres filer er fortsatt et sveip.
+            lease_set = tuple(str(preflight.evidence.source_refs.get("lease", "")).split(","))
+            scope = LandingScopeGate().evaluate(prelanding_evidence.landing_set, lease_set)
+            if scope.status is not PreflightStatus.PASS:
+                return blocked(current, "; ".join(scope.reasons), "landing_scope",
+                               "land only files covered by the lease, or extend the lease")
             done, missing = DefinitionOfDone().evaluate(prelanding_evidence)
             if not done:
                 return blocked(current, "prelanding DoD incomplete: " + ", ".join(missing), "postcommit", "complete DoD before landing")

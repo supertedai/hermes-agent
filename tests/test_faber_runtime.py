@@ -10,7 +10,7 @@ from agent.code_workflow import (
     ReviewEvidence,
     GoalState,
 )
-from agent.faber_runtime import FaberRuntime, handoff_path
+from agent.faber_runtime import FaberRuntime, PostcommitResult, handoff_path
 
 
 def evidence(*, clean: bool = True):
@@ -23,7 +23,9 @@ def evidence(*, clean: bool = True):
         obsidian_status="fresh",
         source_refs={
             "git": "HEAD:agent/faber_runtime.py",
-            "lease": "lease:faber",
+            # BL-4029 / ADR-062 V4 sjekk 2: lease-refen NAVNGIR filene, saa
+            # landingssettet kan sammenlignes mot dem ved commit.
+            "lease": "a.py,b.py",
             "cad": "CAD-M",
             "adr": "ADR-038",
             "bl": "BL-3254",
@@ -43,6 +45,9 @@ def landing(_evidence=None):
         "log",
         "state",
         "closer",
+        # En landing maa oppgi HVILKE filer den roerer. Uten det er filsettet
+        # ukjent, og en ukjent mengde kan ikke vaere en delmengde av leasen.
+        landing_set=("a.py",),
     )
 
 
@@ -104,5 +109,10 @@ def test_faber_runtime_reaches_landed_with_prevalidated_dod():
         review=lambda _: ReviewEvidence(ReviewVerdict.PASS, "diff-g3", "sol"),
         prelanding_evidence=landing_record,
         landing=lambda _: landing_record,
+        postcommit=lambda _: PostcommitResult(True, landing_record),
+        learning=lambda _, __: {"metric": "quality", "validated": True, "skill_or_workflow": "faber"},
     )
     assert result.run.goal.state is GoalState.LANDED
+    assert result.postcommit is not None
+    assert result.postcommit.success is True
+    assert result.learning_event == {"metric": "quality", "validated": True, "skill_or_workflow": "faber"}

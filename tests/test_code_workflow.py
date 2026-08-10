@@ -8,6 +8,7 @@ from pathlib import Path
 
 import agent.code_workflow as cw
 from agent.code_workflow import (
+    LandingScopeGate,
     PreflightResult,
 
     BlGate,
@@ -43,7 +44,9 @@ def passing_preflight():
             obsidian_status="fresh",
             source_refs={
                 "git": "HEAD:target",
-                "lease": "lease:faber",
+                # BL-4029: lease-refen NAVNGIR filene, fordi landingssettet maa kunne
+                # sammenlignes mot dem ved commit (ADR-062 V4 sjekk 2).
+                "lease": "a.py,b.py",
                 "cad": "CAD-M",
                 "adr": "ADR-038",
                 "bl": "BL-3254",
@@ -282,7 +285,7 @@ def test_goal_lifecycle_requires_evidence_and_review():
         GoalState.LANDED,
         review=ReviewVerdict.PASS,
         review_evidence=ReviewEvidence(ReviewVerdict.PASS, "diff-g1", "sol"),
-        landing_evidence=LandingEvidence("sha", ReviewVerdict.PASS, "tests", "readback", "smoke", "rollback", "log", "state", "closer"),
+        landing_evidence=LandingEvidence("sha", ReviewVerdict.PASS, "tests", "readback", "smoke", "rollback", "log", "state", "closer", landing_set=("a.py",)),
     )
     assert goal.state is GoalState.LANDED
 
@@ -293,7 +296,7 @@ def test_definition_of_done_requires_all_postcommit_evidence():
     ok, missing = dod.evaluate(incomplete)
     assert not ok
     assert set(missing) == {"commit_closer", "readback", "runtime_smoke", "brain_change_log", "selfstate"}
-    complete = LandingEvidence("sha", ReviewVerdict.PASS, "tests", "readback", "smoke", "rollback", "log", "state", "closer")
+    complete = LandingEvidence("sha", ReviewVerdict.PASS, "tests", "readback", "smoke", "rollback", "log", "state", "closer", landing_set=("a.py",))
     assert dod.evaluate(complete) == (True, ())
 
 
@@ -350,8 +353,8 @@ def test_governed_runner_reaches_landed_only_with_complete_evidence():
         preflight=preflight,
         build=lambda: {"tests": "pass", "diff_id": "diff-g1"},
         review=lambda evidence: ReviewEvidence(ReviewVerdict.PASS, "diff-g1", "sol"),
-        prelanding_evidence=LandingEvidence("sha", ReviewVerdict.PASS, "tests", "readback", "smoke", "rollback", "log", "state", "closer"),
-        landing=lambda evidence: LandingEvidence("sha", ReviewVerdict.PASS, "tests", "readback", "smoke", "rollback", "log", "state", "closer"),
+        prelanding_evidence=LandingEvidence("sha", ReviewVerdict.PASS, "tests", "readback", "smoke", "rollback", "log", "state", "closer", landing_set=("a.py",)),
+        landing=lambda evidence: LandingEvidence("sha", ReviewVerdict.PASS, "tests", "readback", "smoke", "rollback", "log", "state", "closer", landing_set=("a.py",)),
     )
     assert result.goal.state is GoalState.LANDED
 
@@ -386,8 +389,8 @@ def test_reviewer_must_match_current_diff_before_landing():
         preflight=preflight,
         build=lambda: base,
         review=lambda evidence: ReviewEvidence(ReviewVerdict.PASS, "diff-current", "sol"),
-        prelanding_evidence=LandingEvidence("sha", ReviewVerdict.PASS, "tests", "readback", "smoke", "rollback", "log", "state", "closer"),
-        landing=lambda evidence: LandingEvidence("sha", ReviewVerdict.PASS, "tests", "readback", "smoke", "rollback", "log", "state", "closer"),
+        prelanding_evidence=LandingEvidence("sha", ReviewVerdict.PASS, "tests", "readback", "smoke", "rollback", "log", "state", "closer", landing_set=("a.py",)),
+        landing=lambda evidence: LandingEvidence("sha", ReviewVerdict.PASS, "tests", "readback", "smoke", "rollback", "log", "state", "closer", landing_set=("a.py",)),
     )
     assert matched.goal.state is GoalState.LANDED
 
@@ -574,3 +577,78 @@ def test_postcommit_never_replays_a_step_that_PROVES_something(tmp_path):
     assert "commit_closer" in second.replayed, "recording steps may legitimately replay"
     # success must never be ambiguous about whether the work ran
     assert set(second.replayed) & set(second.executed) == set()
+
+
+# ------------------------------------------- BL-4029 steg 11: landingssettet ---
+
+def test_landing_set_must_be_a_subset_of_the_lease_set():
+    """ADR-062 V4 sjekk 2 — den ene mekaniske sjekken som forhindrer sveipet."""
+    r = LandingScopeGate().evaluate(["a.py", "b.py"], ["a.py", "b.py", "c.py"])
+    assert r.status is PreflightStatus.PASS, r.reasons
+
+
+def test_landing_fewer_files_than_leased_is_legitimate():
+    """Man tar lease FOER man vet hva som trengs. Delmengde, ikke likhet."""
+    assert LandingScopeGate().evaluate(["a.py"], ["a.py", "b.py"]).status is PreflightStatus.PASS
+
+
+def test_the_ae832c8a4_sweep_is_blocked():
+    """Skaden CLAUDE.md dokumenterer — og som traff MEG i denne oekten.
+
+    En `git add` av EN fil ble til en commit med 219, fordi indeksen deles mellom
+    sesjoner og `git commit` uten stier tar alt som ligger der. Eksplisitt `git add`
+    var regelen jeg FULGTE da det skjedde; den er ikke nok.
+    """
+    leased = ["planning/mitt.md"]
+    sweeping = ["planning/mitt.md"] + [f"mwp-uosh/agent/andres_{i}.py" for i in range(218)]
+    r = LandingScopeGate().evaluate(sweeping, leased)
+    assert r.status is PreflightStatus.BLOCK
+    assert any("not a subset" in x for x in r.reasons)
+    assert any("andres_0.py" in x for x in r.reasons), "de fremmede filene maa NAVNGIS"
+
+
+def test_an_empty_landing_set_blocks_because_unknown_is_not_empty():
+    """Et ukjent filsett er ikke «trygt fordi det er tomt».
+
+    En ukjent mengde kan ikke vaere en delmengde av noe. Dagens gjennomgaaende
+    laerdom, i én gate: fravaer av data er ikke et positivt funn.
+    """
+    r = LandingScopeGate().evaluate([], ["a.py"])
+    assert r.status is PreflightStatus.BLOCK
+    assert any("empty or unknown" in x for x in r.reasons)
+
+
+def test_an_empty_lease_set_blocks():
+    r = LandingScopeGate().evaluate(["a.py"], [])
+    assert r.status is PreflightStatus.BLOCK
+    assert any("lease set is empty" in x for x in r.reasons)
+
+
+def test_runner_BLOCKS_when_landing_would_leave_the_lease(monkeypatch):
+    """Driver den HAANDHEVEDE stien, ikke bare gate-klassen.
+
+    Samme laerdom som L4: en klasse-nivaa-test kan aldri innfri en paastand om den
+    haandhevede stien. Her landes en fil som ikke er leaset, gjennom runneren.
+    """
+    ev = PreflightInput(
+        git_clean=True, lease_clear=True, cad_status="fresh", adr_status="accepted",
+        bl_status="open", obsidian_status="fresh",
+        source_refs={"git": "g", "lease": "a.py", "cad": "C", "adr": "A", "bl": "B"},
+    )
+    landing = LandingEvidence(
+        landing_set=("a.py", "IKKE_LEASET.py"),
+        commit="sha", reviewer=ReviewVerdict.PASS, tests="ok", readback="ok",
+        runtime_smoke="ok", rollback="ok", brain_change_log="ok", selfstate="ok",
+        commit_closer="ok",
+    )
+    result = GovernedCodeRunner().run(
+        FaberGoal("g1", "run", cad_ref="C", adr_ref="A", bl_ref="B"),
+        preflight=PreflightResult(PreflightStatus.PASS, (), ev),
+        build=lambda: {"tests": "ok", "diff_id": "d1"},
+        review=lambda e: ReviewEvidence(verdict=ReviewVerdict.PASS, diff_id="d1", reviewer="r"),
+        landing=lambda e: landing,
+        prelanding_evidence=landing,
+    )
+    assert result.goal.state is GoalState.BLOCKED
+    assert result.handoff.required_gate == "landing_scope"
+    assert "IKKE_LEASET.py" in result.blocker
