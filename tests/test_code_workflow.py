@@ -8,6 +8,7 @@ from pathlib import Path
 
 import agent.code_workflow as cw
 from agent.code_workflow import (
+    ScopeBudget,
     LandingScopeGate,
     PreflightResult,
 
@@ -337,7 +338,7 @@ def test_governed_runner_blocks_at_review_and_returns_handoff():
     result = GovernedCodeRunner().run(
         FaberGoal("g1", "run", cad_ref="CAD-M", adr_ref="ADR-038", bl_ref="BL-3254"),
         preflight=preflight,
-        build=lambda: {"tests": "pass"},
+        build=lambda: {"tests": "pass", "changed_files": 1, "changed_lines": 5},
         review=lambda evidence: ReviewVerdict.BLOCK,
         landing=lambda evidence: (_ for _ in ()).throw(AssertionError("must not land")),
     )
@@ -351,7 +352,7 @@ def test_governed_runner_reaches_landed_only_with_complete_evidence():
     result = GovernedCodeRunner().run(
         FaberGoal("g1", "run", cad_ref="CAD-M", adr_ref="ADR-038", bl_ref="BL-3254"),
         preflight=preflight,
-        build=lambda: {"tests": "pass", "diff_id": "diff-g1"},
+        build=lambda: {"tests": "pass", "diff_id": "diff-g1", "changed_files": 2, "changed_lines": 40},
         review=lambda evidence: ReviewEvidence(ReviewVerdict.PASS, "diff-g1", "sol"),
         prelanding_evidence=LandingEvidence("sha", ReviewVerdict.PASS, "tests", "readback", "smoke", "rollback", "log", "state", "closer", landing_set=("a.py",)),
         landing=lambda evidence: LandingEvidence("sha", ReviewVerdict.PASS, "tests", "readback", "smoke", "rollback", "log", "state", "closer", landing_set=("a.py",)),
@@ -373,7 +374,7 @@ def test_faber_goal_registry_persists_and_selects_operational_goals(tmp_path):
 
 def test_reviewer_must_match_current_diff_before_landing():
     preflight = passing_preflight()
-    base = dict(tests="pass", diff_id="diff-current")
+    base = dict(tests="pass", diff_id="diff-current", changed_files=1, changed_lines=8)
     mismatch = GovernedCodeRunner().run(
         FaberGoal("g-diff-1", "run", cad_ref="CAD-M", adr_ref="ADR-038", bl_ref="BL-3254"),
         preflight=preflight,
@@ -644,7 +645,7 @@ def test_runner_BLOCKS_when_landing_would_leave_the_lease(monkeypatch):
     result = GovernedCodeRunner().run(
         FaberGoal("g1", "run", cad_ref="C", adr_ref="A", bl_ref="B"),
         preflight=PreflightResult(PreflightStatus.PASS, (), ev),
-        build=lambda: {"tests": "ok", "diff_id": "d1"},
+        build=lambda: {"tests": "ok", "diff_id": "d1", "changed_files": 1, "changed_lines": 10},
         review=lambda e: ReviewEvidence(verdict=ReviewVerdict.PASS, diff_id="d1", reviewer="r"),
         landing=lambda e: landing,
         prelanding_evidence=landing,
@@ -652,3 +653,72 @@ def test_runner_BLOCKS_when_landing_would_leave_the_lease(monkeypatch):
     assert result.goal.state is GoalState.BLOCKED
     assert result.handoff.required_gate == "landing_scope"
     assert "IKKE_LEASET.py" in result.blocker
+
+
+# ---------------------------------------------- BL-4029 steg 8: blast-radius ---
+
+def _pf_ok():
+    ev = PreflightInput(
+        git_clean=True, lease_clear=True, cad_status="fresh", adr_status="accepted",
+        bl_status="open", obsidian_status="fresh",
+        source_refs={"git": "g", "lease": "a.py", "cad": "C", "adr": "A", "bl": "B"})
+    return PreflightResult(PreflightStatus.PASS, (), ev)
+
+
+def _run_with_build(build_result):
+    return GovernedCodeRunner().run(
+        FaberGoal("g1", "run", cad_ref="C", adr_ref="A", bl_ref="B"),
+        preflight=_pf_ok(),
+        build=lambda: build_result,
+        review=lambda e: ReviewEvidence(ReviewVerdict.PASS, "d1", "r"),
+        landing=lambda e: None,
+        prelanding_evidence=None,
+    )
+
+
+def test_build_that_does_not_report_its_blast_radius_is_BLOCKED():
+    """UMAALT er ikke "liten".
+
+    En build som ikke sier hvor mye den endret, kan ikke vises aa vaere innenfor et
+    budsjett. Samme regel som tomt landingssett paa steg 11, og samme gjennomgaaende
+    laerdom: fravaer av data er ikke et positivt funn.
+    """
+    r = _run_with_build({"tests": "pass", "diff_id": "d1"})
+    assert r.goal.state is GoalState.BLOCKED
+    assert r.handoff.required_gate == "scope_budget"
+    assert "changed_files" in r.blocker and "changed_lines" in r.blocker
+
+
+def test_build_within_budget_passes_step_8():
+    r = _run_with_build({"tests": "pass", "diff_id": "d1",
+                         "changed_files": 3, "changed_lines": 120})
+    # Gaar videre forbi steg 8; stopper senere paa manglende landings-evidens.
+    assert r.handoff is None or r.handoff.required_gate != "scope_budget"
+
+
+def test_a_change_too_large_to_review_properly_is_BLOCKED():
+    """Grensen er ikke moralsk, den er praktisk.
+
+    En patch paa 40 filer kan ikke reviewes ordentlig, og en reviewer som ikke KAN
+    se hele endringen gir en PASS som ikke betyr det den ser ut til aa bety. Steg 10
+    er bare saa sterk som stoerrelsen paa det den faar se.
+    """
+    r = _run_with_build({"tests": "pass", "diff_id": "d1",
+                         "changed_files": 40, "changed_lines": 9000})
+    assert r.goal.state is GoalState.BLOCKED
+    assert r.handoff.required_gate == "scope_budget"
+    assert "files>" in r.blocker and "lines>" in r.blocker
+
+
+def test_non_numeric_metrics_are_BLOCKED_not_coerced():
+    r = _run_with_build({"tests": "pass", "diff_id": "d1",
+                         "changed_files": "mange", "changed_lines": 10})
+    assert r.goal.state is GoalState.BLOCKED
+    assert r.handoff.required_gate == "scope_budget"
+
+
+def test_a_runner_always_has_a_budget():
+    """Ingen budsjett ville stilltiende gjenopprettet tilstanden foer L4:
+    ScopeBudget definert, men aldri spurt."""
+    assert GovernedCodeRunner().scope_budget is not None
+    assert GovernedCodeRunner(scope_budget=ScopeBudget(max_files=1)).scope_budget.max_files == 1

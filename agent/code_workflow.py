@@ -1074,8 +1074,13 @@ class GovernedCodeRunner:
     infrastructure itself.
     """
 
-    def __init__(self, ledger: GoalLedger | None = None):
+    def __init__(self, ledger: GoalLedger | None = None,
+                 scope_budget: "ScopeBudget | None" = None):
         self.ledger = ledger or GoalLedger()
+        #: Blast-radius-grensen for steg 8. Injiserbar, men ALDRI fravaerende:
+        #: en runner uten budsjett ville stilltiende gjenopprettet tilstanden der
+        #: ScopeBudget fantes uten aa bli spurt.
+        self.scope_budget = scope_budget or ScopeBudget()
 
     def run(
         self,
@@ -1135,6 +1140,44 @@ class GovernedCodeRunner:
             evidence = dict(build())
             if not evidence.get("tests"):
                 return blocked(current, "build returned no test evidence", "tests", "run targeted tests")
+
+            # BL-4029 steg 8: BLAST-RADIUS. `ScopeBudget` fantes i koden, men hadde
+            # NULL kallesteder -- samme tilstand som `BlGate`/`DesignGate` hadde foer
+            # L4: en vakt som er definert, men aldri spurt.
+            #
+            # Grensene er ikke moralske, de er praktiske: en patch som roerer 40 filer
+            # kan ikke reviewes ordentlig, og en reviewer som ikke KAN se hele
+            # endringen gir en PASS som ikke betyr det den ser ut til aa bety. Steg 10
+            # er bare saa sterk som stoerrelsen paa det den faar se.
+            #
+            # MANGLENDE MAALETALL BLOKKERER. En build som ikke rapporterer hvor mye
+            # den endret, er ikke "liten fordi tallet mangler" -- den er UMAALT, og en
+            # umaalt mengde kan ikke vaere innenfor et budsjett. Samme regel som tomt
+            # landingssett paa steg 11.
+            budget_fields = ("changed_files", "changed_lines")
+            missing_metrics = [f for f in budget_fields if evidence.get(f) is None]
+            if missing_metrics:
+                return blocked(
+                    current,
+                    "build did not report its blast radius: " + ", ".join(missing_metrics)
+                    + " — an unmeasured change cannot be shown to be within budget",
+                    "scope_budget",
+                    "report changed_files and changed_lines from the build")
+            try:
+                within, violations = self.scope_budget.evaluate(
+                    changed_files=int(evidence.get("changed_files", 0)),
+                    changed_lines=int(evidence.get("changed_lines", 0)),
+                    deleted_lines=int(evidence.get("deleted_lines", 0) or 0),
+                    new_dependencies=int(evidence.get("new_dependencies", 0) or 0),
+                )
+            except (TypeError, ValueError):
+                return blocked(current, "blast-radius metrics are not numeric",
+                               "scope_budget", "report integer counts from the build")
+            if not within:
+                return blocked(
+                    current, "build exceeds scope budget: " + "; ".join(violations),
+                    "scope_budget",
+                    "split the change, or raise the budget deliberately with a reason")
             current = self.ledger.transition(current, GoalState.VERIFIED, preflight=preflight, evidence=evidence)
             review_result = review(evidence)
             if not isinstance(review_result, ReviewEvidence):

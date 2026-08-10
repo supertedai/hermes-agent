@@ -82,7 +82,10 @@ def test_runtime_reaches_runner_only_after_preflight_pass():
     def build():
         nonlocal called
         called = True
-        return {"tests": "pass"}
+        # BL-4029 steg 8: en build maa rapportere sin blast-radius. Uten det
+        # blokkerer scope_budget FOER reviewer, og denne testen handler om at
+        # runneren naar reviewer-gaten.
+        return {"tests": "pass", "changed_files": 1, "changed_lines": 6}
 
     result = FaberRuntime().tick(
         FaberGoal("g2", "passing test", cad_ref="CAD-M", adr_ref="ADR-038", bl_ref="BL-3254"),
@@ -105,7 +108,7 @@ def test_faber_runtime_reaches_landed_with_prevalidated_dod():
     result = FaberRuntime().tick(
         FaberGoal("g3", "runtime landing", cad_ref="CAD-M", adr_ref="ADR-038", bl_ref="BL-3254"),
         evidence_record,
-        build=lambda: {"tests": "pass", "diff_id": "diff-g3"},
+        build=lambda: {"tests": "pass", "diff_id": "diff-g3", "changed_files": 1, "changed_lines": 12},
         review=lambda _: ReviewEvidence(ReviewVerdict.PASS, "diff-g3", "sol"),
         prelanding_evidence=landing_record,
         landing=lambda _: landing_record,
