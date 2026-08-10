@@ -54,6 +54,11 @@ def test_observe_names_the_owner_gate_once_preflight_would_pass(tmp_path):
 
 def test_an_owner_approved_goal_with_full_evidence_clears_preflight(tmp_path, monkeypatch):
     monkeypatch.setattr("agent.faber_observe.git_is_clean", lambda repo: True)
+    # BL-4029: leasen verifiseres naa mot AUTORITETEN, ikke mot evidensen. I en
+    # enhetstest er autoriteten legitimt unaabar, saa den mockes -- men merk at
+    # `"lease": "clear"` i evidensen under ALENE ikke lenger er nok.
+    monkeypatch.setattr("agent.faber_observe.lease_clear_via_authority",
+                        lambda paths: (True, "test: autoritet mocket"))
     registry = FaberGoalRegistry(tmp_path / "goals.json")
     registry.put(
         FaberGoal(
@@ -62,6 +67,9 @@ def test_an_owner_approved_goal_with_full_evidence_clears_preflight(tmp_path, mo
                 "gate": "morten", "owner_approval": "morten:2026-08-04",
                 "cad_status": "verified", "adr_status": "accepted",
                 "bl_status": "open", "obsidian_status": "fresh", "lease": "clear",
+                # BL-4029: uten scope finnes ingen filer aa verifisere en lease PAA,
+                # og da blokkerer gaten foer autoriteten i det hele tatt spoerres.
+                "repo_scope": "hermes-agent: agent/code_workflow.py",
                 "git_ref": "abc1234", "lease_ref": "lease:hermes-agent",
                 "obsidian_ref": "Brain/Symbiose Change Log.md",
             },
@@ -243,3 +251,52 @@ def test_reload_does_not_resurrect_state_the_session_itself_wrote(tmp_path):
     registry.put(FaberGoal("faber.code.flyby:example", "Example", state=GoalState.BUILDING))
     assert registry.get("faber.code.flyby:example").state is GoalState.BUILDING
     assert FaberGoalRegistry(path).get("faber.code.flyby:example").state is GoalState.BUILDING
+
+
+def test_a_written_lease_claim_alone_no_longer_clears_preflight(tmp_path, monkeypatch):
+    """BL-4029, instans 20 — og den var identisk med instans 1.
+
+    Foerste versjon falt tilbake paa `evidence["lease"]` naar autoriteten ikke
+    svarte. Hullet var at PRODUSENTEN kontrollerer om verifisering skjer: token-fila
+    ligger paa `.15` og eies av `agent`, altsaa produsentens egen identitet. En
+    `chmod 0644` -- eller `rm` -- ga tom token, uverifisert, og dermed at produsentens
+    egen paastand ble aeret.
+
+    Ironien: modus-sjekken er en HERDINGSKONTROLL, og den var den billigste bryteren
+    for aa skru verifiseringen AV. En kontroll som feiler inn i aa stole paa den
+    begrensede parten, er en kontroll den parten kan slaa av.
+    """
+    monkeypatch.setattr("agent.faber_observe.git_is_clean", lambda repo: True)
+    # Autoriteten svarer ikke -- akkurat scenariet produsenten kan fremtvinge.
+    monkeypatch.setattr("agent.faber_observe.lease_clear_via_authority",
+                        lambda paths: (None, "test: autoritet unaabar"))
+
+    registry = FaberGoalRegistry(tmp_path / "goals.json")
+    registry.put(
+        FaberGoal(
+            "faber.code.flyby:y", "Y", cad_ref="CAD-M", adr_ref="ADR-1", bl_ref="BL-1",
+            evidence={
+                "gate": "morten", "owner_approval": "morten:2026-08-04",
+                "cad_status": "verified", "adr_status": "accepted",
+                "bl_status": "open", "obsidian_status": "fresh",
+                "lease": "clear",                      # <- produsentens paastand
+                "repo_scope": "hermes-agent: agent/code_workflow.py",
+                "git_ref": "abc1234", "lease_ref": "lease:hermes-agent",
+                "obsidian_ref": "Brain/Symbiose Change Log.md",
+            },
+        )
+    )
+    result = observe(registry, repo_paths={"faber.code.flyby:y": str(tmp_path)})
+    assert result.preflight_clear == 0, (
+        "en SKREVET lease-paastand maa aldri klarere preflight naar autoriteten "
+        "ikke har bekreftet den"
+    )
+    assert any("lease" in r.lower() for r in result.observations[0].reasons)
+
+
+def test_empty_scope_cannot_have_a_verifiable_lease(tmp_path, monkeypatch):
+    """Samme hull, stillere vei: tom sti-liste ga tidligere fallback til evidensen."""
+    from agent.faber_observe import _resolve_lease_clear
+    ok, note = _resolve_lease_clear({"repo_scope": "", "lease": "clear"})
+    assert ok is False
+    assert "ingen filer" in note

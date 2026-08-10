@@ -163,6 +163,138 @@ def scope_is_executable_here(repo_scope: str) -> tuple[bool, str]:
     )
 
 
+#: BL-4029 / ADR-062 krav (b) — UAVHENGIG OPPSLAG.
+#:
+#: `evidence["lease"]` er noe PRODUSENTEN skrev. Gaten som leser den, leser en
+#: paastand — og en paastand er noeyaktig det reviewer BLOKKERTE i BL-3673
+#: (`cab10c5f9`: "jeg skrev en post for aa faa en gate til aa slippe meg gjennom").
+#:
+#: Autoritetsruten `/surface/lease/check` paa `.12` svarer paa noe ANNET: om det
+#: FINNES en lease, og hvem som eier den. Produsenten kan ikke endre det svaret uten
+#: aa faktisk ta en lease -- altsaa uten at noe i verden endrer seg.
+SURFACE_API = os.environ.get("SURFACE_API_URL", "http://192.168.40.12:8010")
+
+#: Klientens hemmelighet leses fra FIL, ikke bare env. Cron-linja her setter kun
+#: HERMES_HOME og leser ingen .env, saa en env-basert hemmelighet ville krevd at
+#: noen redigerte crontab. En fil leses ved hver kjoering: sett den én gang, roter
+#: den naar du vil, uten aa roere schedulering.
+_TOKEN_FILE = os.environ.get(
+    "SURFACE_RECEIPT_TOKEN_FILE",
+    str(Path(os.environ.get("HERMES_HOME", str(Path.home() / ".hermes-gui")))
+        / ".surface_receipt_token"))
+
+
+def _surface_token() -> str:
+    """Env foerst (test), saa fil. Fila MAA vaere 0600.
+
+    Feil modus gir TOM token -- altsaa "UVERIFISERT" -- framfor aa bruke en
+    hemmelighet andre kan lese. En feilkonfigurasjon skal vaere synlig, ikke
+    stilltiende akseptert.
+    """
+    env = os.environ.get("SURFACE_RECEIPT_TOKEN", "").strip()
+    if env:
+        return env
+    try:
+        f = Path(_TOKEN_FILE)
+        if not f.exists():
+            return ""
+        if f.is_symlink():
+            return ""
+        st = f.stat()
+        if st.st_mode & 0o077:
+            return ""
+        if st.st_uid != os.getuid():
+            # En fil eid av en ANNEN bruker med 0600 er fortsatt lesbar for oss
+            # hvis rettighetene tillater det -- men da er det ikke VAAR hemmelighet.
+            return ""
+        return f.read_text(encoding="utf-8").strip()
+    except Exception:  # noqa: BLE001
+        return ""
+
+
+def lease_clear_via_authority(paths: Sequence[str]) -> tuple[bool | None, str]:
+    """Spoer autoriteten om leasen. Returnerer (clear, note).
+
+    `None` betyr IKKE VERIFISERT -- og det er en tredje verdi med vilje. `False`
+    ville sagt "ingen lease finnes", som er en paastand vi ikke har grunnlag for
+    naar vi ikke fikk spurt. Fravaer av svar er ikke et svar; det er dagens
+    gjennomgaaende laerdom, og her staar den i typen.
+
+    Uten token returnerer vi `None` og lar kalleren falle tilbake paa evidensen --
+    med noten om at den da er UVERIFISERT. Det er aerligere enn aa la et manglende
+    token se ut som en manglende lease.
+    """
+    if not paths:
+        return None, "ingen stier aa sjekke"
+    token = _surface_token()
+    if not token:
+        return None, (f"ingen token ({_TOKEN_FILE} mangler eller har feil modus) — "
+                      f"lease er UVERIFISERT, ikke fravaerende")
+
+    import urllib.error
+    import urllib.parse
+    import urllib.request
+
+    q = urllib.parse.urlencode({"paths": ",".join(paths)})
+    req = urllib.request.Request(f"{SURFACE_API}/surface/lease/check?{q}",
+                                 headers={"X-Surface-Token": token})
+    try:
+        with urllib.request.urlopen(req, timeout=8) as resp:
+            data = json.loads(resp.read())
+        return bool(data.get("lease_clear")), (
+            f"autoritet: {len(data.get('held_by_me') or [])} av {len(paths)} eid, "
+            f"{len(data.get('held_by_others') or [])} hos andre")
+    except urllib.error.HTTPError as exc:
+        return None, f"autoriteten svarte {exc.code} — UVERIFISERT"
+    except Exception as exc:  # noqa: BLE001
+        return None, f"autoriteten unaabar ({type(exc).__name__}) — UVERIFISERT"
+
+
+def _scope_paths(repo_scope: str) -> list[str]:
+    """Trekk ut filstier fra et `repo_scope` som `"hermes-agent: a.py, b.py"`."""
+    tail = repo_scope.split(":", 1)[1] if ":" in repo_scope else repo_scope
+    return [x.strip() for x in tail.split(",") if x.strip().endswith(".py")]
+
+
+def _resolve_lease_clear(ev: Mapping[str, Any]) -> tuple[bool, str]:
+    """Autoriteten avgjoer. UVERIFISERT er IKKE "clear".
+
+    FOERSTE VERSJON FALT TILBAKE PAA `evidence["lease"]` NAAR AUTORITETEN IKKE
+    SVARTE, og det var et hull produsenten selv kunne aapne:
+
+        `_surface_token()` leser SURFACE_RECEIPT_TOKEN eller token-fila -- BEGGE
+        paa `.15`, BEGGE eid av `agent`, som ER produsentens identitet. Produsenten
+        kunne `rm` fila, eller `chmod 0644` den, og faa tom token -> `None` ->
+        fallback -> sin egen paastand aeret.
+
+    Ironien er skarp: modus-sjekken er en HERDINGSKONTROLL, og den var den billigste
+    bryteren for aa skru verifiseringen AV. **En kontroll som feiler inn i aa stole
+    paa den begrensede parten, er en kontroll den parten kan slaa av.**
+
+    Det er ADR-062s terminus omskrevet: en tillitsgrense kan ikke uttrykkes i en fil
+    den utrygge parten kan skrive -- og her: **en verifisering kan ikke avhenge av et
+    kreditiv den verifiserte parten kontrollerer, og maa aldri feile aapent til dens
+    paastand.**
+
+    Naa: kan vi ikke verifisere, er svaret FALSE med en egen begrunnelse. Aa blokkere
+    naar autoriteten er nede er riktig for en gate som skal hindre uautorisert
+    landing -- og det gjoer et autoritets-utfall SYNLIG i stedet for at systemet
+    stille faller tilbake til posturen fra foer ruten fantes.
+    """
+    paths = _scope_paths(str(ev.get("repo_scope", "")))
+    if not paths:
+        # Et maal uten filer i scope kan ikke ha en verifiserbar lease. Foer var
+        # dette samme hull via en stillere vei: tom liste -> None -> produsentens
+        # paastand.
+        return False, "scope lister ingen filer — lease kan ikke verifiseres"
+
+    verified, note = lease_clear_via_authority(paths)
+    if verified is not None:
+        return verified, note
+    return False, (f"lease UVERIFISERT ({note}) — evidensen er produsentens egen "
+                   f"paastand og aeres ikke")
+
+
 def evidence_for(goal: FaberGoal, *, git_clean: bool) -> PreflightInput:
     """Build the goal's preflight input from what it actually recorded.
 
@@ -186,7 +318,10 @@ def evidence_for(goal: FaberGoal, *, git_clean: bool) -> PreflightInput:
             refs[name] = str(value)
     return PreflightInput(
         git_clean=git_clean,
-        lease_clear=str(ev.get("lease", "")).strip().lower() == "clear",
+        # ADR-062 (b): AUTORITETEN avgjoer. Uverifisert er ikke "clear" -- se
+        # _resolve_lease_clear for hvorfor fallback til evidensen var et hull
+        # produsenten selv kunne aapne.
+        lease_clear=_resolve_lease_clear(ev)[0],
         cad_status=str(ev.get("cad_status", _UNKNOWN)),
         adr_status=str(ev.get("adr_status", _UNKNOWN)),
         bl_status=str(ev.get("bl_status", _UNKNOWN)),
