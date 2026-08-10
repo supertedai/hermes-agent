@@ -24,7 +24,12 @@ def test_observe_reports_what_each_goal_waits_for(tmp_path):
     obs = result.observations[0]
     assert obs.preflight == "BLOCK"
     assert obs.stopped_by == "preflight"
-    assert any("CAD" in r for r in obs.reasons)
+    # BL-4029 L4: step 4 no longer judges CAD. A freshly promoted goal is held
+    # by what step 4 CAN ask -- an unclaimed lease -- not by design evidence
+    # the chain has not reached yet.
+    assert any("lease" in r for r in obs.reasons)
+    assert not any("CAD" in r for r in obs.reasons), \
+        "preflight must not name CAD -- relocated to DesignGate (step 7)"
 
 
 def test_observe_names_the_owner_gate_once_preflight_would_pass(tmp_path):
@@ -81,7 +86,12 @@ def test_a_missing_source_ref_is_named_in_the_block():
     goal = promoted()
     obs = observe_goal(goal, git_clean=True, gate=__import__("agent.code_workflow", fromlist=["PreflightGate"]).PreflightGate())
     assert any("missing authoritative source refs" in r for r in obs.reasons)
-    assert "git" in " ".join(obs.reasons) and "obsidian" in " ".join(obs.reasons)
+    joined = " ".join(obs.reasons)
+    # BL-4029 L4: step 4 requires refs it can act on. "obsidian" is produced at
+    # step 13, so demanding a reference to it here was the circularity.
+    assert "git" in joined and "lease" in joined
+    assert "obsidian" not in joined, \
+        "step 4 must not require a Brain ref -- that is step 13's closeout"
 
 
 def test_an_unreachable_or_non_git_target_counts_as_dirty(tmp_path):

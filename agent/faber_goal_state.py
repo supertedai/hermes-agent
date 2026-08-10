@@ -329,6 +329,16 @@ def summarise(doc: dict[str, Any] | None = None) -> dict[str, Any]:
                 "history_retained": retained,
                 "history_dropped": dropped,
                 "history_total": retained + dropped,
+                # BL-4029 L9: the DISTINCT outcomes ever recorded for this goal
+                # (current + retained history). A fact, not a judgement -- the
+                # journal still refuses to say whether any of them is good.
+                # Consumers need it because "the goal changed" and "the goal
+                # passed" are different questions, and conflating them is how a
+                # churning-but-never-passing gate reads as healthy.
+                "outcomes_seen": sorted(
+                    {str(h.get("outcome")) for h in (e.get("history") or []) if h.get("outcome")}
+                    | ({str(e.get("outcome"))} if e.get("outcome") else set())
+                ),
             }
         )
     never_changed = [r for r in rows if (r["history_total"] or 0) <= 1 and (r["seq"] or 0) > 1]

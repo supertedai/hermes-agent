@@ -117,6 +117,52 @@ def git_is_clean(repo: str | os.PathLike[str] | None) -> bool:
     return proc.returncode == 0 and not proc.stdout.strip()
 
 
+#: BL-4029 L3 -- scope tokens mapped to a CONTENT marker, never a directory or
+#: remote name.  Measured 2026-08-10: four trees on .15 carry the remote
+#: ``supertedai/AGI.git`` -- including ``hermes-agent`` itself -- because that
+#: remote hosts disjoint lineages.  A check on name or remote answers the wrong
+#: question; only content says whether the codebase is here.
+SCOPE_MARKERS: dict[str, tuple[str, ...]] = {
+    "agi": ("tools/self_state_aggregator.py", "apis"),
+    "hermes-agent": ("agent/code_workflow.py",),
+}
+
+#: Where each scope would live on this host, if it lives here at all.
+SCOPE_ROOTS: dict[str, str] = {
+    "hermes-agent": "/home/agent/agent-layer/hermes-agent",
+    "agi": "/home/agent/AGI",
+}
+
+
+def scope_is_executable_here(repo_scope: str) -> tuple[bool, str]:
+    """Is the goal's target codebase present on THIS host?
+
+    Returns ``(executable, note)``.  A scope this resolver does not recognise
+    returns ``True`` with a note: an unknown scope must not be silently
+    rejected -- that would turn a gap in this table into a verdict about the
+    world, which is the failure class BL-4003 spent eight instances on.
+    """
+    text = (repo_scope or "").lower()
+    named = [tok for tok in SCOPE_MARKERS if tok in text]
+    if not named:
+        return True, "scope not recognised by this resolver — not judged"
+
+    missing = []
+    for tok in named:
+        root = Path(SCOPE_ROOTS.get(tok, ""))
+        markers = SCOPE_MARKERS[tok]
+        if not root or not all((root / m).exists() for m in markers):
+            missing.append(tok)
+    if not missing:
+        return True, ""
+    # A goal whose scope spans several codebases is executable here only if the
+    # part that lives here is the whole of it.
+    return False, (
+        f"codebase absent on this host: {', '.join(missing)} "
+        f"(content markers not found)"
+    )
+
+
 def evidence_for(goal: FaberGoal, *, git_clean: bool) -> PreflightInput:
     """Build the goal's preflight input from what it actually recorded.
 
@@ -146,6 +192,8 @@ def evidence_for(goal: FaberGoal, *, git_clean: bool) -> PreflightInput:
         bl_status=str(ev.get("bl_status", _UNKNOWN)),
         obsidian_status=str(ev.get("obsidian_status", _UNKNOWN)),
         source_refs=refs,
+        **dict(zip(("scope_executable", "scope_note"),
+                   scope_is_executable_here(str(ev.get("repo_scope", ""))))),
     )
 
 
