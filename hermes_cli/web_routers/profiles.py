@@ -110,6 +110,14 @@ def get_profiles_sessions(
     source_filter = source or None
     source_list = [s.strip() for s in (sources or "").split(",") if s.strip()]
     exclude_list = [s.strip() for s in (exclude_sources or "").split(",") if s.strip()]
+    # BL-4000: SERVER-SIDE grunnlinje. `exclude_sources` er en klient-parameter, og
+    # klienten sender den ikke — saa disse rutene viste backend-kjoeringer selv etter at
+    # RPC-stien fikk deny-lista (BL-3599/BL-4000). Maalt: api_server 3880 og cli 1214 er
+    # 100 % eierloese; Mortens egne oekter er kun desktop/tui. Serveren skal ikke stole
+    # paa at klienten filtrerer, saa grunnlinja gjelder UANSETT hva som sendes inn.
+    for _s in ("kanban", "tool", "subagent", "cron", "api_server", "cli"):
+        if _s not in exclude_list:
+            exclude_list.append(_s)
     # Over-fetch per profile so the merged+sorted window is correct for the
     # requested page. Capped so a huge profile can't blow up the response.
     per_profile = min(max(limit + offset, limit), 500)

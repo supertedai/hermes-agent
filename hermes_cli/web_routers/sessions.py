@@ -106,6 +106,14 @@ def get_sessions(
             # section (source=cron) into two independent lists.
             source_list = [s.strip() for s in (sources or "").split(",") if s.strip()]
             exclude_list = [s.strip() for s in (exclude_sources or "").split(",") if s.strip()]
+            # BL-4000: SERVER-SIDE grunnlinje. `exclude_sources` er en klient-parameter, og
+            # klienten sender den ikke — saa ruta viste backend-kjoeringer selv etter at
+            # RPC-stien fikk deny-lista (BL-3599/BL-4000). Maalt: api_server 3880 og cli 1214
+            # er 100 % eierloese; Mortens egne oekter er kun desktop/tui. Serveren skal ikke
+            # stole paa at klienten filtrerer.
+            for _s in ("kanban", "tool", "subagent", "cron", "api_server", "cli"):
+                if _s not in exclude_list:
+                    exclude_list.append(_s)
             sessions = db.list_sessions_rich(
                 source=source or None,
                 sources=source_list or None,
@@ -189,6 +197,14 @@ async def search_sessions(
             source_list = [s.strip() for s in (sources or "").split(",") if s.strip()]
             include_sources = [source_filter] if source_filter else (source_list or None)
             exclude_list = [s.strip() for s in (exclude_sources or "").split(",") if s.strip()]
+            # BL-4000: SERVER-SIDE grunnlinje. `exclude_sources` er en klient-parameter, og
+            # klienten sender den ikke — saa ruta viste backend-kjoeringer selv etter at
+            # RPC-stien fikk deny-lista (BL-3599/BL-4000). Maalt: api_server 3880 og cli 1214
+            # er 100 % eierloese; Mortens egne oekter er kun desktop/tui. Serveren skal ikke
+            # stole paa at klienten filtrerer.
+            for _s in ("kanban", "tool", "subagent", "cron", "api_server", "cli"):
+                if _s not in exclude_list:
+                    exclude_list.append(_s)
             now = time.time()
 
             # Walk parent_session_id to the compression root, memoized so a
