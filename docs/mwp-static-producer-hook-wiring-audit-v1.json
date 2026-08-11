@@ -5,6 +5,18 @@
       "authority_status": "UNVERIFIED",
       "lane": "Hermes MemoryManager",
       "markers": {
+        "agent-layer/hermes-agent/agent/memory_manager.py": {
+          "ingest": true,
+          "prefetch_all": true,
+          "principal_id": false,
+          "provenance": true,
+          "queue_prefetch_all": true,
+          "read_after_write": false,
+          "rollback": false,
+          "sync_all": true,
+          "tenant_id": false,
+          "tombstone": false
+        },
         "agent/memory_provider.py": {
           "ingest": false,
           "prefetch_all": false,
@@ -32,12 +44,11 @@
       },
       "runtime_status": "UNVERIFIED",
       "source_paths_existing": [
+        "agent-layer/hermes-agent/agent/memory_manager.py",
         "agent/memory_provider.py",
         "agent/mwp_memory_manager_receipt_adapter.py"
       ],
-      "source_paths_missing": [
-        "agent-layer/hermes-agent/agent/memory_manager.py"
-      ],
+      "source_paths_missing": [],
       "source_status": "SOURCE_PRESENT"
     },
     {
