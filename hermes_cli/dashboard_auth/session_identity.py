@@ -59,7 +59,9 @@ def identity_path(canonical: bool = True) -> Path:
 
 def _load(canonical: bool = True) -> dict:
     """Rå lesing. IO-/parse-feil PROPAGERER — leserne skal feile lukket."""
-    p = identity_path(canonical)
+    # Keep the default canonical call argument-free so test doubles and
+    # compatibility callers that replace identity_path() remain valid.
+    p = identity_path() if canonical else identity_path(False)
     if not p.exists():
         return {}
     raw = p.read_text(encoding="utf-8")

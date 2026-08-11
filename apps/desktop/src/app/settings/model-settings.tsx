@@ -11,6 +11,7 @@ import {
   getGlobalModelOptions,
   getMoaModels,
   getRecommendedDefaultModel,
+  getHermesConfigRecord,
   saveHermesConfig,
   saveMoaModels,
   setEnvVar,
@@ -222,6 +223,7 @@ export function ModelSettings({ onMainModelChanged }: ModelSettingsProps) {
   // so a request in flight when the user switches profiles can't paint profile
   // A's models/providers into profile B (or fire onMainModelChanged for A).
   const profileEpoch = useRef(0)
+  const agentDefaultWriteGeneration = useRef(0)
 
   const refresh = useCallback(async ({ replaceSelection = false }: { replaceSelection?: boolean } = {}) => {
     const epoch = profileEpoch.current
@@ -522,14 +524,29 @@ export function ModelSettings({ onMainModelChanged }: ModelSettingsProps) {
       }
 
       const prev = config
+      const epoch = profileEpoch.current
+      const generation = agentDefaultWriteGeneration.current + 1
+      agentDefaultWriteGeneration.current = generation
       const next = setNested(config, key, value)
       setConfig(next)
 
       try {
-        await saveHermesConfig(next)
+        const result = await saveHermesConfig(next)
+
+        if (!result.ok) {
+          throw new Error(m.defaultsFailed)
+        }
+
+        const authoritative = await getHermesConfigRecord()
+
+        if (profileEpoch.current === epoch && agentDefaultWriteGeneration.current === generation) {
+          setConfig(authoritative)
+        }
       } catch (err) {
-        setConfig(prev)
-        notifyError(err, m.defaultsFailed)
+        if (profileEpoch.current === epoch && agentDefaultWriteGeneration.current === generation) {
+          setConfig(prev)
+          notifyError(err, m.defaultsFailed)
+        }
       }
     },
     [config, m.defaultsFailed, setConfig]

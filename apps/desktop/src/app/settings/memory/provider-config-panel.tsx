@@ -57,18 +57,20 @@ export function ProviderConfigPanel({ provider }: { provider: string }) {
 
       try {
         await saveMemoryProviderConfig(provider, { [field.key]: value })
+        const authoritative = await getMemoryProviderConfig(provider)
+        const confirmed = authoritative.fields.find(candidate => candidate.key === field.key)
+
+        if (!confirmed) {
+          throw new Error(`Saved memory provider field disappeared: ${field.key}`)
+        }
 
         if (field.kind === 'secret') {
           setValues(current => ({ ...current, [field.key]: '' }))
-          setConfig(
-            current =>
-              current && {
-                ...current,
-                fields: current.fields.map(f => (f.key === field.key ? { ...f, is_set: true } : f))
-              }
-          )
+          setConfig(current => current && { ...current, fields: current.fields.map(f => (f.key === field.key ? confirmed : f)) })
         } else {
-          setSaved(current => ({ ...current, [field.key]: value }))
+          setValues(current => ({ ...current, [field.key]: confirmed.value }))
+          setSaved(current => ({ ...current, [field.key]: confirmed.value }))
+          setConfig(current => current && { ...current, fields: current.fields.map(f => (f.key === field.key ? confirmed : f)) })
         }
       } catch (err) {
         notifyError(err, `Failed to save ${field.label}`)

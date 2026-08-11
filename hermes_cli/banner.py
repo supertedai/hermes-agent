@@ -273,6 +273,45 @@ def _check_via_local_git(repo_dir: Path) -> Optional[int]:
     return None
 
 
+def _version_tuple(v: str) -> tuple[int, ...]:
+    """Parse a dotted version into comparable integer segments."""
+    parts = []
+    for segment in v.split("."):
+        try:
+            parts.append(int(segment))
+        except ValueError:
+            parts.append(0)
+    return tuple(parts)
+
+
+def _fetch_pypi_latest(package: str = "hermes-agent") -> Optional[str]:
+    """Fetch the latest package version from PyPI; return None on failure."""
+    try:
+        import urllib.request
+        url = f"https://pypi.org/pypi/{package}/json"
+        request = urllib.request.Request(url, headers={"Accept": "application/json"})
+        with urllib.request.urlopen(request, timeout=5) as response:
+            payload = json.loads(response.read())
+        return payload.get("info", {}).get("version")
+    except Exception:
+        return None
+
+
+def check_via_pypi() -> Optional[int]:
+    """Return 1 when PyPI is newer, 0 when current, or None on failure."""
+    latest = _fetch_pypi_latest()
+    if latest is None:
+        return None
+    if _version_tuple(latest) > _version_tuple(VERSION):
+        return 1
+    return 0
+
+
+def _check_via_pypi() -> Optional[int]:
+    """Backward-compatible private alias for the PyPI update check."""
+    return check_via_pypi()
+
+
 def check_for_updates() -> Optional[int]:
     """Check whether a Hermes update is available.
 

@@ -6,7 +6,7 @@ import { useSearchParams } from 'react-router'
 
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
-import { getElevenLabsVoices, getHermesConfigSchema, saveHermesConfig } from '@/hermes'
+import { getElevenLabsVoices, getHermesConfigRecord, getHermesConfigSchema, saveHermesConfig } from '@/hermes'
 import { useI18n } from '@/i18n'
 import { triggerHaptic } from '@/lib/haptics'
 import {
@@ -156,20 +156,27 @@ export function ConfigSettings({
             throw new Error(c.autosaveFailed)
           }
 
-          // Mirror the saved record into the shared cache so MCP/model surfaces
-          // reflect the edit without their own refetch.
-          setHermesConfigCache(config)
+          // The PUT acknowledgement only says the write was accepted. Read the
+          // backend's normalized record before publishing success into the
+          // renderer cache, so the value shown here is the authoritative one.
+          const authoritative = await getHermesConfigRecord()
 
-          if (saveVersionRef.current === v) {
-            const discoverySignature = repoDiscoveryPolicySignature(repoDiscoveryPolicyFromConfig(config))
-
-            if (savedDiscoverySignatureRef.current !== discoverySignature) {
-              savedDiscoverySignatureRef.current = discoverySignature
-              await scanAndRecordRepos(true)
-            }
-
-            onConfigSaved?.()
+          // A newer edit may have started while the PUT/readback was in flight;
+          // never let this older response overwrite that newer intent.
+          if (saveVersionRef.current !== v) {
+            return
           }
+
+          setConfig(authoritative)
+          setHermesConfigCache(authoritative)
+          const discoverySignature = repoDiscoveryPolicySignature(repoDiscoveryPolicyFromConfig(authoritative))
+
+          if (savedDiscoverySignatureRef.current !== discoverySignature) {
+            savedDiscoverySignatureRef.current = discoverySignature
+            await scanAndRecordRepos(true)
+          }
+
+          onConfigSaved?.()
         } catch (err) {
           if (saveVersionRef.current === v) {
             notifyError(err, c.autosaveFailed)
