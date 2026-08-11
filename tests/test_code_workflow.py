@@ -228,7 +228,10 @@ def test_relocated_gates_are_actually_INVOKED_by_the_runner():
         n.func.id for n in ast.walk(run_fn)
         if isinstance(n, ast.Call) and isinstance(n.func, ast.Name)
     }
-    for gate in ("BlGate", "DesignGate"):
+    # BL-4055: `SecondOpinionTrigger` staar her av noeyaktig samme grunn som de
+    # to andre -- vakten finnes for aa fange en gate som defineres uten
+    # kallested, og andre-meningen er den nyeste kandidaten til den defekten.
+    for gate in ("BlGate", "DesignGate", "SecondOpinionTrigger"):
         assert gate in called, (
             f"{gate} is defined but never constructed by GovernedCodeRunner — "
             f"the check was moved out of enforcement, not into a new phase"
@@ -333,6 +336,20 @@ def test_handoff_store_survives_next_job_boundary(tmp_path):
     assert loaded == handoff
 
 
+def _concurring_second_opinion(change, **_):
+    """BL-4055: en UAVHENGIG vurderer som er enig.
+
+    Injiseres eksplisitt i landings-testene under. Poenget med aa skrive den ut
+    i stedet for aa la den ekte klienten svare, er at en test som LANDER naa maa
+    vise begge stemmene -- en landing er ikke lenger én vurderers avgjoerelse.
+    """
+    from agent.second_opinion import SecondOpinionOutcome, SecondOpinionStatus
+
+    return SecondOpinionOutcome(
+        status=SecondOpinionStatus.CONCUR, reason="independently checked",
+        provenance="anthropic.api", model="claude-opus-5", confidence=0.9)
+
+
 def test_governed_runner_blocks_at_review_and_returns_handoff():
     preflight = passing_preflight()
     result = GovernedCodeRunner().run(
@@ -349,11 +366,13 @@ def test_governed_runner_blocks_at_review_and_returns_handoff():
 
 def test_governed_runner_reaches_landed_only_with_complete_evidence():
     preflight = passing_preflight()
-    result = GovernedCodeRunner().run(
+    result = GovernedCodeRunner(second_opinion=_concurring_second_opinion).run(
         FaberGoal("g1", "run", cad_ref="CAD-M", adr_ref="ADR-038", bl_ref="BL-3254"),
         preflight=preflight,
-        build=lambda: {"tests": "pass", "diff_id": "diff-g1", "changed_files": 2, "changed_lines": 40},
-        review=lambda evidence: ReviewEvidence(ReviewVerdict.PASS, "diff-g1", "sol"),
+        build=lambda: {"tests": "pass", "diff_id": "diff-g1", "changed_files": 2,
+                       "changed_lines": 40, "diff": "--- a\n+++ b\n+x"},
+        review=lambda evidence: ReviewEvidence(ReviewVerdict.PASS, "diff-g1", "sol",
+                                               confidence=0.95),
         prelanding_evidence=LandingEvidence("sha", ReviewVerdict.PASS, "tests", "readback", "smoke", "rollback", "log", "state", "closer", landing_set=("a.py",)),
         landing=lambda evidence: LandingEvidence("sha", ReviewVerdict.PASS, "tests", "readback", "smoke", "rollback", "log", "state", "closer", landing_set=("a.py",)),
     )
@@ -374,7 +393,8 @@ def test_faber_goal_registry_persists_and_selects_operational_goals(tmp_path):
 
 def test_reviewer_must_match_current_diff_before_landing():
     preflight = passing_preflight()
-    base = dict(tests="pass", diff_id="diff-current", changed_files=1, changed_lines=8)
+    base = dict(tests="pass", diff_id="diff-current", changed_files=1,
+                changed_lines=8, diff="--- a\n+++ b\n+x")
     mismatch = GovernedCodeRunner().run(
         FaberGoal("g-diff-1", "run", cad_ref="CAD-M", adr_ref="ADR-038", bl_ref="BL-3254"),
         preflight=preflight,
@@ -385,11 +405,12 @@ def test_reviewer_must_match_current_diff_before_landing():
     assert mismatch.goal.state is GoalState.BLOCKED
     assert "diff mismatch" in mismatch.blocker
 
-    matched = GovernedCodeRunner().run(
+    matched = GovernedCodeRunner(second_opinion=_concurring_second_opinion).run(
         FaberGoal("g-diff-2", "run", cad_ref="CAD-M", adr_ref="ADR-038", bl_ref="BL-3254"),
         preflight=preflight,
         build=lambda: base,
-        review=lambda evidence: ReviewEvidence(ReviewVerdict.PASS, "diff-current", "sol"),
+        review=lambda evidence: ReviewEvidence(ReviewVerdict.PASS, "diff-current", "sol",
+                                               confidence=0.95),
         prelanding_evidence=LandingEvidence("sha", ReviewVerdict.PASS, "tests", "readback", "smoke", "rollback", "log", "state", "closer", landing_set=("a.py",)),
         landing=lambda evidence: LandingEvidence("sha", ReviewVerdict.PASS, "tests", "readback", "smoke", "rollback", "log", "state", "closer", landing_set=("a.py",)),
     )
@@ -1187,3 +1208,247 @@ def test_step13_a_readback_without_a_sha_blocks():
 
     assert _blocks(result)
     assert "nothing to read back" in _reason(result)
+
+
+# ------------------------------------------- BL-4055 steg 10b: second opinion ---
+#
+# Vaktene under driver RUNNEREN, ikke politikk-klassene. AST-vakten over beviser
+# at gaten konstrueres; den beviser ikke at verdiktet brukes til noe. Det er
+# noeyaktig hullet BL-4029 L4 falt i, saa begge maa finnes.
+
+
+def _so(status, **over):
+    from agent.second_opinion import SecondOpinionOutcome, SecondOpinionStatus
+
+    base = dict(status=getattr(SecondOpinionStatus, status), reason="because",
+                provenance="anthropic.api", model="claude-opus-5", confidence=0.9)
+    base.update(over)
+    return SecondOpinionOutcome(**base)
+
+
+def _unreachable_landing(_evidence):
+    """F3: en landing som IKKE skal skje.
+
+    Reviewer flyttet `landing(evidence)` til FOER steg 10b og fikk hele suiten
+    groenn -- altsaa en commit som skjer, og deretter et maal som merkes BLOCKED.
+    I produksjon er `landing` `landing_callable._land`, som gjoer den ekte
+    commiten. Rekkefoelgen mellom de to linjene var uvoktet.
+
+    Idiomet finnes allerede i repoet (`tests/test_flyby_promote.py`); det manglet
+    bare her.
+    """
+    pytest.fail("landing must be unreachable when the second opinion blocks")
+
+
+def _run_10b(*, opinion, confidence=0.95, files=1, lines=5,
+             landing_set=("a.py",), lease="a.py", diff="--- a\n+++ b\n+x",
+             landing=None):
+    ev = PreflightInput(
+        git_clean=True, lease_clear=True, cad_status="fresh", adr_status="accepted",
+        bl_status="open", obsidian_status="fresh",
+        source_refs={"git": "g", "lease": lease, "cad": "C", "adr": "A", "bl": "B"})
+    land = LandingEvidence(
+        "sha", ReviewVerdict.PASS, "tests", "readback", "smoke", "rollback",
+        "log", "state", "closer", landing_set=landing_set)
+    return GovernedCodeRunner(
+        second_opinion=(lambda change, **kw: opinion) if opinion else None
+    ).run(
+        FaberGoal("g-so", "run", cad_ref="C", adr_ref="A", bl_ref="B"),
+        preflight=PreflightResult(PreflightStatus.PASS, (), ev),
+        build=lambda: {"tests": "ok", "diff_id": "d1", "changed_files": files,
+                       "changed_lines": lines, "diff": diff},
+        review=lambda e: ReviewEvidence(ReviewVerdict.PASS, "d1", "sol",
+                                        confidence=confidence),
+        landing=landing or (lambda e: land),
+        prelanding_evidence=land,
+    )
+
+
+def test_second_opinion_DISSENT_blocks_a_reviewer_PASS():
+    """Uenighet blokkerer nedover.
+
+    Kostnaden er asymmetrisk: aa blokkere foer landing er billig og reversibelt,
+    aa lande en gal endring er ingen av delene. Alternativet -- loggfoer begge
+    stemmer og land likevel -- gjoer andre-meningen til dekorasjon, som er
+    defekten den skulle fjerne.
+    """
+    r = _run_10b(opinion=_so("DISSENT"), confidence=0.5,
+                 landing=_unreachable_landing)
+    assert r.goal.state is GoalState.BLOCKED
+    assert r.handoff.required_gate == "second_opinion_dissent"
+    # F2: loggfoeringen er UBETINGET, saa den maa voktes paa BEGGE stier. Uten
+    # denne linjen overlevde mutanten som droppet `extra=votes`.
+    assert "second_opinion_votes" in r.goal.evidence
+
+
+def test_second_opinion_ESCALATE_routes_to_the_owner():
+    r = _run_10b(opinion=_so("ESCALATE"), confidence=0.5,
+                 landing=_unreachable_landing)
+    assert r.goal.state is GoalState.BLOCKED
+    assert "owner_approval" in r.goal.evidence["next_step"]
+    assert "second_opinion_votes" in r.goal.evidence
+
+
+def test_no_answer_is_not_a_passed_second_opinion():
+    """Fravaer av data er ikke et positivt funn -- og gaten har SIN EGEN grunn.
+
+    UNAVAILABLE og DISSENT blokkerer begge, men krever helt ulike inngrep. En
+    felles «second opinion failed» ville gjort dem umulige aa skille i journalen.
+    """
+    from agent.second_opinion import SecondOpinionOutcome
+
+    r = _run_10b(opinion=SecondOpinionOutcome.unavailable("upstream timed out"),
+                 confidence=0.5, landing=_unreachable_landing)
+    assert r.goal.state is GoalState.BLOCKED
+    assert r.handoff.required_gate == "second_opinion_unavailable"
+    assert r.handoff.required_gate != "second_opinion_dissent"
+    assert "second_opinion_votes" in r.goal.evidence
+
+
+def test_a_runner_with_no_injected_reviewer_uses_the_real_one_and_fails_closed(
+        tmp_path, monkeypatch):
+    """`None` betyr «bruk den ekte klienten», ALDRI «hopp over steget».
+
+    Et skip-on-None ville gjort andre-meningen valgfri for den som konstruerer
+    runneren -- altsaa avskrudd av produsenten, som er nettopp defekten gaten
+    finnes for.
+
+    F4: noekkelstien pekes eksplisitt paa en fil som ikke finnes. Foer var testen
+    groenn fordi standardstien tilfeldigvis var tom paa .15 -- altsaa groenn FORDI
+    kontrollen var avskrudd. Med en ekte noekkel paa plass ville den samme testen
+    gjort et FAKTURERT Opus-kall og deretter feilet paa svaret. Det er gatens egen
+    defektklasse: fravaer i suksessens forkledning.
+    """
+    monkeypatch.setenv("SECOND_OPINION_API_KEY_FILE", str(tmp_path / "absent"))
+    r = _run_10b(opinion=None, confidence=None, landing=_unreachable_landing)
+    assert r.goal.state is GoalState.BLOCKED
+    # Den PRESISE aarsaken naar helt fram: noekkelfila mangler. Et generisk
+    # "unavailable" ville sagt «noe gikk galt» til en loop som skal handle.
+    assert r.handoff.required_gate == "second_opinion_credential"
+    # ... og next_step navngir ÉN handling, ikke to alternativer der ett gjelder.
+    assert "0600" in r.goal.evidence["next_step"]
+
+
+def test_a_confident_reviewer_does_not_close_the_gate_on_blast_radius():
+    """DETTE er testen som gjoer andre-meningen ekte.
+
+        En second opinion som bare paakalles naar man allerede er i tvil,
+        kalles aldri naar man tar feil med selvtillit.
+
+    Confidence 1.0 og en stor endring: utloeseren maa fyre likevel. Hvis denne
+    faller fordi noen gjorde utloeseren rent confidence-basert, er gaten
+    redusert til et tvil-flagg.
+    """
+    r = _run_10b(opinion=_so("DISSENT"), confidence=1.0, files=6, lines=300)
+    assert r.goal.state is GoalState.BLOCKED
+    assert r.handoff.required_gate == "second_opinion_dissent"
+
+
+def test_a_confident_reviewer_does_not_close_the_gate_on_the_governance_surface():
+    """Samme poeng, andre akse: en endring i selve vaktmaskineriet."""
+    r = _run_10b(opinion=_so("DISSENT"), confidence=1.0,
+                 landing_set=("agent/code_workflow.py",),
+                 lease="agent/code_workflow.py")
+    assert r.goal.state is GoalState.BLOCKED
+    assert r.handoff.required_gate == "second_opinion_dissent"
+
+
+def test_a_small_confident_change_is_not_charged_for_an_opus_call():
+    """Utloeseren er smal MED VILJE.
+
+    Det er derfor fail-closed er til aa leve med: hadde gaten fyrt paa alt,
+    ville et API-utfall stanset all landing, noen ville lagt inn en bypass --
+    og bypassen ville vaert defekten.
+    """
+    def _must_not_be_called(change, **kw):
+        raise AssertionError("second opinion consulted for a small, confident change")
+
+    r2 = GovernedCodeRunner(second_opinion=_must_not_be_called)
+    ev = PreflightInput(
+        git_clean=True, lease_clear=True, cad_status="fresh", adr_status="accepted",
+        bl_status="open", obsidian_status="fresh",
+        source_refs={"git": "g", "lease": "a.py", "cad": "C", "adr": "A", "bl": "B"})
+    land = LandingEvidence("sha", ReviewVerdict.PASS, "tests", "readback", "smoke",
+                           "rollback", "log", "state", "closer", landing_set=("a.py",))
+    result = r2.run(
+        FaberGoal("g-cheap", "run", cad_ref="C", adr_ref="A", bl_ref="B"),
+        preflight=PreflightResult(PreflightStatus.PASS, (), ev),
+        build=lambda: {"tests": "ok", "diff_id": "d1", "changed_files": 1,
+                       "changed_lines": 5, "diff": "x"},
+        review=lambda e: ReviewEvidence(ReviewVerdict.PASS, "d1", "sol", confidence=0.99),
+        landing=lambda e: land,
+        prelanding_evidence=land,
+    )
+    assert result.goal.state is GoalState.LANDED
+    assert "second_opinion_votes" not in result.goal.evidence
+
+
+def test_both_votes_are_recorded_on_the_path_that_actually_LANDS():
+    """Loggfoering er ubetinget, ikke uenighetspolitikken.
+
+    Denne fanget en EKTE defekt under verifiseringen: foerste utkast la stemmene
+    bare i `evidence`-dicten, som gaar til landing()-adapteren og aldri til
+    maalets egen evidens. Uenighet ble loggfoert paa BLOCK, mens enighet
+    forsvant paa den stien som faktisk landet -- altsaa borte nettopp der man
+    senere vil sporre «kjoerte gaten i det hele tatt?».
+    """
+    r = _run_10b(opinion=_so("CONCUR"), confidence=0.5)
+    assert r.goal.state is GoalState.LANDED
+    votes = r.goal.evidence["second_opinion_votes"]
+    assert "reviewer=" in votes and "second_opinion=" in votes
+    assert "anthropic.api" in votes
+
+
+def test_a_smuggled_non_independent_CONCUR_cannot_land():
+    """Mortens direktiv, paa den haandhevede stien.
+
+    En modell som spoer seg selv er ikke en andre mening. Reviewer reproduserte
+    dette som en bestaatt CONCUR foer uavhengighetssjekken ble flyttet inn i
+    `resolve_disagreement` selv.
+    """
+    r = _run_10b(opinion=_so("CONCUR", provenance="cortex.13:1234",
+                             model="qwen3-235b"), confidence=0.5)
+    assert r.goal.state is GoalState.BLOCKED
+    assert r.handoff.required_gate == "second_opinion_independence"
+
+
+def test_production_shaped_build_evidence_reaches_CONCUR():
+    """F1, ende-til-ende: naar steg 8 leverer det den faktisk leverer, LANDER det.
+
+    Alle de andre 10b-vaktene mater runneren en haandskrevet diff. Denne bruker
+    noekkelsettet `FaberImplementer.build` faktisk returnerer, og fanger dermed
+    tilfellet reviewer maalte: gaten var teknisk korrekt og likevel en VEGG, fordi
+    ingen produsent satte feltet den leser.
+    """
+    from agent.faber_implementer import render_review_diff
+
+    diff = render_review_diff({"a.py": "x = 1\n"}, {"a.py": "x = 2\n"})
+    assert diff.strip(), "precondition: the renderer must produce something"
+
+    ev = PreflightInput(
+        git_clean=True, lease_clear=True, cad_status="fresh", adr_status="accepted",
+        bl_status="open", obsidian_status="fresh",
+        source_refs={"git": "g", "lease": "a.py", "cad": "C", "adr": "A", "bl": "B"})
+    land = LandingEvidence(
+        "sha", ReviewVerdict.PASS, "tests", "readback", "smoke", "rollback",
+        "log", "state", "closer", landing_set=("a.py",))
+    result = GovernedCodeRunner(second_opinion=lambda change, **kw: _so("CONCUR")).run(
+        FaberGoal("g-prod", "run", cad_ref="C", adr_ref="A", bl_ref="B"),
+        preflight=PreflightResult(PreflightStatus.PASS, (), ev),
+        # Noekkelsettet fra FaberImplementer.build, verbatim.
+        build=lambda: {
+            "changed_files": 1, "changed_lines": 2, "added_lines": 1,
+            "deleted_lines": 1, "new_dependencies": 0,
+            "diff_id": "faber8-deadbeefdeadbeef", "model": "stub",
+            "design_ref": "/tmp/design.json",
+            "blast_radius_source": "measured:pre-image-diff",
+            "written_files": "a.py", "rationale": "bump", "tests": "ok",
+            "diff": diff,
+        },
+        review=lambda e: ReviewEvidence(ReviewVerdict.PASS, "faber8-deadbeefdeadbeef",
+                                        "sol", confidence=0.5),
+        landing=lambda e: land,
+        prelanding_evidence=land,
+    )
+    assert result.goal.state is GoalState.LANDED
+    assert "second_opinion_votes" in result.goal.evidence

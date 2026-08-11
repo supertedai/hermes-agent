@@ -536,13 +536,32 @@ def _prelanding(landing_set: tuple[str, ...]) -> LandingEvidence:
     )
 
 
+
+
+def _concurring_second_opinion(change, **_):
+    """BL-4055: en UAVHENGIG vurderer som er enig.
+
+    Injiseres eksplisitt fordi disse testene handler om LANDINGS-mekanikken, ikke
+    om andre-meningen. Uten injeksjon gaar kallet til den ekte klienten -- som
+    uten noekkelfil gir UNAVAILABLE, altsaa BLOCK. Det er riktig oppfoersel; her
+    vil vi bare ikke teste den om igjen.
+    """
+    from agent.second_opinion import SecondOpinionOutcome, SecondOpinionStatus
+
+    return SecondOpinionOutcome(
+        status=SecondOpinionStatus.CONCUR, reason="independently checked",
+        provenance="anthropic.api", model="claude-opus-5", confidence=0.9)
+
+
 def _run(repo: Path, tmp_path: Path, *, lease: str, landing_set: tuple[str, ...], message: str):
     prelanding = _prelanding(landing_set)
-    return GovernedCodeRunner().run(
+    return GovernedCodeRunner(second_opinion=_concurring_second_opinion).run(
         FaberGoal("g1", "run", cad_ref="C", adr_ref="A", bl_ref="B"),
         preflight=_preflight(lease),
-        build=lambda: {"tests": "ok", "diff_id": "d1", "changed_files": len(landing_set), "changed_lines": 10},
-        review=lambda e: ReviewEvidence(verdict=ReviewVerdict.PASS, diff_id="d1", reviewer="symbiose-reviewer"),
+        build=lambda: {"tests": "ok", "diff_id": "d1", "changed_files": len(landing_set),
+                       "changed_lines": 10, "diff": "--- a\n+++ b\n+x"},
+        review=lambda e: ReviewEvidence(verdict=ReviewVerdict.PASS, diff_id="d1",
+                                        reviewer="symbiose-reviewer", confidence=0.95),
         prelanding_evidence=prelanding,
         landing=landing_callable(
             message=message, prelanding=prelanding, executor=executor(repo, tmp_path),
@@ -676,13 +695,16 @@ def _tick_evidence(lease: str) -> PreflightInput:
 def _tick(repo: Path, tmp_path: Path, *, lease: str, landing_set: tuple[str, ...],
           message: str, store: HandoffStore | None = None):
     prelanding = _prelanding(landing_set)
-    return FaberRuntime(handoff_store=store).tick(
+    return FaberRuntime(
+        handoff_store=store,
+        runner=GovernedCodeRunner(second_opinion=_concurring_second_opinion),
+    ).tick(
         FaberGoal("bl4051", "land steg 11", cad_ref="CAD-M", adr_ref="ADR-062", bl_ref="BL-4051"),
         _tick_evidence(lease),
-        build=lambda: {"tests": "ok", "diff_id": "d1",
+        build=lambda: {"tests": "ok", "diff_id": "d1", "diff": "--- a\n+++ b\n+x",
                        "changed_files": len(landing_set), "changed_lines": 10},
         review=lambda e: ReviewEvidence(verdict=ReviewVerdict.PASS, diff_id="d1",
-                                        reviewer="symbiose-reviewer"),
+                                        reviewer="symbiose-reviewer", confidence=0.95),
         prelanding_evidence=prelanding,
         landing=landing_callable(message=message, prelanding=prelanding,
                                  executor=executor(repo, tmp_path)),

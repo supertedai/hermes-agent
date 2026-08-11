@@ -22,6 +22,16 @@ from enum import Enum
 from pathlib import Path
 from typing import Any, Callable, Mapping, Sequence
 
+# BL-4055. Retningen er ENVEIS: `second_opinion` er ren politikk og importerer
+# ingenting herfra. En sirkulaer import mellom gate og politikk er hvordan en
+# gate ender opp med aa bli definert to steder og divergere.
+from agent.second_opinion import (
+    ChangeUnderReview,
+    SecondOpinionOutcome,
+    SecondOpinionTrigger,
+    resolve_disagreement,
+)
+
 
 class PreflightStatus(str, Enum):
     PASS = "PASS"
@@ -248,6 +258,11 @@ class ReviewEvidence:
     verdict: ReviewVerdict
     diff_id: str
     reviewer: str = ""
+    #: BL-4055. `confidence` fantes allerede i `faber_live_adapter`s
+    #: JSON-kontrakt, men stoppet der: steg 10 kunne ikke lese den, saa den
+    #: kunne ikke utloese noe. `None` er MED VILJE default og betyr UMAALT,
+    #: ikke «sikker» -- `SecondOpinionTrigger` behandler umaalt som en utloeser.
+    confidence: float | None = None
 
 
 @dataclass(frozen=True)
@@ -1530,12 +1545,40 @@ class GovernedCodeRunner:
     """
 
     def __init__(self, ledger: GoalLedger | None = None,
-                 scope_budget: "ScopeBudget | None" = None):
+                 scope_budget: "ScopeBudget | None" = None,
+                 second_opinion: "Callable[..., SecondOpinionOutcome] | None" = None):
         self.ledger = ledger or GoalLedger()
+        #: BL-4055 steg 10b. Injiserbar for test, men ALDRI fravaerende: `None`
+        #: betyr «bruk den ekte klienten», ikke «hopp over steget». Et
+        #: skip-on-None ville gjort andre-meningen valgfri for den som
+        #: konstruerer runneren -- altsaa avskrudd av produsenten, som er
+        #: nettopp defekten gaten finnes for.
+        self._second_opinion = second_opinion
         #: Blast-radius-grensen for steg 8. Injiserbar, men ALDRI fravaerende:
         #: en runner uten budsjett ville stilltiende gjenopprettet tilstanden der
         #: ScopeBudget fantes uten aa bli spurt.
         self.scope_budget = scope_budget or ScopeBudget()
+
+    def _consult_second_opinion(self, change: "ChangeUnderReview", *,
+                                trigger_reasons: tuple[str, ...],
+                                diff_text: str) -> "SecondOpinionOutcome":
+        """Kall vurdereren. Klienten importeres SENT og feiler lukket.
+
+        Sen import fordi `second_opinion_client` drar inn `anthropic`, og dette
+        modulet er dokumentert sideeffektfritt -- men merk at et importbrudd
+        gir `UNAVAILABLE` (som BLOKKERER), ikke et hopp over steget.
+        """
+        if self._second_opinion is not None:
+            return self._second_opinion(change, trigger_reasons=trigger_reasons,
+                                        diff_text=diff_text)
+        try:
+            from agent.second_opinion_client import fetch_second_opinion
+        except Exception as exc:  # noqa: BLE001
+            return SecondOpinionOutcome.unavailable(
+                f"second opinion client unavailable: {type(exc).__name__}",
+                gate="second_opinion_runtime")
+        return fetch_second_opinion(change, trigger_reasons=trigger_reasons,
+                                    diff_text=diff_text)
 
     def run(
         self,
@@ -1547,11 +1590,17 @@ class GovernedCodeRunner:
         landing: Callable[[Mapping[str, str]], LandingEvidence],
         prelanding_evidence: LandingEvidence | None = None,
     ) -> GovernedRunResult:
-        def blocked(current: FaberGoal, reason: str, gate: str, next_step: str) -> GovernedRunResult:
+        def blocked(current: FaberGoal, reason: str, gate: str, next_step: str,
+                    extra: Mapping[str, str] | None = None) -> GovernedRunResult:
+            # BL-4055: `extra` finnes for at BEGGE STEMMER skal overleve en
+            # BLOCK. En blokkering som ikke sier hvem som var uenig, er ikke
+            # etterproevbar -- og en uenighet ingen kan lese er dekorasjon.
+            record = {"blocker": reason, "next_step": next_step}
+            record.update(dict(extra or {}))
             blocked_goal = self.ledger.transition(
                 current,
                 GoalState.BLOCKED,
-                evidence={"blocker": reason, "next_step": next_step},
+                evidence=record,
             )
             return GovernedRunResult(
                 blocked_goal,
@@ -1674,6 +1723,84 @@ class GovernedCodeRunner:
             done, missing = DefinitionOfDone().evaluate(prelanding_evidence)
             if not done:
                 return blocked(current, "prelanding DoD incomplete: " + ", ".join(missing), "postcommit", "complete DoD before landing")
+
+            # ===== BL-4055 steg 10b: SECOND OPINION ==========================
+            # Kjeden hadde ingen andre-mening. Maalt 2026-08-11: null treff paa
+            # second_opinion/dissent/adversarial i agent/. Steg 10 var én
+            # vurderer, og dens PASS var endelig -- og vurdereren er samme
+            # modellfamilie som produserte endringen.
+            #
+            # PLASSERING: sist, etter alle de mekaniske gatene. Ikke fordi den
+            # er minst viktig, men fordi den er den eneste som koster penger og
+            # nettverk: en endring som scope_budget, landing_scope eller DoD
+            # ville stoppet uansett, skal ikke foerst betales for. Alt foran
+            # dette punktet er gratis og lokalt.
+            #
+            # UTLOESEREN er i SecondOpinionTrigger, og den er poenget:
+            #
+            #     En second opinion som bare paakalles naar man allerede er i
+            #     tvil, kalles aldri naar man tar feil med selvtillit.
+            #
+            # Derfor fyrer to av utloeserne (blast-radius, governance-flate)
+            # UAVHENGIG av reviewerens selvrapport -- ogsaa paa confidence 0.99.
+            #
+            # DIFF: `evidence["diff"]` kreves bare naar utloeseren har fyrt.
+            # Mangler den, blir svaret UNAVAILABLE og kjeden blokkerer, av
+            # samme grunn som steg 8 blokkerer paa umaalt blast-radius: en
+            # endring ingen vurderer fikk se, er ikke en godkjent endring.
+            change = ChangeUnderReview(
+                diff_id=expected_diff,
+                reviewer=review_result.reviewer,
+                verdict=verdict.value,
+                confidence=review_result.confidence,
+                # Direkte oppslag, ikke .get(..., 0): steg 8 har allerede
+                # blokkert paa manglende maaletall, saa de FINNES her. En
+                # default paa 0 ville gjort et brudd paa den invarianten om til
+                # «liten endring» -- altsaa umaalt lest som trygt, presis den
+                # slutningen steg 8 forbyr. Mangler de likevel, gir KeyError en
+                # BLOCK via runnerens ytre except, som er riktig retning.
+                changed_files=int(evidence["changed_files"]),
+                changed_lines=int(evidence["changed_lines"]),
+                landing_set=tuple(prelanding_evidence.landing_set),
+                bl_ref=goal.bl_ref,
+                summary=str(evidence.get("summary", "")),
+            )
+            trigger = SecondOpinionTrigger().evaluate(change)
+            # Tomt naar utloeseren ikke fyrte. Hoistet ut av if-en fordi
+            # LANDED-overgangen under maa kunne skrive stemmene: foerste utkast
+            # la dem bare i `evidence`-dicten, som gaar til landing()-adapteren
+            # og ALDRI til maalets egen evidens. Da ble uenighet loggfoert paa
+            # BLOCK, men enighet forsvant paa den stien som faktisk landet --
+            # altsaa nettopp den ubetingede loggfoeringen ADR-en lover.
+            second_opinion_record: dict[str, str] = {}
+            if trigger.required:
+                opinion = self._consult_second_opinion(
+                    change,
+                    trigger_reasons=trigger.reasons,
+                    diff_text=str(evidence.get("diff", "")),
+                )
+                resolution = resolve_disagreement(change=change, opinion=opinion)
+                # BEGGE STEMMER, ALLTID -- ogsaa ved enighet. Loggfoering er
+                # ikke uenighetspolitikken; den er ubetinget. En enighet uten
+                # spor er ikke etterproevbar, og da vet man ikke om gaten
+                # kjoerte i det hele tatt.
+                votes = {
+                    "second_opinion_status": opinion.status.value,
+                    "second_opinion_trigger": ", ".join(trigger.reasons),
+                    "second_opinion_votes": "; ".join(
+                        f"{who}={what}" for who, what in resolution.votes.items()),
+                }
+                evidence.update(votes)
+                second_opinion_record = votes
+                if not resolution.allow:
+                    # next_step kommer fra POLITIKKEN, ikke herfra: den vet hvilken
+                    # undergate som stoppet, runneren saa bare «ikke tillatt». Den
+                    # gamle sammensatte strengen navnga to alternativer der bare ett
+                    # gjaldt -- kjedens eneste next_step som ikke pekte paa én
+                    # handling.
+                    return blocked(current, resolution.reason, resolution.gate,
+                                   resolution.next_step, extra=votes)
+
             landing_evidence = landing(evidence)
             current = self.ledger.transition(
                 current,
@@ -1681,7 +1808,10 @@ class GovernedCodeRunner:
                 review=verdict,
                 review_evidence=review_result,
                 landing_evidence=landing_evidence,
-                evidence={"commit": landing_evidence.commit},
+                # BL-4055: stemmene ogsaa her. Loggfoering er ubetinget, og en
+                # enighet uten spor er ikke etterproevbar -- da vet man ikke om
+                # gaten kjoerte i det hele tatt.
+                evidence={"commit": landing_evidence.commit, **second_opinion_record},
             )
             return GovernedRunResult(current)
         except Exception as exc:

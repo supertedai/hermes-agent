@@ -798,3 +798,370 @@ def test_rollback_skipped_does_not_leak_across_builds_on_one_instance(tmp_path: 
     evidence = impl.build()
     assert impl._skipped_rollback == [], "stale sti fra forrige build maa vaere nullstilt"
     assert "rollback_skipped" not in evidence
+
+
+# ------------------------------------------ BL-4055 F1: diffen steg 10b leser ---
+
+
+def test_build_emits_the_diff_the_second_opinion_reviews(tmp_path: Path):
+    """Uten dette feltet er andre-meningen en VEGG, ikke en gate.
+
+    Reviewer maalte det: ingen produksjonssti satte ``evidence["diff"]``, saa hver
+    utloest endring paa ``faber_runtime --tick-json`` endte i
+    ``second_opinion_input`` -- deterministisk, av en grunn som ikke hadde noe med
+    endringen aa gjoere, med et next_step ingen operatoer kunne handle paa.
+
+    Vakten sjekker INNHOLD, ikke bare at noekkelen finnes: en tom streng ville
+    utloest noeyaktig samme blokkering.
+    """
+    (tmp_path / "a.py").write_text("x = 1\n", encoding="utf-8")
+    patch = ProposedPatch(files={"a.py": "x = 2\ny = 3\n"}, rationale="bump")
+    evidence = implementer(tmp_path, patch).build()
+
+    assert evidence["diff"].strip(), "step 8 produced no diff for step 10b to review"
+    assert "-x = 1" in evidence["diff"]
+    assert "+x = 2" in evidence["diff"]
+    assert "b/a.py" in evidence["diff"]
+
+
+def test_the_reviewed_diff_is_redacted_before_it_leaves_the_process():
+    """Diffen er en NY EGRESS: filinnhold gaar til api.anthropic.com.
+
+    `vet()` er FOERSTE linje og avviser en patch med kreditiv-formet materiale
+    foer `build` i det hele tatt naar evidensen -- saa denne stien kan normalt
+    ikke naas gjennom en patch. Redigeringen i `render_review_diff` er derfor
+    DYBDEFORSVAR, og testes direkte paa rendereren: den skal holde ogsaa for
+    innhold som ikke kom gjennom `vet` (et pre-image som allerede laa i treet,
+    for eksempel), fordi det er det som faktisk sendes ut av prosessen.
+    """
+    from agent.faber_implementer import render_review_diff
+
+    rendered = render_review_diff(
+        {"a.py": 'api_key = "sk-ant-not-a-real-key-000"\n'},
+        {"a.py": "api_key = os.environ['K']\n"})
+
+    assert "sk-ant-not-a-real-key-000" not in rendered
+    assert rendered.strip(), "redaction must not empty the diff — the change is still reviewable"
+
+
+def test_an_unchanged_file_contributes_nothing_to_the_reviewed_diff(tmp_path: Path):
+    """Diffen skal vise ENDRINGEN, ikke hele leasen.
+
+    En diff full av uendrede filer bruker vurdererens kontekstvindu paa stoey og
+    gjoer det vanskeligere aa se det som faktisk skjedde.
+    """
+    (tmp_path / "a.py").write_text("x = 1\n", encoding="utf-8")
+    (tmp_path / "b.py").write_text("keep = True\n", encoding="utf-8")
+    patch = ProposedPatch(files={"a.py": "x = 2\n", "b.py": "keep = True\n"},
+                          rationale="only a")
+    evidence = implementer(tmp_path, patch, lease=("a.py", "b.py")).build()
+
+    assert "a/a.py" in evidence["diff"]
+    assert "b.py" not in evidence["diff"]
+
+
+def test_the_reviewed_diff_is_built_from_the_same_images_as_the_diff_id(tmp_path: Path):
+    """Samme kilde som ``diff_id_for`` og ``measure_blast_radius``.
+
+    Hadde teksten kommet fra en annen kilde -- ``git diff`` mot arbeidstreet, for
+    eksempel -- kunne reviewerens ``diff_id`` matche buildens mens teksten viste
+    noe annet, og da beviser sammenligningen paa steg 10 ingenting.
+    """
+    from agent.faber_implementer import diff_id_for, render_review_diff
+
+    pre = {"a.py": "x = 1\n"}
+    post = {"a.py": "x = 2\n"}
+    rendered = render_review_diff(pre, post)
+    assert "+x = 2" in rendered
+    # Samme post-sett -> samme identitet; diffen beskriver akkurat det settet.
+    assert diff_id_for(post) == diff_id_for({"a.py": "x = 2\n"})
+    assert render_review_diff(post, post) == "", "no change means no diff to review"
+
+
+def test_ordinary_source_does_not_block_step_8_on_security(tmp_path: Path):
+    """BL-4055 F5. DEN vanligste falske positiven i ekte kildekode.
+
+    `model_api_key = ""` matcher IKKE noekkelord-moensteret raatt -- en tom streng
+    er ingen hemmelighet. Men `_safe_evidence` avsluttet med
+    `assert_safe(json.dumps(payload))`, og JSON-escaping skriver den om til
+    `model_api_key = \\"\\"`: da leverer ESCAPE-TEGNET den ikke-tomme verdien
+    kilden ikke hadde, og buildet blokkerte paa `gate=security` med tilbakerulling.
+
+    Reviewer maalte 12 slike filer i repoet. Verre: `_safe_evidence(evidence)`
+    evalueres som ARGUMENT til `ImplementationBlocked` paa scope-stien, saa den
+    falske sikkerhets-feilen kastet FOERST og skjulte den ekte aarsaken -- BL-4029s
+    «journalen lagret feil aarsak», gjeninnfoert av en rettelse for noe annet.
+    """
+    (tmp_path / "a.py").write_text(
+        'model_api_key = ""\nvalue = model_api_key or "K"\n', encoding="utf-8")
+    patch = ProposedPatch(
+        files={"a.py": 'model_api_key = ""\nvalue = model_api_key or "KEY2"\n'},
+        rationale="rename the fallback")
+
+    evidence = implementer(tmp_path, patch).build()
+
+    assert evidence["diff"].strip()
+    assert "KEY2" in evidence["diff"], "legitimate source must survive intact"
+
+
+def test_keyword_shaped_but_legitimate_code_is_not_redacted(tmp_path: Path):
+    """Noekkelord-moenstre hoerer ikke hjemme paa filinnhold.
+
+    `api_key = os.environ[...]` er RIKTIG kode -- det er maaten aa gjoere det paa.
+    Foerste versjon kjoerte full `SecretPolicy` paa diffen og sproeytet `(redacted)`
+    inn i 146 av 558 ekte filer. Verst der gaten sikter: en endring i
+    `hermes_cli/auth.py` naadde vurdereren med de relevante linjene blanket ut, og
+    da er DISSENT den korrekte oppfoerselen -- gaten ble daarligst akkurat paa
+    governance-flaten den ble bygget for.
+    """
+    (tmp_path / "a.py").write_text("api_key = os.environ['K']\n", encoding="utf-8")
+    patch = ProposedPatch(files={"a.py": "api_key = os.environ['KEY2']\n"},
+                          rationale="rename env var")
+
+    evidence = implementer(tmp_path, patch).build()
+
+    assert "(redacted)" not in evidence["diff"]
+    assert "os.environ['KEY2']" in evidence["diff"]
+
+
+def test_a_real_provider_key_in_a_pre_image_is_still_redacted(tmp_path: Path):
+    """Dybdeforsvaret staar: FORMENE redigeres fortsatt.
+
+    `vet()` avviser en PATCH med kreditiv-formet materiale, men den saa aldri
+    pre-imaget. En ekte noekkel som alt laa i treet skal ikke reise ut av prosessen
+    til api.anthropic.com bare fordi linjen rundt den ble endret.
+    """
+    from agent.faber_implementer import render_review_diff
+
+    rendered = render_review_diff(
+        {"a.py": 'KEY = "sk-antxxxxxxxxxxxxxxxxxxxxxxxx"\n'},
+        {"a.py": "KEY = os.environ['K']\n"})
+
+    assert "sk-antxxxxxxxxxxxxxxxxxxxxxxxx" not in rendered
+    assert "(redacted)" in rendered
+
+
+def test_the_diff_backstop_fires_when_a_producer_bypasses_the_renderer(tmp_path: Path):
+    """M3: bakstoppen var udekket, og reviewer slettet den uten at noe feilet.
+
+    Den er INERT-VED-KONSTRUKSJON for alt som gaar gjennom `render_review_diff`
+    (reviewer beviste det med 4008 fuzz-input og null treff), saa den kan bare
+    voktes ved aa gjoere det den finnes for: sette `evidence["diff"]` UTENOM
+    rendereren. Da er den den eneste kontrollen mellom filinnholdet og
+    api.anthropic.com.
+    """
+    (tmp_path / "a.py").write_text("x = 1\n", encoding="utf-8")
+    impl = implementer(tmp_path, ProposedPatch(files={"a.py": "x = 2\n"},
+                                               rationale="bump"))
+
+    with pytest.raises(ImplementationBlocked) as exc:
+        impl._safe_evidence({
+            "tests": "ok",
+            # Uredigert, som en framtidig produsent kunne finne paa aa levere.
+            "diff": '+KEY = "sk-antxxxxxxxxxxxxxxxxxxxxxxxx"\n',
+        })
+
+    assert exc.value.gate == "security"
+    assert "credential-shaped" in str(exc.value)
+
+
+def test_the_reviewed_diff_carries_more_context_than_difflib_default(tmp_path: Path):
+    """M6: `n=10` var begrunnet i en docstring, men holdt av ingenting.
+
+    Begrunnelsen er at vurdereren blir bedt om aa finne «en kontroll som ikke kan
+    fyre» -- det ser man ikke av tre linjer. Et ubundet tall i en docstring som
+    forklarer hvorfor det betyr noe, er hvordan de tre forrige funnene startet.
+    """
+    from agent.faber_implementer import render_review_diff
+
+    body = "".join(f"line_{i} = {i}\n" for i in range(40))
+    changed = body.replace("line_20 = 20", "line_20 = 999")
+    rendered = render_review_diff({"a.py": body}, {"a.py": changed})
+
+    context = [ln for ln in rendered.splitlines()
+               if ln.startswith(" ") and "line_" in ln]
+    assert len(context) >= 14, (
+        f"only {len(context)} context lines — difflib's default of 3 gives 6; "
+        "the reviewer cannot see a control that cannot fire from that")
+
+
+# ------------------------------------ BL-4055 F7: literal-regelen var uvoktet ---
+#
+# Reviewer: tre mutanter overlevde, fordi INGEN test roerte `_LITERAL_SECRET`.
+# Shape-halvdelen var voktet av `sk-`-testen; literal-halvdelen av ingenting.
+
+
+def test_a_literal_secret_in_a_pre_image_is_masked_but_the_keyword_survives():
+    """Bare VERDIEN maskeres. Leseren skal fortsatt se AT det er en hemmelighet."""
+    from agent.faber_implementer import render_review_diff
+
+    rendered = render_review_diff(
+        {"a.py": 'password = "hunter2-prod-db-password"\n'},
+        {"a.py": "password = os.environ['DB_PW']\n"})
+
+    assert "hunter2-prod-db-password" not in rendered
+    assert "password" in rendered, "the keyword must survive; only the value goes"
+    assert "(redacted)" in rendered
+
+
+def test_a_full_authorization_header_literal_is_masked():
+    """F6: header-navn og verdi i ÉN literal.
+
+    Dette var det ene stedet den smale literal-regelen REGREDERTE mot de fulle
+    noekkelord-moenstrene den erstattet -- og det er hvordan en header-konstant
+    faktisk skrives.
+    """
+    from agent.faber_implementer import render_review_diff
+
+    rendered = render_review_diff(
+        {"a.py": 'AUTH_HEADER = "Authorization: Basic dXNlcjpwYXNzd29yZA=="\n'},
+        {"a.py": "AUTH_HEADER = build_auth()\n"})
+
+    assert "dXNlcjpwYXNzd29yZA==" not in rendered
+    assert "(redacted)" in rendered
+
+
+def test_a_bare_authorization_mention_is_not_redacted():
+    """Skjema-moensteret krever ET SKJEMA, ikke bare ordet.
+
+    Uten dette ville hver docstring som naevner headeren blitt maskert -- og det
+    er den falske-positiv-klassen hele F5 handlet om.
+    """
+    from agent.faber_implementer import render_review_diff
+
+    line = "# See the Authorization header documentation for details\n"
+    rendered = render_review_diff({"a.py": line}, {"a.py": line + "x = 1\n"})
+
+    assert "(redacted)" not in rendered
+
+
+def test_the_literal_rule_never_spans_a_line_boundary():
+    """DEN vakten som manglet mest -- mutanten som gjeninnfoerer min egen bug.
+
+    Foerste versjon av verdiklassen var ``[^"']{16,}``, som tillater LINJESKIFT.
+    Den spente seg fra én strengliteral, over ekte kode, til den neste og maskerte
+    alt imellom -- maalt 3 slike, alle i ``print()``-kall. Det er «blank ut
+    legitim logikk»-feilen i miniatyr, innfoert av rettelsen FOR den.
+    """
+    from agent.faber_implementer import render_review_diff
+
+    body = ('print("Password: ")\n'
+            "confirm = compute_the_thing(a, b)\n"
+            'print("Enter it again: ")\n')
+    rendered = render_review_diff({"a.py": body}, {"a.py": body + "x = 1\n"})
+
+    assert "compute_the_thing(a, b)" in rendered, (
+        "a newline-spanning match blanked legitimate code between two literals")
+
+
+def test_two_secrets_on_separate_lines_leave_the_code_between_them_intact():
+    from agent.faber_implementer import render_review_diff
+
+    body = ('api_key = "aaaaaaaaaaaaaaaaaaaaaaaa"\n'
+            "result = do_real_work(x)\n"
+            'token = "bbbbbbbbbbbbbbbbbbbbbbbb"\n')
+    rendered = render_review_diff({"a.py": body}, {"a.py": body + "x = 1\n"})
+
+    assert rendered.count("(redacted)") == 2
+    assert "do_real_work(x)" in rendered
+    assert "aaaaaaaaaaaaaaaaaaaaaaaa" not in rendered
+    assert "bbbbbbbbbbbbbbbbbbbbbbbb" not in rendered
+
+
+def test_the_backstop_also_covers_the_literal_rule(tmp_path: Path):
+    """M3b: bakstoppen mistet literal-regelen uten at noe feilet."""
+    (tmp_path / "a.py").write_text("x = 1\n", encoding="utf-8")
+    impl = implementer(tmp_path, ProposedPatch(files={"a.py": "x = 2\n"},
+                                               rationale="bump"))
+
+    with pytest.raises(ImplementationBlocked) as exc:
+        impl._safe_evidence({
+            "tests": "ok",
+            "diff": '+password = "hunter2-prod-db-password"\n',
+        })
+
+    assert exc.value.gate == "security"
+
+    # N4: og skjema-moensteret. Den ble lagt til i bakstoppen uten en test, saa
+    # aa fjerne den igjen kostet ingenting -- samme hull som literal-regelen
+    # hadde. Hver kontroll i `_file_content_violations` trenger sin egen linje.
+    with pytest.raises(ImplementationBlocked) as exc2:
+        impl._safe_evidence({
+            "tests": "ok",
+            "diff": '+H = "Authorization: Bearer abcdefghijklmnopqrst"\n',
+        })
+
+    assert exc2.value.gate == "security"
+
+
+def test_redaction_is_a_fixed_point_of_the_backstop():
+    """DEN baerende invarianten mellom de to kontrollene.
+
+    `_redact_file_content` maa produsere noe `_file_content_violations` sier er
+    rent. Ellers blokkerer bakstoppen paa redigeringens EGET resultat, og steg 8
+    doer paa `gate=security` for en endring uten hemmeligheter i seg.
+
+    MAALT to ganger, begge ganger som en regresjon:
+      * F5: `_redact` skannet raatekst mens bakstoppen skannet den JSON-escapede
+        formen, saa `model_api_key = ""` blokkerte 12 ekte filer.
+      * F6: `_AUTH_SCHEME` matchet sin egen markoer -- ``(redacted)`` er ti tegn
+        uten mellomrom, saa ``\\S{8,}`` traff den. Blokkeringene gikk 0 -> 10 i
+        samme sekund moensteret ble lagt inn.
+
+    Begge ganger var koden «aapenbart riktig» og begge ganger var det maalingen
+    som avslo. Denne testen er den maalingen, gjort permanent.
+    """
+    from agent.faber_implementer import (_file_content_violations,
+                                         _redact_file_content)
+
+    corpus = [
+        'KEY = "sk-antxxxxxxxxxxxxxxxxxxxxxxxx"',
+        'password = "hunter2-prod-db-password"',
+        'AUTH_HEADER = "Authorization: Basic dXNlcjpwYXNzd29yZA=="',
+        'H = "Authorization: Bearer abcdefghijklmnopqrstuvwx"',
+        'ghp_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
+        "AKIA0123456789ABCDEF",
+        "-----BEGIN RSA PRIVATE KEY-----\nabc\n-----END RSA PRIVATE KEY-----",
+        "-----BEGIN RSA PRIVATE KEY-----\ntruncated",       # `|$`-grenen
+        'api_key = os.environ["K"]',                          # legitim
+        "# see the Authorization header docs",                # legitim
+        "",
+    ]
+    # Enkeltvis, parvis og dobbelt -- en markoer som selv blir et treff dukker
+    # typisk opp foerst naar to moenstre moetes.
+    cases = list(corpus)
+    cases += [a + "\n" + b for a in corpus for b in corpus]
+    cases += [a + a for a in corpus]
+
+    for case in cases:
+        cleaned = _redact_file_content(case)
+        assert not _file_content_violations(cleaned), (
+            "redaction is not a fixed point of the backstop — the backstop would "
+            f"block on its own output for: {case[:60]!r}")
+        # Idempotent: aa redigere en gang til skal ikke endre noe.
+        assert _redact_file_content(cleaned) == cleaned
+
+
+def test_masking_an_auth_header_keeps_the_string_terminator():
+    """N1: `\\S{8,}` var hoeyre-ubundet og spiste avslutningstegnet.
+
+        h = f"Authorization: Bearer {self.access_token}"
+      ->  h = f"Authorization: Bearer (redacted)          <- uterminert
+
+    Vurdereren fikk en oedelagt literal aa lese, i en auth-modul -- altsaa
+    noeyaktig der gaten sikter. Samme familie som spennet over linjeskift.
+
+    Og bindingen kunne ikke gjoeres alene: med anfoerselstegnet i behold matchet
+    literal-regelen ``"Bearer (redacted)"`` (17 tegn) paa neste skanning, saa
+    bakstoppen fyrte paa sitt eget resultat. Fikspunktet holdt BARE fordi mangelen
+    spiste tegnet. Begge moenstrene er derfor markoer-immune naa.
+    """
+    from agent.faber_implementer import render_review_diff
+
+    line = 'h = f"Authorization: Bearer {self.access_token}"'
+    rendered = render_review_diff({"a.py": line + "\n"}, {"a.py": line + "\n# x\n"})
+
+    masked = [ln for ln in rendered.splitlines() if "Authorization" in ln][0]
+    assert masked.rstrip().endswith('"'), (
+        f"the closing quote was swallowed: {masked!r}")
+    assert "(redacted)" in masked

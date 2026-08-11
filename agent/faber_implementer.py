@@ -79,6 +79,7 @@ budsjettobjekt.
 from __future__ import annotations
 
 import ast
+import difflib
 import hashlib
 import json
 import os
@@ -125,6 +126,126 @@ _CREDENTIAL_SHAPES = (
 _DEFAULT_CORTEX_URL = "http://192.168.40.13:1234/v1"
 
 _REDACTED = "(redacted)"
+
+
+#: Noekkelord FULGT AV EN SITERT LITERAL paa >=16 tegn. Dette er IKKE
+#: ``SecretPolicy``s noekkelord-moenstre: de matcher en hvilken som helst
+#: ikke-tom verdi, og traff derfor ``api_key = os.environ["K"]`` -- riktig kode.
+#: Kravet om en sitert literal utelukker den formen ved konstruksjon: etter
+#: ``=`` staar det ``o``, ikke et anfoerselstegn.
+#:
+#: MAALT av meg paa de samme 558 filene: 11 treff i 12 filer, mot 146 for de
+#: fulle noekkelord-moenstrene, og NULL blokkeringer. Alle 11 er plassholdere,
+#: sentinel-konstanter eller prompt-strenger (``"your-global-hmac-secret"``,
+#: ``"HERMES_BACKEND_READY"``, ``"moa-virtual-provider"``) -- ingen ekte
+#: hemmeligheter, og bare den siterte VERDIEN maskeres, saa linjen er fortsatt
+#: lesbar.
+#:
+#: Paa seks realistiske kreditiv lagt i et pre-image fanger den fem som FORMENE
+#: alene slapp ut: ``GOCSPX-``, et DB-passord, en separat sitert ``Basic``-verdi,
+#: en Slack-token, en bar hex-token og en AWS SECRET access key. Den sjette --
+#: HELE headeren som én literal -- krevde et eget skjema-moenster, se
+#: `_AUTH_SCHEME`. (Den siste er verdt
+#: aa merke seg: ``AKIA`` matcher access-key-ID-en, ikke hemmeligheten, og
+#: ``SecretPolicy``s noekkelord traff den heller ikke -- ``secret`` foelges av
+#: ``_access_key``, ikke av ``=``. De fulle moenstrene var aldri sikkerhetsnettet
+#: de ser ut som.)
+#:
+#: Verdiklassen tillater MELLOMROM (en ``Authorization``-literal er
+#: ``"Basic <base64>"``) men ikke LINJESKIFT: uten den grensen spente treffet seg
+#: fra én streng til neste og maskerte ekte kode imellom -- 3 slike, alle i
+#: ``print()``-kall. Det er den samme «blank ut legitim logikk»-feilen i liten
+#: skala.
+_LITERAL_SECRET = re.compile(
+    r"""(?i)(?:api[_-]?key|client[_-]?secret|secret[_-]?access[_-]?key
+        |secret[_-]?key|access[_-]?token|auth[_-]?token|authorization
+        |password|passwd|secret|token|auth)"""
+    # Verdien kan inneholde mellomrom: en `Authorization`-literal er
+    # ``"Basic <base64>"``, og et krav om null mellomrom slapp den ut.
+    # MARKOER-IMMUN verdiklasse. Uten `(?!...)` matcher moensteret
+    # ``"Bearer (redacted)"`` (17 tegn) etter at `_AUTH_SCHEME` har redigert, og
+    # da fyrer bakstoppen paa sitt eget resultat. Samme regel i begge moenstre,
+    # saa fikspunktet foelger av KONSTRUKSJONEN og ikke av at et tegn tilfeldigvis
+    # ble spist.
+    r"""["']?\s*[:=]\s*["']((?:(?!""" + re.escape(_REDACTED) + r""")[^"'\n]){16,})["']""",
+    re.VERBOSE,
+)
+
+
+#: ``Authorization: Bearer <tok>`` naar HELE headeren staar som én literal.
+#:
+#: F6, funnet av reviewer: dette er det ENE stedet den smale literal-regelen
+#: REGREDERTE mot de fulle noekkelord-moenstrene den erstattet. `_LITERAL_SECRET`
+#: krever et anfoerselstegn RETT foer verdien; inne i ``"Authorization: Basic X"``
+#: naar den ``authorization``, spiser ``:`` og mellomrommet, og finner ``B`` der
+#: den krevde et anfoerselstegn. ``SecretPolicy`` fanget den fordi dens moenster er
+#: SKJEMA-formet, ikke noekkelord-formet.
+#:
+#: Og det er nettopp derfor dette moensteret ikke trenger noen verdi-vakt: ``Bearer``
+#: og ``Basic`` er selvidentifiserende, som en leverandoer-FORM. En bar
+#: ``Authorization``-omtale uten skjema matcher ikke.
+#:
+#: MAALT: en konstant som ``AUTH_HEADER = "Authorization: Basic dXNl..."`` er
+#: hvordan en header FAKTISK skrives, saa formen er ikke hypotetisk.
+_AUTH_SCHEME = re.compile(
+    r"""(?i)authorization\s*[:=]\s*["']?(?:bearer|basic)\s+"""
+    # NEGATIV LOOKAHEAD paa markoeren, ellers matcher moensteret sin EGEN
+    # redigering: ``(redacted)`` er ti tegn uten mellomrom, saa `\S{8,}` traff
+    # den. Maalt: blokkeringene gikk 0 -> 10 i det sekundet moensteret ble lagt
+    # inn uten denne. `_redact_file_content` MAA vaere et fikspunkt for
+    # `_file_content_violations`, ellers blokkerer bakstoppen paa sitt eget
+    # resultat -- samme klasse som F5, gjeninnfoert av rettelsen for F6.
+    # BUNDET til hoeyre. `\S{8,}` spiste terminatoren, saa en f-streng mistet sitt
+    # avsluttende anfoerselstegn og vurdereren fikk en uterminert literal aa lese.
+    # Trygt aa binde den NAA som `_LITERAL_SECRET` er markoer-immun -- foer ville
+    # et gjenvaerende anfoerselstegn latt literal-regelen matche markoeren.
+    r"""(?!""" + re.escape(_REDACTED) + r""")([^\s"\'`,)]{8,})""")
+
+
+def _redact_file_content(text: str) -> str:
+    """Rens FILINNHOLD: bare de fem leverandoer-FORMENE, aldri noekkelord-moenstrene.
+
+    Samme sett som :meth:`FaberImplementer.vet` bruker, og av samme grunn, som
+    :func:`_redact` allerede staver ut: paa kildekode ville noekkelord-moenstrene
+    blokkert legitimt arbeid. MAALT av reviewer paa 558 ekte filer i repoet: 146
+    av dem fikk ``(redacted)`` sprayet inn i legitim kode av den fulle
+    ``SecretPolicy``, og 12 blokkerte buildet helt.
+
+    En FORM er selvidentifiserende -- ``sk-``, ``ghp_``, ``AKIA``, en JWT, en
+    PEM-blokk er en hemmelighet uansett hva variabelen rundt heter. Et NOEKKELORD
+    er det ikke: ``api_key = os.environ["K"]`` er riktig kode, ikke en lekkasje.
+    """
+    value = str(text or "")
+    if not value.strip():
+        return value
+    for shape in _CREDENTIAL_SHAPES:
+        value = shape.sub(_REDACTED, value)
+    # Bare den siterte VERDIEN erstattes, ikke noekkelordet: en leser skal fortsatt
+    # se AT det er en hemmelighet der og hva den heter.
+    value = _LITERAL_SECRET.sub(
+        lambda m: m.group(0).replace(m.group(1), _REDACTED), value)
+    value = _AUTH_SCHEME.sub(
+        lambda m: m.group(0).replace(m.group(1), _REDACTED), value)
+    return value
+
+
+def _file_content_violations(text: str) -> tuple[str, ...]:
+    """Kreditiv-treff i filinnhold. Tom = trygt aa slippe ut av prosessen.
+
+    BEVISST samme sett som :func:`_redact_file_content` fjerner. Den er derfor
+    INERT-VED-KONSTRUKSJON for alt som har gaatt gjennom
+    :func:`render_review_diff` -- reviewer beviste det med 4008 fuzz-input og null
+    treff. Den finnes for ÉN ting: en framtidig produsent som setter
+    ``evidence["diff"]`` UTEN aa gaa gjennom rendereren. Da er dette den eneste
+    kontrollen mellom filinnholdet og api.anthropic.com.
+    """
+    text = str(text or "")
+    hits = [shape.pattern for shape in _CREDENTIAL_SHAPES if shape.search(text)]
+    if _LITERAL_SECRET.search(text):
+        hits.append(_LITERAL_SECRET.pattern)
+    if _AUTH_SCHEME.search(text):
+        hits.append(_AUTH_SCHEME.pattern)
+    return tuple(hits)
 
 
 def _redact(text: str) -> str:
@@ -962,6 +1083,11 @@ class FaberImplementer:
             "design_ref": str(self.design_store.path_for(self.goal_id)),
             "blast_radius_source": "measured:pre-image-diff",
             "written_files": "",
+            # BL-4055 F1: det steg 10b vurderer. Settes HER, sammen med `diff_id`,
+            # fra samme pre/post — se `render_review_diff` for hvorfor kilden maa
+            # vaere den samme og hvorfor teksten redigeres foer den forlater
+            # prosessen.
+            "diff": render_review_diff(pre, files),
         }
         mismatch = _claim_mismatch(patch.model_claimed, radius)
         if mismatch:
@@ -1033,15 +1159,100 @@ class FaberImplementer:
         ticks steg 4 (``git_clean``) feiler paa vaart eget rot.
         """
         payload = dict(evidence)
+        # BL-4055 F5. ``diff`` tas UT av den serialiserte skanningen og sjekkes paa
+        # innholdet sitt i stedet. Grunnen er maalt, ikke prinsipiell:
+        # ``assert_safe_payload`` avslutter med ``assert_safe(json.dumps(payload))``,
+        # og JSON-escaping FORANDRER teksten. ``model_api_key = ""`` matcher ikke
+        # raatt -- en tom streng er ingen hemmelighet -- men serialisert blir den
+        # ``model_api_key = \"\"``, og da leverer escape-tegnet den ikke-tomme
+        # verdien moensteret krevde. Reviewer maalte 12 ekte filer som blokkerte
+        # buildet paa den veien, med tilbakerulling og feil ``gate``.
+        #
+        # Aa skanne representasjonen i stedet for innholdet er en kategorifeil naar
+        # feltet ER innhold. Formene sjekkes derfor direkte, som ``vet`` gjoer.
+        reviewed_diff = payload.pop("diff", None)
         try:
             SecretPolicy.assert_safe_payload(payload)
+            shapes = _file_content_violations(reviewed_diff)
+            if shapes:
+                raise PermissionError(
+                    "reviewed diff carries credential-shaped material: "
+                    + ", ".join(shapes))
         except PermissionError as exc:
             self.rollback()
             raise ImplementationBlocked(
                 f"step 8 evidence carries credential-like material: {exc}",
                 gate="security",
             ) from exc
+        if reviewed_diff is not None:
+            payload["diff"] = reviewed_diff
         return payload
+
+
+def render_review_diff(pre: Mapping[str, str | None], post: Mapping[str, str]) -> str:
+    """Unified diff av det som skal skrives — det steg 10b faktisk vurderer.
+
+    BL-4055 F1. Uten denne satte ingen produksjonssti ``evidence["diff"]``, og
+    andre-meningen ble en VEGG: hver utloest endring blokkerte paa
+    ``second_opinion_input`` uansett hva den inneholdt. En gate som alltid sier
+    nei maaler ingenting — den er bare dyrere enn aa ikke ha den.
+
+    Bygget fra SAMME ``pre``/``post`` som :func:`measure_blast_radius` og
+    :func:`diff_id_for`. Det er ikke tilfeldig: reviewer sammenligner sin
+    ``diff_id`` mot buildens, og hvis teksten hadde kommet fra en annen kilde
+    (``git diff`` mot arbeidstreet, f.eks.) kunne id-en matche mens teksten viste
+    noe annet — og da beviser sammenligningen ingenting.
+
+    **REDIGERT FOER DEN FORLATER PROSESSEN.** Dette er en NY EGRESS: filinnhold
+    gaar til api.anthropic.com. To ting foelger:
+
+    * :func:`_redact_file_content` kjoeres paa hele diffen -- bare de fem
+      leverandoer-FORMENE, samme sett som :meth:`vet`. IKKE full ``SecretPolicy``:
+      noekkelord-moenstrene hoerer ikke hjemme paa filinnhold, og foerste versjon av
+      denne funksjonen brukte dem likevel. Reviewer maalte konsekvensen paa 558
+      ekte filer: 146 fikk ``(redacted)`` i legitim kode, og 12 BLOKKERTE buildet.
+    * :meth:`FaberImplementer._safe_evidence` sjekker feltet paa INNHOLDET, ikke paa
+      JSON-representasjonen av det -- se der for hvorfor det skillet er
+      loefteboerende.
+
+    **DET ER ETT FILTER, IKKE TO.** Foerste utkast skrev «en ekte noekkel som
+    slipper forbi BEGGE», men bakstoppen bruker samme moenstersett som
+    redigeringen her, saa den kan per konstruksjon ikke fyre paa noe som har gaatt
+    gjennom denne funksjonen (reviewer beviste det: 4008 fuzz-input, null treff).
+    Bakstoppen er verdt aa beholde for ÉN ting -- en framtidig produsent som setter
+    ``evidence["diff"]`` uten aa gaa via rendereren -- men den er ikke et andre lag
+    med deteksjon, og skal ikke omtales som det.
+
+    **HVA SOM FORTSATT SLIPPER UT.** FORMENE + literal-regelen daekker ikke alt.
+    Et kreditiv uten gjenkjennelig form som staar i en UKANTERT variabel, eller
+    som konstrueres i kode, gaar ut. Se ADR-ens Beslutning 6 for den maalte
+    listen og for hvorfor byttehandelen likevel er riktig.
+
+    **IKKE AVKORTET, med vilje.** Er diffen stoerre enn klientens grense, blokkerer
+    klienten med den begrunnelsen. Aa sende en avkortet diff ville gitt en vurderer
+    som ikke KAN se hele endringen — og en PASS derfra betyr ikke det den ser ut
+    til aa bety. Det er noeyaktig argumentet steg 8 er bygget paa.
+    """
+    chunks: list[str] = []
+    for path in sorted(post):
+        new_content = post[path]
+        old_content = pre.get(path)
+        base = "" if old_content is None else old_content
+        if base == new_content:
+            continue
+        chunks.extend(difflib.unified_diff(
+            base.splitlines(keepends=True),
+            new_content.splitlines(keepends=True),
+            fromfile=f"a/{path}" if old_content is not None else "/dev/null",
+            tofile=f"b/{path}",
+            # Mer enn difflibs tre linjer. Vurdereren blir bedt om aa finne «en
+            # kontroll som ikke kan fyre» og «en sjekk som passerer tomt» -- det er
+            # ikke noe man ser av tre linjer kontekst. Pre-imagene ligger alt i
+            # minnet, saa dette koster ingenting lokalt og bare tokens ved kallet,
+            # og ScopeBudget holder allerede stoerrelsen nede.
+            n=10,
+        ))
+    return _redact_file_content("".join(chunks))
 
 
 def diff_id_for(files: Mapping[str, str]) -> str:

@@ -16,6 +16,21 @@ from agent.code_workflow import (
     ReviewEvidence,
     ReviewVerdict,
 )
+
+
+def _concurring_second_opinion(change, **_):
+    """BL-4055: en UAVHENGIG vurderer som er enig.
+
+    Injiseres fordi disse testene handler om OWNER-GATEN, ikke om andre-meningen.
+    Uten injeksjon gaar kallet til den ekte klienten, som uten noekkelfil gir
+    UNAVAILABLE -> BLOCK. Riktig oppfoersel; bare ikke det disse testene maaler.
+    """
+    from agent.second_opinion import SecondOpinionOutcome, SecondOpinionStatus
+
+    return SecondOpinionOutcome(
+        status=SecondOpinionStatus.CONCUR, reason="independently checked",
+        provenance="anthropic.api", model="claude-opus-5", confidence=0.9)
+
 from agent.flyby_promote import (
     PromotionBlocked,
     build_goal,
@@ -171,11 +186,11 @@ def test_the_promoters_own_unknowns_no_longer_block_at_step_4():
 def test_owner_gated_goal_cannot_advance_even_on_a_passing_preflight():
     """The morten gate must be enforced by the runner, not just recorded."""
     goal = build_goal(packet(gate="morten"), promoted_by="x", promoted_at="t")
-    result = GovernedCodeRunner().run(
+    result = GovernedCodeRunner(second_opinion=_concurring_second_opinion).run(
         goal,
         preflight=passing_preflight(),
         build=lambda: pytest.fail("build must be unreachable behind an owner gate"),
-        review=lambda evidence: ReviewEvidence(ReviewVerdict.PASS, "d", "sol"),
+        review=lambda evidence: ReviewEvidence(ReviewVerdict.PASS, "d", "sol", confidence=0.95),
         landing=lambda evidence: pytest.fail("landing must be unreachable"),
     )
     assert result.goal.state is GoalState.BLOCKED
@@ -190,11 +205,11 @@ def test_recorded_owner_approval_releases_the_gate():
         promoted_at="t",
     )
     approved = FaberGoal(**{**goal.__dict__, "evidence": {**goal.evidence, "owner_approval": "morten:2026-08-04"}})
-    result = GovernedCodeRunner().run(
+    result = GovernedCodeRunner(second_opinion=_concurring_second_opinion).run(
         approved,
         preflight=passing_preflight(),
-        build=lambda: {"tests": "pass", "diff_id": "d", "changed_files": 1, "changed_lines": 4},
-        review=lambda evidence: ReviewEvidence(ReviewVerdict.PASS, "d", "sol"),
+        build=lambda: {"tests": "pass", "diff_id": "d", "diff": "--- a\n+++ b\n+x", "changed_files": 1, "changed_lines": 4},
+        review=lambda evidence: ReviewEvidence(ReviewVerdict.PASS, "d", "sol", confidence=0.95),
         prelanding_evidence=LandingEvidence("sha", ReviewVerdict.PASS, "t", "r", "s", "rb", "l", "st", "c",
                                        landing_set=("agent/example.py",)),
         landing=lambda evidence: LandingEvidence("sha", ReviewVerdict.PASS, "t", "r", "s", "rb", "l", "st", "c",
@@ -204,11 +219,11 @@ def test_recorded_owner_approval_releases_the_gate():
 
 
 def test_reviewer_gated_goal_is_not_caught_by_the_owner_gate():
-    result = GovernedCodeRunner().run(
+    result = GovernedCodeRunner(second_opinion=_concurring_second_opinion).run(
         build_goal(packet(cad_ref="CAD-M", adr_ref="ADR-038"), promoted_by="x", promoted_at="t"),
         preflight=passing_preflight(),
-        build=lambda: {"tests": "pass", "diff_id": "d", "changed_files": 1, "changed_lines": 4},
-        review=lambda evidence: ReviewEvidence(ReviewVerdict.PASS, "d", "sol"),
+        build=lambda: {"tests": "pass", "diff_id": "d", "diff": "--- a\n+++ b\n+x", "changed_files": 1, "changed_lines": 4},
+        review=lambda evidence: ReviewEvidence(ReviewVerdict.PASS, "d", "sol", confidence=0.95),
         prelanding_evidence=LandingEvidence("sha", ReviewVerdict.PASS, "t", "r", "s", "rb", "l", "st", "c",
                                        landing_set=("agent/example.py",)),
         landing=lambda evidence: LandingEvidence("sha", ReviewVerdict.PASS, "t", "r", "s", "rb", "l", "st", "c",
@@ -218,11 +233,11 @@ def test_reviewer_gated_goal_is_not_caught_by_the_owner_gate():
 
 
 def test_goals_without_a_gate_field_are_unaffected():
-    result = GovernedCodeRunner().run(
+    result = GovernedCodeRunner(second_opinion=_concurring_second_opinion).run(
         FaberGoal("legacy", "pre-existing goal", cad_ref="CAD-M", adr_ref="ADR-038", bl_ref="BL-1"),
         preflight=passing_preflight(),
-        build=lambda: {"tests": "pass", "diff_id": "d", "changed_files": 1, "changed_lines": 4},
-        review=lambda evidence: ReviewEvidence(ReviewVerdict.PASS, "d", "sol"),
+        build=lambda: {"tests": "pass", "diff_id": "d", "diff": "--- a\n+++ b\n+x", "changed_files": 1, "changed_lines": 4},
+        review=lambda evidence: ReviewEvidence(ReviewVerdict.PASS, "d", "sol", confidence=0.95),
         prelanding_evidence=LandingEvidence("sha", ReviewVerdict.PASS, "t", "r", "s", "rb", "l", "st", "c",
                                        landing_set=("agent/example.py",)),
         landing=lambda evidence: LandingEvidence("sha", ReviewVerdict.PASS, "t", "r", "s", "rb", "l", "st", "c",
@@ -291,11 +306,11 @@ def test_a_promoted_goal_is_dequeued_and_blocks_for_the_right_reason(tmp_path):
     promote([packet()], registry, promoted_by="x")
     queued = registry.next_operational_goal()
     assert queued.goal_id == "faber.code.flyby:example"
-    result = GovernedCodeRunner().run(
+    result = GovernedCodeRunner(second_opinion=_concurring_second_opinion).run(
         queued,
         preflight=passing_preflight(),
         build=lambda: pytest.fail("build must be unreachable without CAD/ADR"),
-        review=lambda evidence: ReviewEvidence(ReviewVerdict.PASS, "d", "sol"),
+        review=lambda evidence: ReviewEvidence(ReviewVerdict.PASS, "d", "sol", confidence=0.95),
         landing=lambda evidence: pytest.fail("landing must be unreachable"),
     )
     assert "invalid goal transition" not in result.blocker
@@ -351,11 +366,11 @@ def test_a_goal_advanced_by_another_writer_is_not_reset_by_a_stale_promoter(tmp_
 def test_an_autonomt_gate_is_not_mistaken_for_an_owner_gate():
     """autonomt|reviewer|morten is the Flyby intake vocabulary; autonomt means
     no owner decision is needed, so it must not dead-end the runner."""
-    result = GovernedCodeRunner().run(
+    result = GovernedCodeRunner(second_opinion=_concurring_second_opinion).run(
         build_goal(packet(gate="autonomt", cad_ref="CAD-M", adr_ref="ADR-038"), promoted_by="x", promoted_at="t"),
         preflight=passing_preflight(),
-        build=lambda: {"tests": "pass", "diff_id": "d", "changed_files": 1, "changed_lines": 4},
-        review=lambda evidence: ReviewEvidence(ReviewVerdict.PASS, "d", "sol"),
+        build=lambda: {"tests": "pass", "diff_id": "d", "diff": "--- a\n+++ b\n+x", "changed_files": 1, "changed_lines": 4},
+        review=lambda evidence: ReviewEvidence(ReviewVerdict.PASS, "d", "sol", confidence=0.95),
         prelanding_evidence=LandingEvidence("sha", ReviewVerdict.PASS, "t", "r", "s", "rb", "l", "st", "c",
                                        landing_set=("agent/example.py",)),
         landing=lambda evidence: LandingEvidence("sha", ReviewVerdict.PASS, "t", "r", "s", "rb", "l", "st", "c",
@@ -365,11 +380,11 @@ def test_an_autonomt_gate_is_not_mistaken_for_an_owner_gate():
 
 
 def test_an_unrecognised_gate_value_still_fails_closed():
-    result = GovernedCodeRunner().run(
+    result = GovernedCodeRunner(second_opinion=_concurring_second_opinion).run(
         build_goal(packet(gate="whatever", cad_ref="CAD-M", adr_ref="ADR-038"), promoted_by="x", promoted_at="t"),
         preflight=passing_preflight(),
         build=lambda: pytest.fail("build must be unreachable behind an unknown gate"),
-        review=lambda evidence: ReviewEvidence(ReviewVerdict.PASS, "d", "sol"),
+        review=lambda evidence: ReviewEvidence(ReviewVerdict.PASS, "d", "sol", confidence=0.95),
         landing=lambda evidence: pytest.fail("landing must be unreachable"),
     )
     assert result.goal.state is GoalState.BLOCKED
@@ -420,11 +435,11 @@ def test_every_morten_gated_workstream_is_held_by_the_owner_gate(tmp_path):
         if pkt["gate"] != "morten":
             continue
         goal = build_goal(pkt, promoted_by=promoted_by, promoted_at="t")
-        result = GovernedCodeRunner().run(
+        result = GovernedCodeRunner(second_opinion=_concurring_second_opinion).run(
             goal,
             preflight=passing_preflight(),
             build=lambda: pytest.fail(f"{goal.goal_id} reached build behind a morten gate"),
-            review=lambda evidence: ReviewEvidence(ReviewVerdict.PASS, "d", "sol"),
+            review=lambda evidence: ReviewEvidence(ReviewVerdict.PASS, "d", "sol", confidence=0.95),
             landing=lambda evidence: pytest.fail("landing reached"),
         )
         assert result.goal.state is GoalState.BLOCKED

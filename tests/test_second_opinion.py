@@ -372,7 +372,10 @@ def test_route_reports_unavailable_as_block_not_pass(tmp_path, monkeypatch):
     assert out["triggered"] is True
     assert out["status"] == "UNAVAILABLE"
     assert out["allow"] is False
-    assert out["gate"] == "second_opinion_unavailable"
+    # Undergaten OVERLEVER. Foer kollapset alle UNAVAILABLE-aarsakene til én
+    # verdi, og da var «vi fikk ikke svar» og «vi sendte aldri noe» det samme i
+    # journalen -- selv om de krever helt ulike inngrep.
+    assert out["gate"] == "second_opinion_credential"
 
 
 def test_force_bypasses_the_trigger_but_not_fail_closed(tmp_path, monkeypatch):
@@ -560,3 +563,53 @@ def test_client_is_pinned_to_anthropic_regardless_of_env(tmp_path, monkeypatch):
         "client was built without an explicit base_url — the SDK would then read "
         "ANTHROPIC_BASE_URL itself, and the environment would decide who the "
         "'independent reviewer' is")
+
+
+def test_every_gate_the_module_can_emit_has_its_own_next_step():
+    """Tabellen maa daekke ALT som faktisk sendes ut, ikke bare det jeg husket.
+
+    Gatene hoestes fra KILDEN, ikke fra en haandskrevet liste: en liste her ville
+    raatnet i det noen la til en ny `gate=`-verdi, og da ville den nye gaten falt
+    stille tilbake paa default-teksten. Det er den stille varianten av defekten
+    hele denne BL-en handler om -- handlingen finnes, men den som skal utfoere den
+    faar en generisk setning i stedet.
+    """
+    import re as _re
+    from pathlib import Path
+
+    from agent import second_opinion as so_mod
+    from agent.second_opinion import _NEXT_STEP, _NEXT_STEP_DEFAULT, next_step_for
+
+    # Alle TRE modulene som kan sende ut en gate. `code_workflow` gjoer det i
+    # `_consult_second_opinion` (``second_opinion_runtime``); uten den her laa én
+    # av de tre utenfor vaktens rekkevidde.
+    from agent import code_workflow as cw_mod
+
+    sources = [Path(so_mod.__file__).read_text(encoding="utf-8"),
+               Path(soc.__file__).read_text(encoding="utf-8"),
+               Path(cw_mod.__file__).read_text(encoding="utf-8")]
+    emitted = set()
+    for src in sources:
+        emitted |= set(_re.findall(r'gate=["\'](second_opinion[a-z_]*)["\']', src))
+
+    assert emitted, "harvest found no gates — the guard would pass vacuously"
+
+    # `second_opinion` (allow-stien) og `second_opinion_unavailable` (fabrikkens
+    # default) trenger ingen egen handling: den foerste blokkerer ikke, den andre
+    # er nettopp «ukjent aarsak», som default-teksten beskriver riktig.
+    generic = {"second_opinion", "second_opinion_unavailable"}
+    missing = sorted(g for g in emitted - generic if g not in _NEXT_STEP)
+    assert not missing, (
+        f"these gates fall through to the generic next_step: {missing} — "
+        "add one action each to _NEXT_STEP")
+
+    for gate in _NEXT_STEP:
+        assert next_step_for(gate) != _NEXT_STEP_DEFAULT
+        assert next_step_for(gate).strip()
+
+
+def test_an_unknown_gate_still_gets_an_actionable_default():
+    """Default er ikke tom. En tom next_step ser ut som «ingen handling kreves»."""
+    from agent.second_opinion import next_step_for
+
+    assert next_step_for("second_opinion_something_new").strip()

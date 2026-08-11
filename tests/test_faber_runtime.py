@@ -4,6 +4,7 @@ from pathlib import Path
 
 from agent.code_workflow import (
     FaberGoal,
+    GovernedCodeRunner,
     LandingEvidence,
     PreflightInput,
     ReviewVerdict,
@@ -102,14 +103,34 @@ def test_runtime_reaches_runner_only_after_preflight_pass():
     assert result.run.handoff.required_gate == "reviewer"
 
 
+
+
+def _concurring_second_opinion(change, **_):
+    """BL-4055: en UAVHENGIG vurderer som er enig.
+
+    Injiseres eksplisitt fordi disse testene handler om LANDINGS-mekanikken, ikke
+    om andre-meningen. Uten injeksjon gaar kallet til den ekte klienten -- som
+    uten noekkelfil gir UNAVAILABLE, altsaa BLOCK. Det er riktig oppfoersel; her
+    vil vi bare ikke teste den om igjen.
+    """
+    from agent.second_opinion import SecondOpinionOutcome, SecondOpinionStatus
+
+    return SecondOpinionOutcome(
+        status=SecondOpinionStatus.CONCUR, reason="independently checked",
+        provenance="anthropic.api", model="claude-opus-5", confidence=0.9)
+
 def test_faber_runtime_reaches_landed_with_prevalidated_dod():
     evidence_record = evidence()
     landing_record = landing()
-    result = FaberRuntime().tick(
+    result = FaberRuntime(
+        runner=GovernedCodeRunner(second_opinion=_concurring_second_opinion),
+    ).tick(
         FaberGoal("g3", "runtime landing", cad_ref="CAD-M", adr_ref="ADR-038", bl_ref="BL-3254"),
         evidence_record,
-        build=lambda: {"tests": "pass", "diff_id": "diff-g3", "changed_files": 1, "changed_lines": 12},
-        review=lambda _: ReviewEvidence(ReviewVerdict.PASS, "diff-g3", "sol"),
+        build=lambda: {"tests": "pass", "diff_id": "diff-g3", "changed_files": 1,
+                       "changed_lines": 12, "diff": "--- a\n+++ b\n+x"},
+        review=lambda _: ReviewEvidence(ReviewVerdict.PASS, "diff-g3", "sol",
+                                        confidence=0.95),
         prelanding_evidence=landing_record,
         landing=lambda _: landing_record,
         postcommit=lambda _: PostcommitResult(True, landing_record),

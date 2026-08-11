@@ -253,6 +253,52 @@ class SecondOpinionTrigger:
         return TriggerDecision(required=bool(reasons), reasons=tuple(reasons))
 
 
+#: ÉN handling per gate. Ordboka finnes fordi den som VET hvorfor det stoppet er
+#: politikken, ikke runneren -- runneren saa bare «ikke tillatt». Et next_step som
+#: lister to alternativer der bare ett gjelder, er ikke handlingsanvisende for en
+#: autonom loop; den proever i blinde.
+_NEXT_STEP: Mapping[str, str] = {
+    "second_opinion_dissent":
+        "address the finding the independent reviewer named, or split the change",
+    "second_opinion_escalate":
+        "obtain the owner's decision and record it as evidence['owner_approval']",
+    "second_opinion_cannot_upgrade":
+        "address the first reviewer's block; a second opinion cannot overturn it",
+    "second_opinion_credential":
+        "install the API key at the configured path, mode 0600, owned by the "
+        "running uid — see the blocker for which of the three failed",
+    "second_opinion_transport":
+        "the independent reviewer was unreachable; retry, or check API availability",
+    "second_opinion_parse":
+        "the reviewer returned no usable verdict; retry the review",
+    "second_opinion_input":
+        "supply the diff in build evidence so the reviewer can see the change",
+    "second_opinion_refusal":
+        "the reviewer declined to review this change; take it to the owner",
+    "second_opinion_independence":
+        "point the second opinion at Claude Opus via the Anthropic API",
+    "second_opinion_runtime":
+        "restore the second opinion client",
+    # Fabrikkens default og `resolve_disagreement`s egen fallback. Reviewer fant
+    # den: den var IKKE i tabellen, saa den falt stille tilbake paa den generiske
+    # teksten -- en ordbok med manglende oppslag svarer ikke «mangler», den svarer
+    # default. Det er «definert uten kallested» ett hakk lenger ut.
+    "second_opinion_unavailable":
+        "the independent reviewer returned nothing usable; read the blocker for "
+        "which stage failed, then re-run the review",
+}
+
+#: Fallback naar en gate ikke staar i tabellen. Bevisst ikke en tom streng: et
+#: manglende next_step ville sett ut som «ingen handling kreves».
+_NEXT_STEP_DEFAULT = ("inspect the recorded second opinion and the blocker, then "
+                      "re-run the review")
+
+
+def next_step_for(gate: str) -> str:
+    """Handlingen som faktisk klarerer *gate*."""
+    return _NEXT_STEP.get(gate, _NEXT_STEP_DEFAULT)
+
+
 @dataclass(frozen=True)
 class Resolution:
     """Hva kjeden gjoer med de to stemmene."""
@@ -260,6 +306,8 @@ class Resolution:
     allow: bool
     gate: str
     reason: str
+    #: Utledet av `gate`, ikke skrevet av kalleren -- se `_NEXT_STEP`.
+    next_step: str = ""
     escalate_to_owner: bool = False
     #: Begge stemmer, alltid -- ogsaa naar de er enige.
     votes: Mapping[str, str] = field(default_factory=dict)
@@ -283,9 +331,16 @@ def resolve_disagreement(*, change: ChangeUnderReview,
     }
 
     if opinion.status is SecondOpinionStatus.UNAVAILABLE:
+        # `opinion.gate` BEVARES. Foer kollapset alle undergatene
+        # (_credential/_transport/_parse/_input/_refusal/_independence/_runtime)
+        # til én verdi, og da var «vi fikk ikke svar» og «vi sendte aldri noe» det
+        # samme i journalen -- selv om de krever helt ulike inngrep. Begrunnelsen
+        # overlevde; ruten gjorde det ikke, og det er ruten en autonom loop leser.
+        gate = opinion.gate or "second_opinion_unavailable"
         return Resolution(
             allow=False,
-            gate="second_opinion_unavailable",
+            gate=gate,
+            next_step=next_step_for(gate),
             reason=("second opinion produced no usable verdict "
                     f"({opinion.reason or 'no reason given'}) — absence of an answer "
                     "is not a passed review"),
@@ -296,6 +351,7 @@ def resolve_disagreement(*, change: ChangeUnderReview,
         return Resolution(
             allow=False,
             gate="second_opinion_escalate",
+            next_step=next_step_for("second_opinion_escalate"),
             reason=("second opinion declined to decide and escalated to the owner: "
                     + (opinion.reason or "no reason given")),
             escalate_to_owner=True,
@@ -306,6 +362,7 @@ def resolve_disagreement(*, change: ChangeUnderReview,
         return Resolution(
             allow=False,
             gate="second_opinion_dissent",
+            next_step=next_step_for("second_opinion_dissent"),
             reason=("independent second opinion dissents from the reviewer PASS: "
                     + (opinion.reason or "no reason given")),
             votes=votes,
@@ -322,6 +379,7 @@ def resolve_disagreement(*, change: ChangeUnderReview,
         return Resolution(
             allow=False,
             gate="second_opinion_independence",
+            next_step=next_step_for("second_opinion_independence"),
             reason=independence,
             votes=votes,
         )
@@ -331,6 +389,7 @@ def resolve_disagreement(*, change: ChangeUnderReview,
         return Resolution(
             allow=False,
             gate="second_opinion_cannot_upgrade",
+            next_step=next_step_for("second_opinion_cannot_upgrade"),
             reason=(f"reviewer verdict is {change.verdict}; a second opinion can veto "
                     "a PASS but never overturn a BLOCK"),
             votes=votes,
