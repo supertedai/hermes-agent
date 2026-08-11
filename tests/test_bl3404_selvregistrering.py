@@ -188,4 +188,5 @@ ok(us.add_pending(username="gammel.sok", password="ny-passord-123", totp_secret=
    "og navnet er fritt for en ny soknad")
 
 print("\n" + ("ALLE PASSERTE" if not FAIL else "FEIL: " + "; ".join(FAIL)))
-sys.exit(1 if FAIL else 0)
+if FAIL:
+    raise AssertionError("; ".join(FAIL))
