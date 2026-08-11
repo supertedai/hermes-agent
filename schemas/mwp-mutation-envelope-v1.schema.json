@@ -1,0 +1,44 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "mwp://schemas/mutation-envelope-v1",
+  "title": "MWP Strict Canonical Mutation Envelope v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "mutation_id", "idempotency_key", "operation", "canonical_key",
+    "principal_id", "tenant_id", "installation_id", "device_id",
+    "login_surface_id", "session_id", "system_scope", "auth_context_ref",
+    "canonical_authority_ref", "source_surface", "provenance_ref", "occurred_at"
+  ],
+  "properties": {
+    "mutation_id": {"type": "string", "minLength": 1},
+    "idempotency_key": {"type": "string", "minLength": 1},
+    "operation": {"enum": ["create", "read", "update", "delete"]},
+    "canonical_key": {"type": "string", "minLength": 1},
+    "principal_id": {"type": "string", "minLength": 1},
+    "tenant_id": {"type": "string", "minLength": 1},
+    "installation_id": {"type": "string", "minLength": 1},
+    "device_id": {"type": "string", "minLength": 1},
+    "login_surface_id": {"type": "string", "minLength": 1},
+    "session_id": {"type": "string", "minLength": 1},
+    "system_scope": {"type": "string", "minLength": 1},
+    "auth_context_ref": {"type": "string", "minLength": 1},
+    "canonical_authority_ref": {"type": "string", "minLength": 1},
+    "source_surface": {"type": "string", "minLength": 1},
+    "provenance_ref": {"type": "string", "minLength": 1},
+    "occurred_at": {"type": "string", "format": "date-time"},
+    "expected_version": {"type": ["integer", "null"], "minimum": 0},
+    "content_hash": {"type": "string"},
+    "rollback_ref": {"type": "string"}
+  },
+  "allOf": [
+    {
+      "if": {"properties": {"operation": {"const": "update"}}},
+      "then": {"required": ["expected_version"]}
+    },
+    {
+      "if": {"properties": {"operation": {"const": "delete"}}},
+      "then": {"required": ["expected_version", "rollback_ref"]}
+    }
+  ]
+}
