@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import os
 import pytest
 from pathlib import Path
 
@@ -12,6 +13,7 @@ from agent.continuous_pipeline import (
     CostAwareModelRouter,
     ContinuousPipeline,
     FileMemoryProvider,
+    GoalProposal,
     JsonStateStore,
     LoopOutcome,
     MemorySnapshot,
@@ -28,6 +30,7 @@ from agent.continuous_pipeline import (
     estimate_memory_tokens,
     trim_memory_to_budget,
     LearningMeasurement,
+    LearningMeasurementStore,
     ExecutionLedger,
     runtime_open,
 )
@@ -193,7 +196,7 @@ def test_pipeline_records_scheduler_selection():
 def test_model_router_avoids_llm_for_retrieval_and_resolves_quality_route_live():
     router = CostAwareModelRouter(resolver=lambda role: {
         "builder": "live-builder-id",
-        "designer_reviewer": "live-reviewer-id",
+        "reviewer": "live-reviewer-id",
     }[role])
     assert router.route("retrieve").model_ref is None
     review = router.route("review", complexity="high")
@@ -204,8 +207,24 @@ def test_model_router_avoids_llm_for_retrieval_and_resolves_quality_route_live()
     assert router.telemetry[-1].resolver_latency_ms >= 0
 
 
+def test_model_router_persists_measured_outcome_and_blocks_unknown_task(tmp_path):
+    router = CostAwareModelRouter(
+        resolver=lambda role: "live-" + role,
+        telemetry_path=tmp_path / "routing.json",
+    )
+    router.route("review")
+    router.record_outcome(task="review", actual_quality=0.97, execution_latency_ms=123.0, estimated_cost=0.42)
+    data = json.loads((tmp_path / "routing.json").read_text())
+    assert data[-1]["actual_quality"] == pytest.approx(0.97)
+    assert data[-1]["execution_latency_ms"] == pytest.approx(123.0)
+    assert data[-1]["estimated_cost"] == pytest.approx(0.42)
+    with pytest.raises(RuntimeError, match="no governed model route"):
+        router.route("unknown-task")
+
+
 def test_learning_measurement_requires_validation_for_improvement():
     unvalidated = LearningMeasurement("accuracy", 0.5, 0.7, 0.8, validated=False, skill_or_workflow="wf1")
+
     assert unvalidated.delta == pytest.approx(0.2)
     assert not unvalidated.improved
     assert unvalidated.to_event()["improved"] is False
@@ -215,11 +234,22 @@ def test_learning_measurement_requires_validation_for_improvement():
     assert validated.to_event()["delta"] == pytest.approx(0.2)
 
 
+def test_learning_measurement_store_requires_validation_for_claimed_improvement(tmp_path):
+    store = LearningMeasurementStore(tmp_path / "learning.json")
+    event = store.record(LearningMeasurement("accuracy", 0.5, 0.7, 0.95, validated=True, skill_or_workflow="wf1"))
+    assert event["improved"] is True
+    assert json.loads((tmp_path / "learning.json").read_text())[0]["validated"] is True
+    with pytest.raises(ValueError, match="skill_or_workflow"):
+        store.record(LearningMeasurement("accuracy", 0.5, 0.7, 0.95, validated=True))
+
+
+
+
 def test_pipeline_binds_live_model_router_to_tick_routing():
     adapter = Adapter(action=False)
     router = CostAwareModelRouter(resolver=lambda role: {
         "builder": "builder-live",
-        "designer_reviewer": "reviewer-live",
+        "reviewer": "reviewer-live",
     }[role])
     result = ContinuousPipeline(adapter, Memory(), router=router).tick()
     assert result.model_routing.builder == "builder-live"
@@ -227,8 +257,61 @@ def test_pipeline_binds_live_model_router_to_tick_routing():
     assert len(router.telemetry) == 2
 
 
+def test_model_router_exposes_sol_luna_120b_and_671b_roles():
+    router = CostAwareModelRouter(resolver=lambda role: {
+        "designer": "sol-live",
+        "reviewer": "sol-live",
+        "builder": "luna-live",
+        "builder_120b": "120b-live",
+        "builder_671b": "671b-live",
+    }[role])
+    assert router.route("design").model_ref == "sol-live"
+    assert router.route("review").model_ref == "sol-live"
+    assert router.route("build").model_ref == "luna-live"
+    assert router.route("build_120b").model_ref == "120b-live"
+    assert router.route("build_671b").model_ref == "671b-live"
+
+
+def test_default_role_resolver_reads_authoritative_hermes_config_and_env(monkeypatch):
+    for key in ("HERMES_LUNA_MODEL", "HERMES_BUILDER_MODEL", "HERMES_120B_MODEL", "HERMES_671B_MODEL"):
+        monkeypatch.delenv(key, raising=False)
+    # Tests deliberately run with an isolated HERMES_HOME. Seed the canonical
+    # config there instead of reaching through Path.home() into the operator's
+    # live profile.
+    hermes_home = Path(os.environ["HERMES_HOME"])
+    (hermes_home / "config.yaml").write_text(
+        "model:\n  default: gpt-5.6-luna\n  provider: openai-api\n",
+        encoding="utf-8",
+    )
+    from agent.continuous_pipeline import default_live_model_resolver
+    assert default_live_model_resolver("builder") == "gpt-5.6-luna"
+    # The isolated config has no 120B route; its resolver must not invent a
+    # hard-coded model ID. An explicitly configured route is accepted.
+    monkeypatch.setenv("HERMES_120B_MODEL", "gpt-oss-120b")
+    assert default_live_model_resolver("builder_120b") == "gpt-oss-120b"
+
+
+def test_goal_sink_emits_proposal_without_act():
+    class GoalAdapter(Adapter):
+        def propose_goals(self, observation, reasoning):
+            return [GoalProposal("TUI job", "measured", goal_id="g1", cad_ref="CAD-M", adr_ref="ADR-042", bl_ref="BL-3596", rollback="revert", job_spec={"schedule": "0 9 * * *"})]
+
+    emitted = []
+    result = ContinuousPipeline(
+        GoalAdapter(action=False, confidence=0.99),
+        Memory(),
+        require_live_router=False,
+        goal_sink=lambda goal: emitted.append(goal.goal_id) or {"status": "pending"},
+    ).tick()
+    assert emitted == ["g1"]
+    assert result.goals[0].trace_id == result.tick_id
+    assert result.proposal_results == ({"status": "pending"},)
+    assert result.outcome is LoopOutcome.OBSERVE
+
+
 def test_model_router_fails_closed_without_live_resolver_for_quality_route():
     with pytest.raises(RuntimeError, match="dynamic model resolver"):
+
         CostAwareModelRouter().route("review")
 
 
@@ -253,10 +336,12 @@ def test_memory_manager_bridge_preserves_existing_hook_lifecycle():
     bridge = MemoryManagerBridge(
         manager,
         MemoryScheduler((MemoryLayerSpec("episodic", "canonical", max_tokens=100),)),
+        source_scope="faber.codex",
     )
     result = bridge.before_turn("query", session_id="s1", budget_tokens=100)
     bridge.after_turn("u", "a", session_id="s1")
     assert result.context == "canonical-context"
+    assert result.source_scope == "faber.codex"
     assert result.selection.selected == ("episodic",)
     assert bridge.before_compress([]) == "preserve"
     bridge.session_end([])
@@ -298,8 +383,23 @@ def test_missing_selected_memory_blocks_act():
     assert not adapter.executed
 
 
+def test_memory_manager_bridge_strict_mode_blocks_aggregate_fallback():
+    class Manager:
+        def prefetch_all(self, query, *, session_id="", strict=False):
+            return "aggregate"
+
+    bridge = MemoryManagerBridge(
+        Manager(),
+        MemoryScheduler((MemoryLayerSpec("governance", "canonical", max_tokens=100),)),
+        strict=True,
+    )
+    with pytest.raises(RuntimeError, match="per-layer reader required"):
+        bridge.before_turn("q", phase="sense")
+
+
 def test_execution_ledger_is_crash_safe_and_idempotent(tmp_path):
     ledger = ExecutionLedger(tmp_path / "execution.json")
+
     assert ledger.claim("run-1")
     assert ledger.status("run-1") == "started"
     assert not ledger.claim("run-1")
@@ -344,3 +444,78 @@ def test_memory_manager_bridge_uses_per_layer_reader_when_available():
     result = bridge.before_turn("q", budget_tokens=20)
     assert result.selection.enforcement_mode == "per_layer_reader"
     assert estimate_memory_tokens(result.context) <= 20
+
+
+# ── BL-3643/ADR-044 D3: strict er kapabilitets-avledet, aldri en tur som dør ──────────
+# Rotårsak 2026-08-04: strict=True var begrunnet med fallback_rate=0.0 målt mot en TOM
+# MemoryManager (triviell suksess). Live sto Mortens opus-provider uten prefetch_layers,
+# og hver gateway-tur døde på raisen. Disse testene fryser begge halvdeler av fiksen.
+
+def _opus_shaped_provider():
+    """Samme form som ~/.hermes/plugins/opus: ingen prefetch_layers-override."""
+    from agent.memory_provider import MemoryProvider
+
+    class OpusShaped(MemoryProvider):
+        @property
+        def name(self):
+            return "opus-shaped"
+
+        def is_available(self):
+            return True
+
+        def initialize(self, session_id, **kwargs):
+            return None
+
+        def prefetch(self, query, *, session_id=""):
+            return ""
+
+        def get_tool_schemas(self):
+            return []
+
+    return OpusShaped()
+
+
+def test_supports_layer_reads_false_for_provider_without_override():
+    from agent.memory_manager import MemoryManager
+
+    mm = MemoryManager()
+    mm.add_provider(_opus_shaped_provider())
+    assert mm.supports_layer_reads() is False
+
+
+def test_supports_layer_reads_false_for_empty_manager():
+    from agent.memory_manager import MemoryManager
+
+    assert MemoryManager().supports_layer_reads() is False
+
+
+def test_supports_layer_reads_true_for_overriding_provider():
+    from agent.memory_manager import MemoryManager
+    from agent.symbiose_layer_provider import SymbioseLayerStatusProvider
+
+    mm = MemoryManager()
+    mm.add_provider(SymbioseLayerStatusProvider())
+    assert mm.supports_layer_reads() is True
+
+
+def test_empty_manager_prefetch_layers_is_capability_absence_not_success():
+    """Tom manager skal IKKE kunne minte fallback_rate=0.0 (den vakuøse målingen)."""
+    from agent.memory_manager import MemoryManager
+
+    assert MemoryManager().prefetch_layers(["episodisk"], "q") is None
+
+
+def test_capability_derived_strict_survives_the_turn_with_opus_shaped_provider():
+    """ADR-044 D3: med en provider uten per-lag-flate faller turen ærlig tilbake — den dør ikke."""
+    from agent.memory_manager import MemoryManager
+
+    mm = MemoryManager()
+    mm.add_provider(_opus_shaped_provider())
+    bridge = MemoryManagerBridge(
+        mm,
+        MemoryScheduler((MemoryLayerSpec("episodisk", "canonical", max_tokens=100),)),
+        strict=mm.supports_layer_reads(),
+    )
+    result = bridge.before_turn("hei", phase="sense")
+    assert result.selection.enforcement_mode == "aggregate_output_fallback"
+    assert bridge.aggregate_fallback_calls == 1

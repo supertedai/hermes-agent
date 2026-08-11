@@ -1731,6 +1731,26 @@ def init_agent(
             _ra().logger.warning("Memory provider plugin init failed: %s", _mpe)
             agent._memory_manager = None
 
+    # If no external provider is configured, expose the existing Symbiose
+    # layer-status reader through the canonical MemoryManager. This is
+    # read-only and does not create a second store or override a provider.
+    if agent._memory_manager is None and not skip_memory:
+        try:
+            from agent.memory_manager import MemoryManager as _MemoryManager
+            from agent.symbiose_layer_provider import SymbioseLayerStatusProvider
+            _symbiose_provider = SymbioseLayerStatusProvider()
+            if _symbiose_provider.is_available():
+                agent._memory_manager = _MemoryManager()
+                agent._memory_manager.add_provider(_symbiose_provider)
+                agent._memory_manager.initialize_all(
+                    session_id=agent.session_id,
+                    platform=platform or "cli",
+                    hermes_home=str(get_hermes_home()),
+                    agent_context="primary",
+                )
+        except Exception as _symbiose_provider_err:
+            _ra().logger.warning("Symbiose layer-status provider unavailable: %s", _symbiose_provider_err)
+
     from agent.memory_manager import inject_memory_provider_tools as _inject_memory_provider_tools
     _inject_memory_provider_tools(agent)
 
@@ -1753,6 +1773,17 @@ def init_agent(
             agent._memory_scheduler_bridge = MemoryManagerBridge(
                 agent._memory_manager,
                 MemoryScheduler(_canonical_specs, require_canonical=True),
+                # strict is CAPABILITY-DERIVED, not asserted. The old strict=True was
+                # justified by fallback_rate=0.0 measured against an EMPTY MemoryManager
+                # (faber_runtime --memory-measure-query) — vacuous evidence. With Mortens
+                # configured provider (memory.provider=opus, BL-3643) the manager has no
+                # per-layer surface, and strict raised on EVERY gateway turn: the exact
+                # class ADR-044 D3 forbids ("aldri en tur som dør") and the opus provider
+                # contract promises against (BL-2290). Capable stack => strict enforcement;
+                # incapable stack => honest, metered aggregate fallback (metrics below).
+                strict=agent._memory_manager.supports_layer_reads(),
+                metrics_path=os.path.expanduser("~/.hermes-gui/faber/memory-enforcement.json"),
+                source_scope="faber.codex",
             )
         except Exception as _scheduler_err:
             _ra().logger.error("Memory scheduler bridge unavailable; refusing ungated memory runtime: %s", _scheduler_err)

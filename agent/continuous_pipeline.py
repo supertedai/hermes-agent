@@ -14,6 +14,8 @@ import os
 import tempfile
 import threading
 import time
+import urllib.error
+import urllib.request
 import uuid
 from dataclasses import asdict, dataclass, field, replace
 from datetime import datetime, timezone
@@ -230,6 +232,7 @@ class MemoryScheduler:
 class MemoryHookResult:
     selection: MemorySelection
     context: str = ""
+    source_scope: str = "hermes.session"
 
 
 class MemoryManagerBridge:
@@ -240,9 +243,32 @@ class MemoryManagerBridge:
     authoritative until the canonical layer registry exposes per-layer reads.
     """
 
-    def __init__(self, manager: Any, scheduler: MemoryScheduler):
+    def __init__(self, manager: Any, scheduler: MemoryScheduler, *, strict: bool = False, metrics_path: str | os.PathLike[str] | None = None, source_scope: str = "hermes.session"):
         self.manager = manager
         self.scheduler = scheduler
+        self.strict = strict
+        self.metrics_path = Path(metrics_path).expanduser() if metrics_path else None
+        self.source_scope = source_scope
+        self.per_layer_calls = 0
+        self.aggregate_fallback_calls = 0
+
+    def _persist_metrics(self) -> None:
+        if self.metrics_path is None:
+            return
+        payload = {
+            "per_layer_calls": self.per_layer_calls,
+            "aggregate_fallback_calls": self.aggregate_fallback_calls,
+            "total_calls": self.per_layer_calls + self.aggregate_fallback_calls,
+            "fallback_rate": (
+                self.aggregate_fallback_calls / (self.per_layer_calls + self.aggregate_fallback_calls)
+                if self.per_layer_calls + self.aggregate_fallback_calls else 0.0
+            ),
+            "strict": self.strict,
+        }
+        self.metrics_path.parent.mkdir(parents=True, exist_ok=True)
+        tmp = self.metrics_path.with_suffix(self.metrics_path.suffix + ".tmp")
+        tmp.write_text(json.dumps(payload, indent=2) + "\n", encoding="utf-8")
+        tmp.replace(self.metrics_path)
 
     def before_turn(
         self,
@@ -275,16 +301,26 @@ class MemoryManagerBridge:
                 context = trim_memory_to_budget(context, budget_tokens)
                 actual_tokens = estimate_memory_tokens(context)
                 mode = "per_layer_reader"
+                self.per_layer_calls += 1
+                self._persist_metrics()
             else:
+                self.aggregate_fallback_calls += 1
+                self._persist_metrics()
+                if self.strict:
+                    raise RuntimeError("per-layer reader required for strict memory enforcement")
                 context = self.manager.prefetch_all(query, session_id=session_id, strict=True)
                 context = trim_memory_to_budget(context or "", budget_tokens)
                 actual_tokens = estimate_memory_tokens(context)
         else:
+            self.aggregate_fallback_calls += 1
+            self._persist_metrics()
+            if self.strict:
+                raise RuntimeError("per-layer reader required for strict memory enforcement")
             context = self.manager.prefetch_all(query, session_id=session_id, strict=True)
             context = trim_memory_to_budget(context or "", budget_tokens)
             actual_tokens = estimate_memory_tokens(context)
         selection = replace(selection, actual_tokens=actual_tokens, enforcement_mode=mode)
-        return MemoryHookResult(selection=selection, context=context)
+        return MemoryHookResult(selection=selection, context=context, source_scope=self.source_scope)
 
     def after_turn(
         self,
@@ -335,17 +371,110 @@ class RuntimeWake:
     action_allowed: bool = False
 
 
+def _configured_hermes_model(provider: str) -> str | None:
+    """Read a model reference from Hermes' canonical config loader.
+
+    Do not scan YAML as text here: a primary ``model.provider`` section is
+    commonly followed by ``fallback_providers`` and a bounded text window can
+    accidentally attribute a fallback model to the primary route.  This
+    resolver is used by governed pipeline routing, so primary and fallback
+    provider identity must remain distinct.
+    """
+    try:
+        from hermes_cli.config import load_config_readonly
+
+        config = load_config_readonly() or {}
+    except Exception:
+        return None
+
+    model_config = config.get("model") or {}
+    if not isinstance(model_config, dict):
+        model_config = {}
+    configured_provider = str(model_config.get("provider") or "").strip().lower()
+    default_model = str(model_config.get("default") or "").strip()
+    requested_provider = str(provider or "").strip().lower()
+
+    # ``custom`` is the historical role for the active/default model route;
+    # preserve that contract without treating a fallback entry as primary.
+    if requested_provider == "custom":
+        return default_model or None
+    if configured_provider == requested_provider:
+        return default_model or None
+
+    fallbacks = config.get("fallback_providers") or []
+    if isinstance(fallbacks, list):
+        for entry in fallbacks:
+            if not isinstance(entry, dict):
+                continue
+            entry_provider = str(entry.get("provider") or "").strip().lower()
+            if entry_provider == requested_provider:
+                fallback_model = str(entry.get("model") or "").strip()
+                return fallback_model or None
+    return None
+
+
+def default_live_model_resolver(role: str) -> str:
+    """Resolve governed role routes from live configuration; fail closed."""
+    env_by_role = {
+        "designer": ("HERMES_SOL_MODEL", "HERMES_DESIGNER_MODEL"),
+        "reviewer": ("HERMES_SOL_MODEL", "HERMES_REVIEWER_MODEL"),
+        "designer_reviewer": ("HERMES_SOL_MODEL", "HERMES_DESIGNER_REVIEWER_MODEL"),
+        "builder": ("HERMES_LUNA_MODEL", "HERMES_BUILDER_MODEL"),
+        "builder_120b": ("HERMES_120B_MODEL",),
+        "builder_671b": ("HERMES_671B_MODEL",),
+    }
+    if role not in env_by_role:
+        raise RuntimeError(f"unsupported live model role: {role}")
+    for key in env_by_role[role]:
+        model = os.environ.get(key, "").strip()
+        if model:
+            return model
+    if role == "builder":
+        model = _configured_hermes_model("openai-api")
+        if model:
+            return model
+    if role == "builder_120b":
+        model = _configured_hermes_model("custom")
+        if model:
+            return model
+    if role in {"designer", "reviewer", "designer_reviewer", "builder_671b"}:
+        base = os.environ.get("OPUS_REASONER_URL", "http://192.168.40.13:1234/v1").rstrip("/")
+        url = base.removesuffix("/v1") + "/api/v0/models"
+        try:
+            with urllib.request.urlopen(url, timeout=5) as response:
+                items = (json.load(response).get("data") or [])
+        except (OSError, urllib.error.URLError, json.JSONDecodeError) as exc:
+            raise RuntimeError(f"live Cortex/Sol resolver unavailable: {exc}") from exc
+        candidates = [
+            item for item in items
+            if isinstance(item, dict)
+            and item.get("id")
+            and "embed" not in str(item.get("id", "")).lower()
+            and "120b" not in str(item.get("id", "")).lower()
+            and "gpt-oss" not in str(item.get("arch", "")).lower()
+        ]
+        if len(candidates) != 1:
+            raise RuntimeError(f"live Cortex/Sol resolver expected one candidate, got {len(candidates)}")
+        capabilities = candidates[0].get("capabilities") or []
+        if "tool_use" not in capabilities:
+            raise RuntimeError("live Cortex/Sol candidate lacks tool_use")
+        return str(candidates[0]["id"])
+    raise RuntimeError(f"live model route is required for role '{role}'")
+
+
 @dataclass(frozen=True)
 class ModelRouting:
     """Role-to-substrate routing; IDs are configuration, never identity."""
 
-    designer_reviewer: str = "configured.designer_reviewer"
-    builder: str = "configured.builder"
+    designer_reviewer: str = "configured.sol"
+    designer: str = "configured.sol"
+    reviewer: str = "configured.sol"
+    builder: str = "configured.luna"
     builder_fallbacks: tuple[str, ...] = (
-        "configured.local_120b",
-        "configured.local_671b",
+        "configured.120b",
+        "configured.671b",
     )
-    landing_gate: str = "configured.landing_gate"
+    landing_gate: str = "configured.claude"
 
 
 @dataclass(frozen=True)
@@ -364,6 +493,9 @@ class ModelRouteTelemetry:
     quality_floor: float
     resolver_latency_ms: float
     resolved: bool
+    estimated_cost: float = 0.0
+    actual_quality: float | None = None
+    execution_latency_ms: float | None = None
 
 
 class CostAwareModelRouter:
@@ -378,9 +510,11 @@ class CostAwareModelRouter:
         routing: ModelRouting | None = None,
         *,
         resolver: Callable[[str], str] | None = None,
+        telemetry_path: str | os.PathLike[str] | None = None,
     ):
         self.routing = routing or ModelRouting()
         self.resolver = resolver
+        self.telemetry_path = Path(telemetry_path).expanduser() if telemetry_path else None
         self.telemetry: list[ModelRouteTelemetry] = []
 
     def _resolve(self, role: str) -> tuple[str, float]:
@@ -393,26 +527,69 @@ class CostAwareModelRouter:
             raise RuntimeError(f"dynamic model resolver returned no model for role '{role}'")
         return model_ref, latency_ms
 
+    def _persist_telemetry(self) -> None:
+        if self.telemetry_path is None:
+            return
+        self.telemetry_path.parent.mkdir(parents=True, exist_ok=True)
+        tmp = self.telemetry_path.with_suffix(self.telemetry_path.suffix + ".tmp")
+        tmp.write_text(json.dumps([asdict(item) for item in self.telemetry], indent=2) + "\n", encoding="utf-8")
+        tmp.replace(self.telemetry_path)
+
+    def record_outcome(
+        self,
+        *,
+        task: str,
+        actual_quality: float,
+        execution_latency_ms: float,
+        estimated_cost: float,
+    ) -> None:
+        """Attach measured task outcome to the latest matching route."""
+        if not 0.0 <= actual_quality <= 1.0:
+            raise ValueError("actual_quality must be between 0 and 1")
+        for index in range(len(self.telemetry) - 1, -1, -1):
+            item = self.telemetry[index]
+            if item.task == task:
+                self.telemetry[index] = replace(
+                    item,
+                    actual_quality=actual_quality,
+                    execution_latency_ms=execution_latency_ms,
+                    estimated_cost=estimated_cost,
+                )
+                self._persist_telemetry()
+                return
+        raise KeyError(f"no route telemetry exists for task '{task}'")
+
     def route(self, task: str, *, complexity: str = "normal") -> ModelRoute:
         if task in {"retrieve", "memory_select", "freshness", "verify"}:
             return ModelRoute(task, None, 0, 1.0, "deterministic/no LLM")
         if task in {"sense", "classify", "summarize"}:
             model_ref, latency_ms = self._resolve("builder")
-            route = ModelRoute(task, model_ref, 512, 0.80, "cheap configured route")
+            route = ModelRoute(task, model_ref, 512, 0.80, "Luna configured route")
             self.telemetry.append(ModelRouteTelemetry(task, model_ref, route.quality_floor, latency_ms, True))
+            self._persist_telemetry()
             return route
         if task in {"design", "review", "epistemic"}:
             budget = 4096 if complexity == "high" else 2048
-            model_ref, latency_ms = self._resolve("designer_reviewer")
-            route = ModelRoute(task, model_ref, budget, 0.95, "quality-critical live-resolved route")
+            role = "designer" if task == "design" else "reviewer"
+            model_ref, latency_ms = self._resolve(role)
+            route = ModelRoute(task, model_ref, budget, 0.95, "Sol quality-critical live-resolved route")
             self.telemetry.append(ModelRouteTelemetry(task, model_ref, route.quality_floor, latency_ms, True))
+            self._persist_telemetry()
             return route
         if task == "build":
             model_ref, latency_ms = self._resolve("builder")
-            route = ModelRoute(task, model_ref, 4096, 0.90, "builder live-resolved route")
+            route = ModelRoute(task, model_ref, 4096, 0.90, "Luna builder live-resolved route")
             self.telemetry.append(ModelRouteTelemetry(task, model_ref, route.quality_floor, latency_ms, True))
+            self._persist_telemetry()
             return route
-        return ModelRoute(task, self.routing.builder_fallbacks[0], 1024, 0.85, "safe default")
+        if task in {"build_120b", "build_671b"}:
+            role = "builder_120b" if task == "build_120b" else "builder_671b"
+            model_ref, latency_ms = self._resolve(role)
+            route = ModelRoute(task, model_ref, 8192, 0.95, f"{role} live-resolved heavy builder route")
+            self.telemetry.append(ModelRouteTelemetry(task, model_ref, route.quality_floor, latency_ms, True))
+            self._persist_telemetry()
+            return route
+        raise RuntimeError(f"no governed model route for task '{task}'")
 
 
 @dataclass(frozen=True)
@@ -443,6 +620,36 @@ class LearningMeasurement:
             "improved": self.improved,
             "skill_or_workflow": self.skill_or_workflow,
         }
+
+
+class LearningMeasurementStore:
+    """Durable before/after learning evidence; unvalidated gains never count."""
+
+    def __init__(self, path: str | os.PathLike[str]):
+        self.path = Path(path).expanduser()
+
+    def record(self, measurement: LearningMeasurement) -> dict[str, Any]:
+        if not measurement.metric.strip():
+            raise ValueError("learning metric is required")
+        if not 0.0 <= measurement.confidence <= 1.0:
+            raise ValueError("learning confidence must be between 0 and 1")
+        if measurement.validated and not measurement.skill_or_workflow.strip():
+            raise ValueError("validated learning requires skill_or_workflow")
+        event = measurement.to_event()
+        existing: list[dict[str, Any]] = []
+        if self.path.exists():
+            try:
+                existing = json.loads(self.path.read_text(encoding="utf-8"))
+                if not isinstance(existing, list):
+                    raise ValueError("learning store must contain a list")
+            except (OSError, json.JSONDecodeError, ValueError) as exc:
+                raise RuntimeError(f"learning store unreadable: {exc}") from exc
+        existing.append(event)
+        self.path.parent.mkdir(parents=True, exist_ok=True)
+        tmp = self.path.with_suffix(self.path.suffix + ".tmp")
+        tmp.write_text(json.dumps(existing, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+        tmp.replace(self.path)
+        return event
 
 
 @dataclass(frozen=True)
@@ -477,6 +684,14 @@ class GoalProposal:
     title: str
     rationale: str
     priority: int = 2
+    goal_id: str = ""
+    cad_ref: str = ""
+    adr_ref: str = ""
+    bl_ref: str = ""
+    risk: str = "low"
+    rollback: str = ""
+    job_spec: Mapping[str, Any] = field(default_factory=dict)
+    trace_id: str = ""
 
 
 @dataclass(frozen=True)
@@ -533,6 +748,7 @@ class TickResult:
     observation: Observation
     reasoning: Reasoning
     goals: tuple[GoalProposal, ...] = ()
+    proposal_results: tuple[Mapping[str, Any], ...] = ()
     action: ActionProposal | None = None
     action_result: Mapping[str, Any] | None = None
     learning_event: Mapping[str, Any] | None = None
@@ -718,6 +934,7 @@ class ContinuousPipeline:
         router: CostAwareModelRouter | None = None,
         execution_ledger: ExecutionLedger | None = None,
         require_live_router: bool = True,
+        goal_sink: Callable[[GoalProposal], Mapping[str, Any] | None] | None = None,
         approval: Callable[[ActionProposal], ApprovalDecision | bool] | None = None,
     ):
         self.adapter = adapter
@@ -728,9 +945,17 @@ class ContinuousPipeline:
         self.memory_token_budget = memory_token_budget
         self.memory_phase = memory_phase
         self.routing = routing or ModelRouting()
-        self.router = router
+        self.router = router or (
+            CostAwareModelRouter(
+                resolver=default_live_model_resolver,
+                telemetry_path=os.environ.get("HERMES_FABER_ROUTING_TELEMETRY", "~/.hermes-gui/faber/routing-telemetry.json"),
+            )
+            if require_live_router
+            else None
+        )
         self.execution_ledger = execution_ledger
         self.require_live_router = require_live_router
+        self.goal_sink = goal_sink
         self.approval = approval or (lambda action: False)
 
     def _resolve_runtime_routing(self) -> ModelRouting:
@@ -746,6 +971,8 @@ class ContinuousPipeline:
             self.routing,
             builder=builder,
             designer_reviewer=reviewer,
+            designer=reviewer,
+            reviewer=reviewer,
         )
         return self.routing
 
@@ -772,11 +999,17 @@ class ContinuousPipeline:
             )
         reasoning = self.adapter.reason(observation, self.routing)
         proposed_goals = (
-            tuple(self.adapter.propose_goals(observation, reasoning))
+            tuple(replace(goal, trace_id=tick_id) for goal in self.adapter.propose_goals(observation, reasoning))
             if not reasoning.needs_more_evidence and reasoning.confidence >= 0.95
             else ()
         )
         goals = proposed_goals
+        proposal_results: tuple[Mapping[str, Any], ...] = ()
+        if self.goal_sink is not None and goals:
+            try:
+                proposal_results = tuple(dict(self.goal_sink(goal) or {}) for goal in goals)
+            except Exception as exc:
+                raise RuntimeError(f"Faber goal proposal sink failed: {exc}") from exc
         action = self.adapter.propose_action(observation, reasoning)
 
         # Epistemic gate: uncertainty or low confidence never becomes ACT.
@@ -812,6 +1045,7 @@ class ContinuousPipeline:
             observation=observation,
             reasoning=reasoning,
             goals=goals,
+            proposal_results=proposal_results,
             action=action,
             action_result=action_result,
             model_routing=self.routing,

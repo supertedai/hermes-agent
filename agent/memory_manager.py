@@ -522,6 +522,26 @@ class MemoryManager:
         """
         return extract_user_instruction_from_skill_message(text)
 
+    def supports_layer_reads(self) -> bool:
+        """True only when every provider OVERRIDES prefetch_layers.
+
+        The base-class implementation returns None as a capability declaration
+        ("no per-layer surface"), so inheriting it does not count. This probe
+        exists so strict enforcement can be decided at init from what the
+        configured providers can actually do — not asserted and then refuted
+        turn by turn (ADR-044 D3: memory must never sink a turn).
+        """
+        if not self._providers:
+            return False
+        for provider in self._providers:
+            fn = getattr(provider, "prefetch_layers", None)
+            if not callable(fn):
+                return False
+            impl = getattr(type(provider), "prefetch_layers", None)
+            if impl is MemoryProvider.prefetch_layers:
+                return False
+        return True
+
     def prefetch_layers(
         self,
         layers: List[str],
@@ -536,7 +556,12 @@ class MemoryManager:
         merged: Dict[str, str] = {layer: "" for layer in layers}
         providers = list(self._providers)
         if not providers:
-            return {}
+            # No providers is ABSENCE of the per-layer surface, not a trivially
+            # successful read. Returning {} here let faber_runtime --memory-measure-query
+            # mint fallback_rate=0.0 against an empty manager — the vacuous evidence
+            # that justified strict=True while the live manager could not do per-layer
+            # reads at all (every gateway turn died on it, 2026-08-04).
+            return None
         for provider in providers:
             reader = getattr(provider, "prefetch_layers", None)
             if not callable(reader):
