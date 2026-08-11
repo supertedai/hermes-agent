@@ -14,6 +14,7 @@ def test_candidate_without_reviewer_is_owner_gate():
     assert isinstance(blockers, list)
     assert "canonical reviewer PASS missing" in blockers
     assert "rollback_ref missing" in blockers
+    assert result["rollback_ref"] == ""
 
 
 def test_candidate_with_all_receipts_is_review_ready_but_side_effect_free():
@@ -29,6 +30,7 @@ def test_candidate_with_all_receipts_is_review_ready_but_side_effect_free():
         "experiment_id": "",
         "status": "REVIEW_READY",
         "blockers": [],
+        "rollback_ref": "run:abc/train.py",
         "side_effects": "none",
     }
 
@@ -58,3 +60,16 @@ def test_boolean_metric_stays_owner_gate():
         "rollback_ref": "run:abc/train.py",
     })
     assert result["status"] == "OWNER_GATE"
+
+
+def test_candidate_provenance_path_derives_rollback_ref():
+    result = evaluate_receipt({
+        "bl": "BL-3935",
+        "decision": "promote_candidate",
+        "reviewer": "PASS",
+        "candidate_commit": "abc",
+        "val_bpb_observed": 1.2,
+        "provenance": ["/tmp/autoresearch-runs/e/train.py"],
+    })
+    assert result["status"] == "REVIEW_READY"
+    assert result["rollback_ref"] == "/tmp/autoresearch-runs/e/train.py"

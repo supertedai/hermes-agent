@@ -18,6 +18,18 @@ REVIEW_READY = "REVIEW_READY"
 OWNER_GATE = "OWNER_GATE"
 
 
+def _rollback_ref(receipt: Mapping[str, object]) -> str:
+    explicit = receipt.get("rollback_ref")
+    if isinstance(explicit, str) and explicit.strip():
+        return explicit.strip()
+    provenance = receipt.get("provenance")
+    if isinstance(provenance, list):
+        for item in provenance:
+            if isinstance(item, str) and item.startswith("/tmp/autoresearch-runs/") and item.endswith("/train.py"):
+                return item
+    return ""
+
+
 def evaluate_receipt(receipt: Mapping[str, object]) -> dict[str, object]:
     blockers: list[str] = []
     if not isinstance(receipt, Mapping):
@@ -34,13 +46,14 @@ def evaluate_receipt(receipt: Mapping[str, object]) -> dict[str, object]:
     value = receipt.get("val_bpb_observed")
     if not isinstance(value, (int, float)) or isinstance(value, bool) or not math.isfinite(float(value)):
         blockers.append("measured val_bpb missing")
-    rollback_ref = receipt.get("rollback_ref")
-    if not isinstance(rollback_ref, str) or not rollback_ref.strip():
+    rollback_ref = _rollback_ref(receipt)
+    if not rollback_ref:
         blockers.append("rollback_ref missing")
     return {
         "experiment_id": receipt.get("experiment_id", ""),
         "status": REVIEW_READY if not blockers else OWNER_GATE,
         "blockers": blockers,
+        "rollback_ref": rollback_ref,
         "side_effects": "none",
     }
 
