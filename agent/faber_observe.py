@@ -33,6 +33,10 @@ from agent.code_workflow import (
     PreflightStatus,
     owner_gate_block,
 )
+from agent.lease_authority import (
+    check as lease_clear_via_authority,
+    scope_paths as _scope_paths,
+)
 
 #: Statuses PreflightGate treats as actionable.  Mirrored here only to explain a
 #: BLOCK in the readback; the gate itself remains the single decision point.
@@ -172,88 +176,14 @@ def scope_is_executable_here(repo_scope: str) -> tuple[bool, str]:
 #: Autoritetsruten `/surface/lease/check` paa `.12` svarer paa noe ANNET: om det
 #: FINNES en lease, og hvem som eier den. Produsenten kan ikke endre det svaret uten
 #: aa faktisk ta en lease -- altsaa uten at noe i verden endrer seg.
-SURFACE_API = os.environ.get("SURFACE_API_URL", "http://192.168.40.12:8010")
-
-#: Klientens hemmelighet leses fra FIL, ikke bare env. Cron-linja her setter kun
-#: HERMES_HOME og leser ingen .env, saa en env-basert hemmelighet ville krevd at
-#: noen redigerte crontab. En fil leses ved hver kjoering: sett den én gang, roter
-#: den naar du vil, uten aa roere schedulering.
-_TOKEN_FILE = os.environ.get(
-    "SURFACE_RECEIPT_TOKEN_FILE",
-    str(Path(os.environ.get("HERMES_HOME", str(Path.home() / ".hermes-gui")))
-        / ".surface_receipt_token"))
-
-
-def _surface_token() -> str:
-    """Env foerst (test), saa fil. Fila MAA vaere 0600.
-
-    Feil modus gir TOM token -- altsaa "UVERIFISERT" -- framfor aa bruke en
-    hemmelighet andre kan lese. En feilkonfigurasjon skal vaere synlig, ikke
-    stilltiende akseptert.
-    """
-    env = os.environ.get("SURFACE_RECEIPT_TOKEN", "").strip()
-    if env:
-        return env
-    try:
-        f = Path(_TOKEN_FILE)
-        if not f.exists():
-            return ""
-        if f.is_symlink():
-            return ""
-        st = f.stat()
-        if st.st_mode & 0o077:
-            return ""
-        if st.st_uid != os.getuid():
-            # En fil eid av en ANNEN bruker med 0600 er fortsatt lesbar for oss
-            # hvis rettighetene tillater det -- men da er det ikke VAAR hemmelighet.
-            return ""
-        return f.read_text(encoding="utf-8").strip()
-    except Exception:  # noqa: BLE001
-        return ""
-
-
-def lease_clear_via_authority(paths: Sequence[str]) -> tuple[bool | None, str]:
-    """Spoer autoriteten om leasen. Returnerer (clear, note).
-
-    `None` betyr IKKE VERIFISERT -- og det er en tredje verdi med vilje. `False`
-    ville sagt "ingen lease finnes", som er en paastand vi ikke har grunnlag for
-    naar vi ikke fikk spurt. Fravaer av svar er ikke et svar; det er dagens
-    gjennomgaaende laerdom, og her staar den i typen.
-
-    Uten token returnerer vi `None` og lar kalleren falle tilbake paa evidensen --
-    med noten om at den da er UVERIFISERT. Det er aerligere enn aa la et manglende
-    token se ut som en manglende lease.
-    """
-    if not paths:
-        return None, "ingen stier aa sjekke"
-    token = _surface_token()
-    if not token:
-        return None, (f"ingen token ({_TOKEN_FILE} mangler eller har feil modus) — "
-                      f"lease er UVERIFISERT, ikke fravaerende")
-
-    import urllib.error
-    import urllib.parse
-    import urllib.request
-
-    q = urllib.parse.urlencode({"paths": ",".join(paths)})
-    req = urllib.request.Request(f"{SURFACE_API}/surface/lease/check?{q}",
-                                 headers={"X-Surface-Token": token})
-    try:
-        with urllib.request.urlopen(req, timeout=8) as resp:
-            data = json.loads(resp.read())
-        return bool(data.get("lease_clear")), (
-            f"autoritet: {len(data.get('held_by_me') or [])} av {len(paths)} eid, "
-            f"{len(data.get('held_by_others') or [])} hos andre")
-    except urllib.error.HTTPError as exc:
-        return None, f"autoriteten svarte {exc.code} — UVERIFISERT"
-    except Exception as exc:  # noqa: BLE001
-        return None, f"autoriteten unaabar ({type(exc).__name__}) — UVERIFISERT"
-
-
-def _scope_paths(repo_scope: str) -> list[str]:
-    """Trekk ut filstier fra et `repo_scope` som `"hermes-agent: a.py, b.py"`."""
-    tail = repo_scope.split(":", 1)[1] if ":" in repo_scope else repo_scope
-    return [x.strip() for x in tail.split(",") if x.strip().endswith(".py")]
+#:
+#: BL-4059: `lease_clear_via_authority`, `_scope_paths`, token-lesingen og
+#: HTTP-laget BODDE her. De er flyttet til `agent.lease_authority` og importeres
+#: tilbake oeverst -- med vilje, ikke av ryddetrang. Da steg 6 fikk lov til aa TA
+#: leasen, fikk `check` og `claim` samme krav: SAMME token, SAMME vert, SAMME
+#: sti-sett. To kopier ville kunne divergere paa noeyaktig det som var hullet under
+#: -- en token-fil produsenten selv kan slaa av -- og da ville vi verifisert én
+#: mengde og leaset en annen.
 
 
 def _resolve_lease_clear(ev: Mapping[str, Any]) -> tuple[bool, str]:
