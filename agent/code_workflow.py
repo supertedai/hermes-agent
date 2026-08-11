@@ -1,3 +1,19 @@
+# ===========================================================================
+# BL-4029 L8 -- THIS IS NOT THE AUTHORITATIVE COPY.
+#
+# Four copies of code_workflow.py exist on .15. The one the observe cron runs,
+# and the only one whose gate decisions reach production, is:
+#
+#     /home/agent/agent-layer/hermes-agent/agent/code_workflow.py
+#
+# Measured 2026-08-10: 1020 / 672 / 662 / 662 lines -- they have diverged.
+# One component with four truths cannot be reasoned about, and a gate placed on
+# the wrong copy means nothing. Read the authoritative file before concluding
+# anything about gate behaviour from this one.
+#
+# This banner is a signpost, not a merge: the copies are NOT being unified
+# here, because each tree may legitimately need its own version.
+# ===========================================================================
 """Governed Code/Faber workflow gates.
 
 This module is deliberately side-effect free. It turns the Code workflow rails
