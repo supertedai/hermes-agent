@@ -1,35 +1,19 @@
 {
-  "recorded_at": "2026-08-09T17:23:06.579028+00:00",
+  "recorded_at": "2026-08-10T15:14:39.966607+00:00",
   "host": "box12",
   "metadata_only": true,
   "graph_or_obsidian_write": false,
   "world_model": {
     "status": "VERIFIED",
     "domains": 42,
-    "experiences": 710,
-    "cross_domain_links": 455,
-    "patterns": 1401,
+    "experiences": 720,
+    "cross_domain_links": 456,
+    "patterns": 1451,
     "errors": []
   },
   "lateral_bus": {
-    "status": "ok",
-    "route": "/lateral-bus/status",
-    "principal": "morten",
-    "metadata_only": true,
-    "read_only": true,
-    "substrate": "neo4j-daemonmesh",
-    "total_daemons": 363,
-    "by_health": {
-      "healthy": 344,
-      "restarting": 2,
-      "starting": 1,
-      "stopped": 12,
-      "unknown": 4
-    },
-    "mesh_edges": 374653,
-    "latest_seen": "2026-08-09T17:23:06.016000000+00:00",
-    "stale_minutes": 10,
-    "generated_at": "2026-08-09T17:23:07.227650+00:00"
+    "status": "BLOCKED",
+    "error": "CalledProcessError: Command '['ssh', '-o', 'BatchMode=yes', '-o', 'ConnectTimeout=8', 'box12', 'python3 -c \\'import urllib.request; r=urllib.request.urlopen(urllib.request.Request(\"http://127.0.0.1:8010/lateral-bus/status\",headers={\"X-User-ID\":\"morten\"}),timeout=20); print(r.read().decode())\\' ']' returned non-zero exit status 1."
   },
   "next_action": "continue local lanes; keep remote authority read-only until every receipt is fresh"
 }

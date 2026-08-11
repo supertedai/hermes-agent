@@ -71,7 +71,7 @@
         "scope": "installation + login surface + user + agent",
         "evidence": "metadata-only topology context readback",
         "freshness": "FRESH",
-        "drift": "{\"added\": [\"process:node\"], \"changed\": [], \"removed\": []}",
+        "drift": "{\"added\": [], \"changed\": [], \"removed\": [\"process:python3\"]}",
         "rollback_gate": "BLOCKED/UNKNOWN prevents green promotion",
         "status": "DRIFTED",
         "gap": "topology drift detected; reconcile changed items"
@@ -162,7 +162,7 @@
     {
       "destination": "git",
       "status": "VERIFIED",
-      "ref": "repo=/home/agent/agent-layer/mwp-uosh-automation-01;head=f0b94d7df17244fce4d1f0ec013cdd8dc47b58f1;dirty=yes"
+      "ref": "repo=/home/agent/agent-layer/mwp-uosh-automation-01;head=717b86d071b27f716ba350edcf3749c598667f0d;dirty=yes"
     },
     {
       "destination": "graph",

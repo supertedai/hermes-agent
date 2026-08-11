@@ -2,7 +2,7 @@
   "artifact_id": "mwp-role-provider-closeout-readback-current",
   "mwp_id": "MWP-UOSH-001",
   "gate_id": "GAP-ROLE-PROVIDER-001",
-  "recorded_at": "2026-08-09T08:00:43Z",
+  "recorded_at": "2026-08-10T06:16:48Z",
   "mode": "metadata-only-source-runtime-verification",
   "status": "BLOCKED",
   "scope": {
@@ -25,9 +25,19 @@
     "fallback_health_transition": null
   },
   "runtime_evidence": {
-    "resolver_endpoint": "127.0.0.1:41343/health",
-    "resolver_http_status": 0,
-    "resolver_probe": "connection refused",
+    "resolver_endpoint": ".12 http://127.0.0.1:8010/api/mwp/role-provider",
+    "resolver_http_status": 200,
+    "resolver_probe": "DECLARED_NOT_LIVE_SELECTED",
+    "resolver_readback": {
+      "surface": "hermes-desktop",
+      "role_id": "chat",
+      "provider_ref": "UNVERIFIED",
+      "declared_model_ref": "gpt-luna",
+      "selected_model_ref": "UNVERIFIED",
+      "downstream_candidate_ref": "cco",
+      "writes_allowed": false,
+      "provenance_ref": "mwp-role-provider-readback"
+    },
     "dashboard_endpoint": "127.0.0.1:9119/health",
     "dashboard_http_status": 200,
     "dashboard_qualification": "reachability only; not active-turn role/provider authority"
@@ -36,9 +46,9 @@
     "command": "scripts/run_tests.sh tests/test_mwp_role_provider.py tests/hermes_cli/test_runtime_provider_resolution.py tests/hermes_cli/test_provider_parity.py -q",
     "result": "63 passed, 0 failed"
   },
-  "blocker": "Authenticated active-turn resolver evidence is unavailable: role_id, api_mode, llm_instance_id, fallback health/transition, and freshness-bound authority receipt are missing.",
+  "blocker": "Route is reachable and returns a declared chat role, but authenticated live selection evidence is unavailable: provider_id, selected model, api_mode, llm_instance_id, fallback health/transition, and authority receipt are missing.",
   "owner": "Morten / authorized runtime configuration owner",
-  "next_action": "Owner provides an authenticated metadata-only active-turn resolver receipt containing role_id, provider_id, model_id, api_mode, llm_instance_id, fallback health/transition, and freshness timestamp; rerun this gate before downstream activation.",
+  "next_action": "Obtain authenticated live-selected role/provider receipt containing provider_id, selected model_id, api_mode, llm_instance_id, fallback health/transition, and freshness timestamp; keep downstream activation blocked.",
   "promotion_rule": "Do not promote DECLARED, REACHABLE, collection presence, catalog consistency, or local runtime presence to LIVE_VERIFIED.",
   "mutation": {
     "config_write": false,
