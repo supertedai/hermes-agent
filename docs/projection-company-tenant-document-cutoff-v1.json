@@ -1,27 +1,47 @@
 {
   "artifact_id": "projection-company-tenant-document-cutoff-v1",
-  "status": "READY_FOR_DESTINATION_GATE",
+  "status": "PARTIAL_DESTINATIONS_WRITTEN",
   "source_artifact": "docs/mwp-company-tenant-document-cutoff-gap-package-v1.json",
   "target_surfaces": {
     "graph": {
-      "status": "BLOCKED_WRITER_AUTHORITY",
-      "target": null,
-      "writer": null,
-      "rollback": null
+      "status": "WRITTEN_AND_READ_BACK",
+      "target": "Neo4j .12:7474 :SelfKnowledgeFact decision:company_tenant_document_cutoff_gap_package_2026_08_11",
+      "writer": "tools/self_state_aggregator.selfstate_write() from .13 (BL-4095)",
+      "readback": {
+        "revision": 1,
+        "chars": 3240,
+        "relations": 2,
+        "unlinked_facts": 0
+      },
+      "rollback": "archive the fact via the gate; emit_graph never deletes"
     },
     "obsidian": {
-      "status": "BLOCKED_WRITER_AUTHORITY",
-      "target": null,
-      "writer": null,
-      "rollback": null
+      "status": "WRITTEN",
+      "target": "~/Documents/Brain/03-Architecture/Symbiose/Company Tenants — Energy Rent og ByOpus.md + Symbiose Change Log.md",
+      "writer": "BL-4095 from .13",
+      "rollback": "delete the note and the change-log paragraph; both are additive"
     }
   },
   "projection_shape": {
     "type": "metadata_only",
-    "fields": ["artifact_id", "parent_mwp", "parent_gap", "tenant_ids", "gap_ids", "status", "owner", "provenance_ref", "freshness", "rollback_ref"],
+    "fields": [
+      "artifact_id",
+      "parent_mwp",
+      "parent_gap",
+      "tenant_ids",
+      "gap_ids",
+      "status",
+      "owner",
+      "provenance_ref",
+      "freshness",
+      "rollback_ref"
+    ],
     "raw_content": false
   },
-  "tenant_ids": ["energy-rent-as", "byopus-as"],
+  "tenant_ids": [
+    "energy-rent-as",
+    "byopus-as"
+  ],
   "gap_ids": [
     "GAP-COMPANY-ENERGYRENT-TENANT-001",
     "GAP-COMPANY-BYOPUS-TENANT-001",
@@ -32,5 +52,11 @@
     "GAP-COMPANY-RESTORE-EXPORT-001",
     "GAP-COMPANY-GRAPH-OBSIDIAN-PROJECTION-001"
   ],
-  "next_action": "obtain destination-specific writer/target readback; do not infer graph or Obsidian persistence from this manifest"
+  "next_action": "company runtime remains OPEN_OWNER_AUTHORITY: no tenant, steward, agent, connector or document ingest exists. Morten's gate.",
+  "child_bl": {
+    "id": "BL-4095",
+    "allocated_with": "tools/allocate_bl.py on .13 (never hand-picked, BL-416/BL-3824)",
+    "status": "REGISTERED"
+  },
+  "why_it_was_blocked": "The authoring session measured from .15, which has no graph credentials (ADR-061) and no Obsidian vault, and where allocate_bl.py does not exist. All three blocks were HOST-BOUND, not architectural. A session reporting BLOCKED must name the host it measured from; otherwise a local absence reads as a system boundary and a gap stays open because nobody asked the neighbour."
 }

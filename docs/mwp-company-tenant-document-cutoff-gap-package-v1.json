@@ -10,9 +10,11 @@
     "BL-MWP-CANONICAL-EVIDENCE-LEDGER-001"
   ],
   "bl_registration": {
-    "status": "REQUIRED",
+    "status": "REGISTERED",
+    "bl_id": "BL-4095",
     "numeric_child_bl_not_invented": true,
-    "next_action": "register or map child gates through the canonical BL registry before implementation claim"
+    "allocated_with": "tools/allocate_bl.py on .13",
+    "note": "The authoring session was right to refuse to invent one; the allocator only exists on .13. Refusing to guess was correct behaviour, not a gap in judgement."
   },
   "provenance": {
     "source": "current Hermes conversation",
@@ -33,7 +35,13 @@
       "scope": "company tenant Energy Rent AS",
       "status": "OPEN_OWNER_AUTHORITY",
       "owner": "Morten / canonical company control-plane authority",
-      "missing": ["legal_entity_id readback", "tenant registry record", "company owner/role readback", "energy-rent-steward binding", "company cockpit/context-scope readback"],
+      "missing": [
+        "legal_entity_id readback",
+        "tenant registry record",
+        "company owner/role readback",
+        "energy-rent-steward binding",
+        "company cockpit/context-scope readback"
+      ],
       "acceptance": "tenant and steward read-after-write plus negative cross-tenant access test",
       "rollback": "remove only the newly created binding after pre-read and owner approval"
     },
@@ -42,7 +50,13 @@
       "scope": "company tenant ByOpus AS",
       "status": "OPEN_OWNER_AUTHORITY",
       "owner": "Morten / canonical company control-plane authority",
-      "missing": ["legal_entity_id readback", "tenant registry record", "company owner/role readback", "byopus-steward binding", "company cockpit/context-scope readback"],
+      "missing": [
+        "legal_entity_id readback",
+        "tenant registry record",
+        "company owner/role readback",
+        "byopus-steward binding",
+        "company cockpit/context-scope readback"
+      ],
       "acceptance": "tenant and steward read-after-write plus negative cross-tenant access test",
       "rollback": "remove only the newly created binding after pre-read and owner approval"
     },
@@ -51,7 +65,15 @@
       "scope": "both company document corpora",
       "status": "OPEN_LIVE_CANARY",
       "owner": "document-ingest/world-model authority",
-      "missing": ["folder/batch manifest", "document upload canary", "reference-vs-ingest zone receipt", "ACL/sensitivity receipt", "chunk/embed/Qdrant receipt", "world-model entity/edge readback", "document finding provenance"],
+      "missing": [
+        "folder/batch manifest",
+        "document upload canary",
+        "reference-vs-ingest zone receipt",
+        "ACL/sensitivity receipt",
+        "chunk/embed/Qdrant receipt",
+        "world-model entity/edge readback",
+        "document finding provenance"
+      ],
       "acceptance": "one synthetic non-sensitive document per tenant can be uploaded, ingested, recalled, deleted and read back without cross-tenant leakage",
       "rollback": "document delete/tombstone plus projection cleanup receipt"
     },
@@ -60,7 +82,13 @@
       "scope": "document-derived facts, findings and proposals",
       "status": "OPEN_PROMOTION_GATE",
       "owner": "MWP evidence/learning authority",
-      "missing": ["DocumentFinding-to-evidence ledger link", "confidence/epistemic classification", "proposal queue receipt", "owner approval receipt", "skill promotion prohibition/explicit gate"],
+      "missing": [
+        "DocumentFinding-to-evidence ledger link",
+        "confidence/epistemic classification",
+        "proposal queue receipt",
+        "owner approval receipt",
+        "skill promotion prohibition/explicit gate"
+      ],
       "acceptance": "finding and proposal remain candidate until approved; every promoted item has provenance, freshness and rollback"
     },
     {
@@ -68,7 +96,14 @@
       "scope": "Personal, Opus System, Energy Rent AS and ByOpus AS",
       "status": "BLOCKED_UNTIL_LIVE_NEGATIVE_TEST",
       "owner": "identity/tenant authority",
-      "missing": ["principal-to-tenant enforcement", "Qdrant namespace isolation", "graph/world-model scope isolation", "Hindsight/memory isolation", "prompt/cache/pending-queue isolation", "portfolio projection allowlist"],
+      "missing": [
+        "principal-to-tenant enforcement",
+        "Qdrant namespace isolation",
+        "graph/world-model scope isolation",
+        "Hindsight/memory isolation",
+        "prompt/cache/pending-queue isolation",
+        "portfolio projection allowlist"
+      ],
       "acceptance": "unauthorized tenant queries return no company content and produce metadata-only denial receipt"
     },
     {
@@ -76,7 +111,16 @@
       "scope": "Energy Rent AS emergency cutoff",
       "status": "OPEN_CUTOFF_RUNBOOK",
       "owner": "Morten / Energy Rent owner authority",
-      "missing": ["cutoff trigger", "freeze ingest/connectors", "revoke agent/runtime bindings", "export package", "export hash manifest", "restore drill", "Qdrant/graph/Hindsight/cache purge", "post-cutoff negative retrieval"],
+      "missing": [
+        "cutoff trigger",
+        "freeze ingest/connectors",
+        "revoke agent/runtime bindings",
+        "export package",
+        "export hash manifest",
+        "restore drill",
+        "Qdrant/graph/Hindsight/cache purge",
+        "post-cutoff negative retrieval"
+      ],
       "acceptance": "RUNTIME_RELEASED readback plus separately classified DATA_PURGED or LEGAL_RETENTION status",
       "rollback": "restore only into an explicitly approved isolated destination; never silently reactivate Opus access"
     },
@@ -85,16 +129,31 @@
       "scope": "both company tenants and Energy Rent emergency archive",
       "status": "OPEN_DR_RESTORE",
       "owner": "backup/recovery authority",
-      "missing": ["company package format", "originals/text/chunks/provenance manifest", "encryption and key custody", "independent destination", "integrity verification", "structural restore test", "freshness/SLA"],
+      "missing": [
+        "company package format",
+        "originals/text/chunks/provenance manifest",
+        "encryption and key custody",
+        "independent destination",
+        "integrity verification",
+        "structural restore test",
+        "freshness/SLA"
+      ],
       "acceptance": "archive can be restored into an isolated non-production namespace and hashes/counts match"
     },
     {
       "id": "GAP-COMPANY-GRAPH-OBSIDIAN-PROJECTION-001",
       "scope": "company tenant metadata projection",
-      "status": "BLOCKED_WRITER_AUTHORITY",
+      "status": "CLOSED_BY_BL-4095",
       "owner": "canonical graph/Obsidian projection authority",
-      "missing": ["exact graph target and writer grant", "exact Obsidian vault/note mapping", "pre-read hashes", "destination receipts", "rollback references"],
-      "acceptance": "metadata-only graph and Obsidian projections read back with tenant, source, freshness and rollback"
+      "missing": [
+        "exact graph target and writer grant",
+        "exact Obsidian vault/note mapping",
+        "pre-read hashes",
+        "destination receipts",
+        "rollback references"
+      ],
+      "acceptance": "metadata-only graph and Obsidian projections read back with tenant, source, freshness and rollback",
+      "evidence": "graph fact written from .13 and read back (revision 1, 2 relations, detect_unlinked=[]); Obsidian note + change-log entry written; both metadata-only"
     }
   ],
   "projection_plan": {
