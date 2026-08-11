@@ -332,3 +332,172 @@ def test_nested_root_is_reported_but_does_not_degrade_coverage(tmp_path):
     assert index["root_nesting"][0]["outer"] == "repo_active"
     # beta ble lest to ganger, men finnes bare én gang i katalogen.
     assert sorted(s["name"] for s in index["skills"]) == ["alpha", "beta"]
+
+
+def test_symlinked_subdirectory_is_read_not_silently_skipped(tmp_path):
+    """Siste form av blindsonen fra funn 2 — symlenke i stedet for permission-bit.
+
+    Med followlinks=False var `read == expected`, `errors: ()`, COMPLETE — og
+    skillen bak lenken simpelthen borte. En MISSING-påstand mot den ville vært
+    et falskt funn.
+    """
+    import os as _os
+
+    root = tmp_path / "root"
+    _skill(root, "direct", "direct-one")
+    elsewhere = tmp_path / "elsewhere"
+    _skill(elsewhere, "linked", "behind-symlink")
+    _os.symlink(elsewhere / "linked", root / "linked-in")
+
+    cov, entries = scan_root(SkillRoot("r", root, 0))
+    assert cov.state is Coverage.COMPLETE
+    assert cov.errors == ()
+    assert sorted(e.name for e in entries) == ["behind-symlink", "direct-one"]
+
+
+def test_symlink_cycle_terminates(tmp_path):
+    """followlinks uten syklusvern henger for alltid på én lenke."""
+    import os as _os
+
+    root = tmp_path / "root"
+    _skill(root, "a", "alpha")
+    _os.symlink(root, root / "loop")          # a/loop -> a
+    inner = root / "deep"
+    inner.mkdir()
+    _os.symlink(root, inner / "back")          # a/deep/back -> a
+
+    cov, entries = scan_root(SkillRoot("r", root, 0))   # må terminere
+    assert cov.state is Coverage.COMPLETE
+    assert [e.name for e in entries] == ["alpha"]       # alpha telles ÉN gang
+
+
+def test_two_symlinks_to_the_same_skill_are_one_entry(tmp_path):
+    """Delt undertre er allerede lest — ikke et hull, og ikke to skills."""
+    import os as _os
+
+    root = tmp_path / "root"
+    root.mkdir()
+    target = tmp_path / "shared"
+    _skill(target, "s", "shared-one")
+    _os.symlink(target / "s", root / "link-a")
+    _os.symlink(target / "s", root / "link-b")
+
+    cov, entries = scan_root(SkillRoot("r", root, 0))
+    assert cov.state is Coverage.COMPLETE
+    assert [e.name for e in entries] == ["shared-one"]
+
+
+def test_out_of_root_link_is_recorded_as_provenance_not_degradation(tmp_path):
+    """Motstykket til scope_narrowed: «jeg så på MER enn roten».
+
+    En SKILL.md hvor som helst på filsystemet havner nå under en kanonisk
+    rot-nøkkel, og navn + beskrivelse går inn i den governede reviewerens
+    systemprompt. Dekningen er fortsatt sann — så dette rapporteres, det
+    degraderer ikke.
+    """
+    import os as _os
+
+    root = tmp_path / "root"
+    _skill(root, "own", "own-skill")
+    foreign = tmp_path / "foreign"
+    _skill(foreign, "f", "foreign-skill")
+    _os.symlink(foreign / "f", root / "link")
+
+    cov, entries = scan_root(SkillRoot("r", root, 0))
+    assert cov.state is Coverage.COMPLETE          # ikke degradert
+    assert sorted(e.name for e in entries) == ["foreign-skill", "own-skill"]
+    assert cov.out_of_root                          # ...men synlig
+    assert "UTENFOR roten" in cov.note
+
+
+def test_parent_link_is_refused_without_losing_coverage(tmp_path):
+    """En forelder-lenke gjør den timesvis cronen til en filsystem-traversering.
+
+    NB på begrunnelsen: å nekte taper faktisk NOE — en forelder inneholder også
+    alt ved siden av roten, og de søsken-skillene blir ikke lest (testen under
+    pinner nettopp det). Grunnen dette likevel ikke senker dekningen er at det
+    deklarerte omfanget ER de fem røttene: dette er en OMFANGSBESLUTNING som
+    noteres, ikke et målehull. Reviewer 2026-08-11 felte den forrige, sterkere
+    formuleringen.
+    """
+    import os as _os
+
+    parent = tmp_path / "parent"
+    root = parent / "root"
+    _skill(root, "own", "own-skill")
+    _skill(parent / "sibling", "s", "sibling-skill")
+    _os.symlink(parent, root / "up")
+
+    cov, entries = scan_root(SkillRoot("r", root, 0))
+    assert cov.state is Coverage.COMPLETE
+    assert [e.name for e in entries] == ["own-skill"]     # ikke sugd inn
+    assert cov.refused_links
+    assert "forelder-lenke" in cov.note
+    assert "utvidet" in cov.note          # omfangsbeslutning, ikke dekningspåstand
+    assert "roten dekker dem" not in cov.note
+
+
+def test_link_to_home_does_not_crawl_the_home_directory(tmp_path):
+    """Den operasjonelle faren, direkte: ln -s <forelder> inne i roten."""
+    import os as _os
+
+    big = tmp_path / "big"
+    for i in range(30):
+        _skill(big, f"s{i}", f"noise-{i}")
+    root = big / "root"
+    _skill(root, "own", "own-skill")
+    _os.symlink(big, root / "home-link")
+
+    cov, entries = scan_root(SkillRoot("r", root, 0))
+    assert [e.name for e in entries] == ["own-skill"]
+    assert cov.read == 1 and cov.expected == 1
+
+
+def test_symlinked_SKILL_FILE_is_recorded_as_out_of_root(tmp_path):
+    """os.walk eksponerer bare KATALOGERS lenke-status — filer slapp forbi.
+
+    Reviewer 2026-08-11: `root/sneak/SKILL.md -> /andre/sted/SKILL.md` ble lest,
+    indeksert under en kanonisk rot-nøkkel og var valgbar for den governede
+    systemprompten, mens out_of_root rapporterte ingenting. Et provenansfelt som
+    ikke dekker alle veier inn er verre enn ingen — det blir trodd.
+    """
+    import os as _os
+
+    root = tmp_path / "root"
+    _skill(root, "ok", "ok-skill")
+    foreign = tmp_path / "foreign"
+    foreign.mkdir()
+    (foreign / "SKILL.md").write_text("---\nname: foreign-file-skill\n---\nbody\n",
+                                      encoding="utf-8")
+    sneak = root / "sneak"
+    sneak.mkdir()
+    _os.symlink(foreign / "SKILL.md", sneak / "SKILL.md")
+
+    cov, entries = scan_root(SkillRoot("r", root, 0))
+    assert sorted(e.name for e in entries) == ["foreign-file-skill", "ok-skill"]
+    assert cov.out_of_root, "en symlenket SKILL.md-FIL må også telle som utenfor roten"
+    assert any("foreign" in t for t in cov.out_of_root)
+
+
+def test_parent_link_refusal_does_lose_sibling_skills(tmp_path):
+    """Pinner det motbeviset reviewer brukte til å felle kommentaren.
+
+    Testen finnes for at ingen skal gjeninnføre «roten dekker dem»: den gjør det
+    tapte eksplisitt, slik at policyen forsvares på riktig grunnlag.
+    """
+    import os as _os
+
+    parent = tmp_path / "parent"
+    root = parent / "root"
+    _skill(root, "own", "own-skill")
+    for i in range(3):
+        _skill(parent / f"sib{i}", "s", f"sibling-{i}")
+    _os.symlink(parent, root / "up")
+
+    cov, entries = scan_root(SkillRoot("r", root, 0))
+    names = [e.name for e in entries]
+    assert names == ["own-skill"]
+    # Disse er nåbare fra innsiden av roten og blir IKKE lest. Det er prisen,
+    # og den er bevisst.
+    assert not any(n.startswith("sibling-") for n in names)
+    assert cov.state is Coverage.COMPLETE

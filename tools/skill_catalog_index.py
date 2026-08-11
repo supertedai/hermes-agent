@@ -155,6 +155,14 @@ class RootCoverage:
     expected: int | None
     note: str = ""
     errors: tuple[str, ...] = ()
+    #: Lenkemål utenfor roten som BLE fulgt. Provenans, ikke degradering:
+    #: dekningen er fortsatt sann, men leseren skal kunne se hva som ble tatt med
+    #: og hvorfra. `scope_narrowed` sier «jeg så på mindre enn maskinen»; dette
+    #: sier «jeg så på mer enn roten», og det fantes ikke noe felt for det.
+    out_of_root: tuple[str, ...] = ()
+    #: Forelder-lenker vi nektet å følge. En OMFANGSBESLUTNING, ikke en
+    #: dekningspåstand — se scan_root(). De kan bære skills vi da ikke leser.
+    refused_links: tuple[str, ...] = ()
 
     @property
     def is_complete(self) -> bool:
@@ -169,6 +177,8 @@ class RootCoverage:
             "expected": self.expected,
             "note": self.note,
             "errors": list(self.errors),
+            "out_of_root": list(self.out_of_root),
+            "refused_links": list(self.refused_links),
             "is_complete": self.is_complete,
         }
 
@@ -303,10 +313,85 @@ def scan_root(root: SkillRoot, *, include_archive: bool = False) -> tuple[RootCo
     def _on_error(exc: OSError) -> None:
         walk_errors.append(f"{getattr(exc, 'filename', '?')}: {type(exc).__name__}: {exc}")
 
+    # followlinks=True — med syklusvern.
+    #
+    # Reviewer 2026-08-11 runde 2 fant den siste formen av samme blindsone:
+    # `os.walk(followlinks=False)` hopper over en SYMLENKET undermappe uten at
+    # det telles som lesefeil. `read == expected`, `errors: ()`, COMPLETE — og
+    # skillen bak lenken er simpelthen borte. Nøyaktig samme form som
+    # permission-bit-hullet, med en symlenke i stedet.
+    #
+    # Å telle den som et HULL (→ PARTIAL) ville vært feil medisin: den som med
+    # vilje symlenker en skill-katalog ville låst katalogen til PARTIAL for
+    # alltid, og dermed gjort MISSING uoppnåelig — samme avbryter-form som
+    # manglende bygger var. Riktig svar er å FØLGE lenken, slik at skillen
+    # faktisk blir lest og COMPLETE fortsatt er sant.
+    #
+    # Prisen for followlinks er sykler (a/b -> a). `seen` holder realpath for
+    # hver besøkt katalog; en katalog vi allerede har vært i, traverseres ikke
+    # om igjen. Uten det henger byggeren for alltid på en enkelt lenke.
     found: list[Path] = []
-    for dirpath, _dirnames, filenames in os.walk(root.path, onerror=_on_error):
+    seen: set[str] = set()
+    root_real = os.path.realpath(root.path)
+    # Lenker som peker UT av roten. Ikke en degradering — se build_index().
+    outside: set[str] = set()
+    # Lenker vi nektet å følge fordi de peker på en FORELDER av roten.
+    refused: set[str] = set()
+
+    for dirpath, dirnames, filenames in os.walk(root.path, onerror=_on_error,
+                                                followlinks=True):
+        real = os.path.realpath(dirpath)
+        if real in seen:
+            # Syklus eller delt undertre — allerede lest, ikke et hull.
+            dirnames[:] = []
+            continue
+        seen.add(real)
+
+        # Forelder-lenke = katalog-krasj. `ln -s / root/x` gjør den timesvis
+        # cronen til en filsystem-traversering. Målt av reviewer 2026-08-11: ÉN
+        # uhells-lenke inn i repoet dro 203 skills inn i en rot med 1.
+        #
+        # HVORFOR DETTE KAN NEKTES UTEN Å SENKE DEKNINGEN — og det er IKKE fordi
+        # «roten dekker dem». Det sto her først, og det er usant: en forelder
+        # inneholder roten, men den inneholder også alt VED SIDEN AV roten.
+        # Reviewer felte formuleringen med et motbevis (tre søsken-skills nådd
+        # fra innsiden av roten, ikke lest). I en endring som handler om
+        # påstander som løper foran beviset sitt, er en kommentar som lover mer
+        # enn koden holder nettopp den defekten som ikke får lov å gå gjennom.
+        #
+        # Den ekte grunnen: det DEKLARERTE omfanget er de fem røttene. En
+        # forelder-lenke ville utvidet omfanget forbi roten i stillhet. Å nekte
+        # er derfor en OMFANGSBESLUTNING som noteres — ikke en dekningspåstand.
+        # Regelen bak: et MÅLEHULL senker dekningen; en POLICY-UTELUKKELSE
+        # noteres og senker den ikke.
+        kept = []
+        for name in dirnames:
+            child = os.path.join(dirpath, name)
+            if not os.path.islink(child):
+                kept.append(name)
+                continue
+            target = os.path.realpath(child)
+            if root_real == target or root_real.startswith(target.rstrip(os.sep) + os.sep):
+                refused.add(target)
+                continue
+            if target != root_real and not target.startswith(root_real.rstrip(os.sep) + os.sep):
+                outside.add(target)
+            kept.append(name)
+        dirnames[:] = kept
+
         if "SKILL.md" in filenames:
-            found.append(Path(dirpath) / "SKILL.md")
+            skill_file = Path(dirpath) / "SKILL.md"
+            # os.walk eksponerer bare KATALOGERS lenke-status via dirnames.
+            # Reviewer 2026-08-11: `root/sneak/SKILL.md -> /andre/sted/SKILL.md`
+            # ble lest, indeksert under en kanonisk rot-nøkkel, og var
+            # valgbar for systemprompten — mens out_of_root rapporterte
+            # ingenting. Et provenansfelt som ikke dekker alle veier inn er
+            # verre enn ingen: det blir trodd.
+            if os.path.islink(skill_file):
+                target = os.path.realpath(skill_file)
+                if not target.startswith(root_real.rstrip(os.sep) + os.sep):
+                    outside.add(target)
+            found.append(skill_file)
     found.sort()
 
     expected = len(found)
@@ -360,7 +445,8 @@ def scan_root(root: SkillRoot, *, include_archive: bool = False) -> tuple[RootCo
         note_bits.append(f"{len(errors)} filer kunne ikke leses")
         return (
             RootCoverage(root.key, str(root.path), Coverage.PARTIAL, read, expected,
-                         "; ".join(note_bits), tuple(errors[:20])),
+                         "; ".join(note_bits), tuple(errors[:20]),
+                         tuple(sorted(outside)), tuple(sorted(refused))),
             entries,
         )
 
@@ -368,14 +454,21 @@ def scan_root(root: SkillRoot, *, include_archive: bool = False) -> tuple[RootCo
         note_bits.append(f"leste {read} av {expected} — differansen er UAVKLART")
         return (
             RootCoverage(root.key, str(root.path), Coverage.PARTIAL, read, expected,
-                         "; ".join(note_bits)),
+                         "; ".join(note_bits), (),
+                         tuple(sorted(outside)), tuple(sorted(refused))),
             entries,
         )
 
     note_bits.append(f"alle {expected} SKILL.md lest")
+    if outside:
+        note_bits.append(f"{len(outside)} lenkemål UTENFOR roten ble fulgt og tatt med")
+    if refused:
+        note_bits.append(f"{len(refused)} forelder-lenke(r) ikke fulgt — ville utvidet "
+                         f"omfanget forbi roten; målet er notert")
     return (
         RootCoverage(root.key, str(root.path), Coverage.COMPLETE, read, expected,
-                     "; ".join(note_bits)),
+                     "; ".join(note_bits), (),
+                     tuple(sorted(outside)), tuple(sorted(refused))),
         entries,
     )
 
@@ -517,6 +610,11 @@ def build_index(
         "roots_missing": missing_roots,
         "root_path_collisions": collisions,
         "root_nesting": nested,
+        # Motstykket til scope_narrowed. Degraderer IKKE — dekningen er sann,
+        # dette forteller bare hvor innholdet kom fra.
+        "out_of_root_targets": sorted({t for c in coverages for t in c.out_of_root}),
+        "scope_widened": any(c.out_of_root for c in coverages),
+        "refused_parent_links": sorted({t for c in coverages for t in c.refused_links}),
         "scope_narrowed": bool(missing_roots or collisions),
         "roots": [c.to_json() for c in coverages],
         "files_seen": sum(c.read for c in coverages),
@@ -570,6 +668,11 @@ def main(argv: Sequence[str] | None = None) -> int:
     print(f"  katalog-dekning: {index['catalog_coverage'].upper()}"
           f" — {index['skill_count']} unike skills av {index['files_seen']} filer",
           file=sys.stderr)
+    if index["scope_widened"]:
+        for t in index["out_of_root_targets"]:
+            print(f"  ??  lenkemål utenfor roten ble tatt med: {t}", file=sys.stderr)
+    for t in index["refused_parent_links"]:
+        print(f"  --  forelder-lenke ikke fulgt (roten dekker den): {t}", file=sys.stderr)
     if index["root_path_collisions"]:
         for c in index["root_path_collisions"]:
             print(f"  !!  rot-kollisjon: {'+'.join(c['keys'])} peker begge på {c['path']}",
