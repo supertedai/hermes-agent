@@ -39,3 +39,22 @@ No parent closeout is allowed while this BL or any predecessor gate remains unre
 ## 2026-08-09 access/readback update
 
 `docs/mwp-cross-surface-access-readback-v1.json` records the current surface truth: local Git trees and `/home/byopus/AGI` are writable; 102 scoped artifacts are prepared and Git promotion awaits the `.13` GitHub-surface → runtime CLI handoff; graph read is connected and the orchestrator canary is rollback-verified, but canonical writer audit authority remains unverified; lateral-bus HTTP is live principal-scoped/read-only with 200/401 behavior; and the active Brain Obsidian vault has a verified metadata projection. This BL remains `PARTIAL / GATES_OPEN`; no blanket production-write authority is claimed.
+
+## 2026-08-10 Symbiose/Hermes phase mapping (drift control)
+
+Recorded so this work is MAPPED rather than `PARKED` per the drift-control rule. No phase gate
+is advanced by any of it.
+
+| Work | Phase | Status | Note |
+|---|---|---|---|
+| BL-4007 Symbiose self-state reader (ADR-061 step 1) | P3 | `SIDE_LANE_READ_ONLY` | read-only layer/vitals/goal/playbook inventory into the system prompt and one read tool; no shadow receipt, no effect chain |
+| BL-4008 cross-principal READ isolation | P1 | `PARTIAL_SIDE_LANE` | one-process read gate on identity; no tenant, no readback receipt; P1 stays `BLOCKED` |
+| BL-4015 per-row principal stamp on write queues | P4 | `SIDE_LANE` | owner stamp only; no `event_type`, not `IngestEnvelope v1`; unstamped rows not quarantined |
+| BL-4019 user-overflow drain to per-user Hindsight bank | P4 | `SIDE_LANE` | recovered from live deployment; was running untracked |
+| BL-4023 per-session topology block in system prompt | P0/P6 | `SIDE_LANE_VOCABULARY_DIVERGENT` | duplicates the required-topology-binding vocabulary; see the convergence note in ADR-HERMES-SURFACE-BACKPLANE-001 |
+
+Explicitly NOT closed: none of the four P0 rows. The nearest is *Principal/session/device/tenant
+authority* — BL-4008 delivers principal isolation on the read side within a single process,
+while the row requires authenticated user + durable session + device + login surface +
+tenant/system scope. P1 *Memory/learning promotion* is made BROADER, not better: BL-4007 adds
+one more live read endpoint with no causal effect chain behind it.
