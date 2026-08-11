@@ -505,12 +505,19 @@ def test_postcommit_loop_reuses_completed_steps(tmp_path):
     # able to write the journal made postcommit report DONE without tests or a
     # runtime smoke ever running. Recording steps still replay; proving steps
     # are re-verified every time.
+    #
+    # BL-4052 CORRECTS the classification above without changing its principle.
+    # A3 put `readback` and `rollback` in the replay set, but both PROVE rather
+    # than RECORD: readback asserts the commit still contains exactly what it
+    # should, and rollback asserts the revert still applies. Replaying either
+    # means a journal write makes the assertion report DONE without anything
+    # being read or checked -- which is the very hole A3 closed for tests and
+    # runtime_smoke, left open two slots further along. Now all four re-verify.
     new_calls = calls[len(calls_after_first):]
-    assert set(new_calls) == {"tests", "runtime_smoke"}, new_calls
+    assert set(new_calls) == {"tests", "runtime_smoke", "readback", "rollback"}, new_calls
     assert "commit_closer" not in new_calls
-    assert set(second.replayed) == {"commit_closer", "brain_change_log", "selfstate",
-                                    "readback", "rollback"}
-    assert set(second.executed) == {"tests", "runtime_smoke"}
+    assert set(second.replayed) == {"commit_closer", "brain_change_log", "selfstate"}
+    assert set(second.executed) == {"tests", "runtime_smoke", "readback", "rollback"}
 
 
 # --------------------------------------------------------- BL-4029: Part A ---
@@ -722,3 +729,461 @@ def test_a_runner_always_has_a_budget():
     ScopeBudget definert, men aldri spurt."""
     assert GovernedCodeRunner().scope_budget is not None
     assert GovernedCodeRunner(scope_budget=ScopeBudget(max_files=1)).scope_budget.max_files == 1
+
+
+# ===========================================================================
+# BL-4052 — steg 12 (runtime_smoke) og steg 13 (postcommit_readback)
+# ===========================================================================
+
+from agent.code_workflow import (  # noqa: E402
+    BindMount,
+    CommitReadback,
+    ContainerRuntimeTarget,
+    PostcommitReadbackGate,
+    RetiredFleetGate,
+    RuntimeProbe,
+    RuntimeSmokeGate,
+    StepBlocked,
+)
+
+
+def _blocks(result):
+    return result.status is cw.PreflightStatus.BLOCK
+
+
+def _reason(result):
+    return " | ".join(result.reasons)
+
+
+# --- den maalte virkeligheten paa .12, brukt som fixture ------------------
+# docker inspect efc-unified-api, 2026-08-11. Vertsfila er synlig TO steder
+# inne i containeren samtidig, og WorkingDir avgjoer hvilken som importeres.
+EFC_UNIFIED_API = ContainerRuntimeTarget(
+    name="efc-unified-api",
+    working_dir="/repo",
+    cmd=("uvicorn", "apis.unified_api.main:app", "--host", "0.0.0.0", "--port", "8080"),
+    mounts=(
+        BindMount("/home/byopus/AGI", "/repo"),
+        BindMount("/home/byopus/AGI/apis/unified_api/main.py", "/app/apis/unified_api/main.py"),
+        BindMount("/home/byopus/AGI/symbiose", "/app/symbiose"),
+        BindMount("/home/byopus/AGI/certs/pa-ssl-ca.crt", "/certs/pa-ssl-ca.crt"),
+    ),
+)
+
+
+def fresh_probe(**over):
+    """En probe der ALT er maalt og alt stemmer."""
+    base = dict(
+        target="efc-unified-api",
+        answered=True,
+        running=True,
+        started_at="2026-08-10T19:07:07.602127692Z",   # UTC
+        loaded_path="/repo/apis/unified_api/main.py",
+        observed_digest="97d8ede366b16b3117adee823bad8952",
+        expected_digest="97d8ede366b16b3117adee823bad8952",
+        source_mtime="2026-08-10T18:17:35.934017+00:00",  # foer prosessstart
+        probe_method="docker exec",
+    )
+    base.update(over)
+    return RuntimeProbe(**base)
+
+
+# --- steg 12: hovedregelen ------------------------------------------------
+
+def test_step12_a_probe_that_got_no_answer_is_not_a_pass():
+    """Dagens gjennomgaaende regel, i sin reneste form."""
+    result = RuntimeSmokeGate().evaluate(
+        RuntimeProbe(target="efc-unified-api", answered=False,
+                     probe_method="docker exec", note="container not found"))
+
+    assert _blocks(result)
+    assert "not answered is not a passed smoke test" in _reason(result)
+    assert "container not found" in _reason(result)
+
+
+def test_step12_a_fully_measured_and_consistent_probe_passes():
+    assert RuntimeSmokeGate().evaluate(fresh_probe()).status is cw.PreflightStatus.PASS
+
+
+def test_step12_file_newer_than_process_start_blocks():
+    """Kjernen i steg 12: oppdatert fil er ikke oppdatert prosess."""
+    result = RuntimeSmokeGate().evaluate(fresh_probe(
+        started_at="2026-08-10T19:07:07+00:00",
+        source_mtime="2026-08-11T09:00:00+00:00",   # skrevet ETTER start
+    ))
+
+    assert _blocks(result)
+    assert "source is NEWER than the running process" in _reason(result)
+    assert "never restarted" in _reason(result)
+
+
+def test_step12_naive_timestamp_blocks_instead_of_being_assumed_utc():
+    """Maalt 2026-08-11: mtime +0200 vs StartedAt UTC. Uten sone snus svaret.
+
+    Den naive strengen "2026-08-10 20:17:35" ser NYERE ut enn UTC-starten
+    19:07:07, saa en soneloes sammenligning ville gitt FALSK BLOCK -- den
+    faktiske sannheten er at prosessen startet 50 minutter etter skrivingen.
+    Gaten nekter aa gjette hvilken av dem det er.
+    """
+    result = RuntimeSmokeGate().evaluate(fresh_probe(source_mtime="2026-08-10 20:17:35.934017"))
+
+    assert _blocks(result)
+    assert "carries no timezone" in _reason(result)
+    assert "inverts the verdict" in _reason(result)
+
+
+def test_step12_same_instant_expressed_in_two_zones_is_not_a_regression():
+    """+0200-stempelet er FOER UTC-starten, og skal passere naar sonen er med."""
+    result = RuntimeSmokeGate().evaluate(fresh_probe(
+        started_at="2026-08-10T19:07:07.602127692Z",
+        source_mtime="2026-08-10T20:17:35.934017+02:00",   # = 18:17:35Z
+    ))
+
+    assert result.status is cw.PreflightStatus.PASS
+
+
+def test_step12_only_an_in_process_read_is_an_accepted_probe_method():
+    """Maalt: `docker cp` foelger bind-mounten ut til verten (md5 97d8ede3... begge steder).
+
+    Allowlist, ikke svarteliste (reviewer B7). En svarteliste paa et
+    SELVRAPPORTERT felt fanger bare kallere som beskriver feilen sin med
+    nettopp de ordene listen kjenner -- `docker  cp` med to mellomrom,
+    `docker container cp`, `podman cp` og «cat on host» slapp alle gjennom.
+    """
+    assert RuntimeSmokeGate().evaluate(
+        fresh_probe(probe_method="docker exec")).status is cw.PreflightStatus.PASS
+    # ...og normalisering av mellomrom/store bokstaver skal ikke aapne den igjen
+    assert RuntimeSmokeGate().evaluate(
+        fresh_probe(probe_method="  DOCKER   exec ")).status is cw.PreflightStatus.PASS
+
+    for evasion in ("docker cp", "docker  cp", "docker container cp", "podman cp",
+                    "kubectl cp", "cat on host", "host file read", "ssh .12 docker cp"):
+        result = RuntimeSmokeGate().evaluate(fresh_probe(probe_method=evasion))
+        assert _blocks(result), evasion
+        assert "not a recognised in-process read" in _reason(result), evasion
+        assert "cannot fail" in _reason(result), evasion
+
+
+def test_step12_unrecorded_probe_method_blocks():
+    """Grunnen assereres: uten den overlever mutasjonen som fjerner sjekken.
+
+    Med metoden fjernet faller "" gjennom til allowlist-grenen og blokkerer
+    likevel -- men da paa «ikke en gjenkjent in-process-lesing», altsaa en
+    paastand om at kalleren oppga en UGYLDIG metode naar sannheten er at den
+    ikke oppga noen. Feil begrunnelse er feil funn.
+    """
+    result = RuntimeSmokeGate().evaluate(fresh_probe(probe_method=""))
+
+    assert _blocks(result)
+    assert "was not recorded" in _reason(result)
+    assert "not a recognised in-process read" not in _reason(result)
+
+
+def test_step12_stopped_or_unknown_container_blocks():
+    stopped = RuntimeSmokeGate().evaluate(fresh_probe(running=False))
+    unknown = RuntimeSmokeGate().evaluate(fresh_probe(running=None))
+
+    assert _blocks(stopped) and "stopped container is not deployed" in _reason(stopped)
+    assert _blocks(unknown) and "unknown is not running" in _reason(unknown)
+
+
+def test_step12_digest_mismatch_blocks():
+    result = RuntimeSmokeGate().evaluate(fresh_probe(observed_digest="deadbeefdeadbeef"))
+
+    assert _blocks(result)
+    assert "different file than the one landed" in _reason(result)
+
+
+def test_step12_unmeasured_digest_or_path_blocks():
+    """Umaalt er ikke likt. Fravaer av data er ikke et positivt funn.
+
+    Grunnen ASSERTERES, ikke bare at det blokkerer. En mutasjonstest viste
+    hvorfor: fjerner man umaalt-sjekken, blokkerer en probe med EN manglende
+    digest fortsatt -- men paa "mismatch", altsaa en paastand om at filene er
+    ULIKE naar sannheten er at de aldri ble sammenlignet. Og med BEGGE
+    manglende blir "" == "", saa den slipper helt gjennom. En test som bare
+    spoer «blokkerte den?» kan ikke se forskjell paa de to, og da er vakten
+    uovervaaket selv om den finnes.
+    """
+    for missing in ({"observed_digest": None}, {"expected_digest": None},
+                    {"observed_digest": None, "expected_digest": None}):
+        result = RuntimeSmokeGate().evaluate(fresh_probe(**missing))
+        assert _blocks(result), missing
+        assert "digest not measured" in _reason(result), missing
+        assert "different file than the one landed" not in _reason(result), missing
+
+    assert _blocks(RuntimeSmokeGate().evaluate(fresh_probe(loaded_path=None)))
+    assert _blocks(RuntimeSmokeGate().evaluate(fresh_probe(started_at=None)))
+    assert _blocks(RuntimeSmokeGate().evaluate(fresh_probe(source_mtime=None)))
+
+
+# --- steg 12: mount-analysen ----------------------------------------------
+
+def test_mount_analysis_picks_the_copy_on_syspath_not_the_image_baked_one():
+    """Samme vertsfil, to container-stier. WorkingDir=/repo avgjoer."""
+    host = "/home/byopus/AGI/apis/unified_api/main.py"
+
+    assert set(EFC_UNIFIED_API.container_paths_for(host)) == {
+        "/app/apis/unified_api/main.py",
+        "/repo/apis/unified_api/main.py",
+    }
+    path, why = EFC_UNIFIED_API.resolve_loaded_path(host)
+    assert path == "/repo/apis/unified_api/main.py" and why == ""
+    assert EFC_UNIFIED_API.import_root() == "/repo"
+
+
+def test_mount_analysis_blocks_a_file_the_container_cannot_see():
+    path, why = EFC_UNIFIED_API.resolve_loaded_path("/home/agent/hermes-agent/agent/x.py")
+
+    assert path is None
+    assert "not visible inside" in why
+
+
+def test_mount_analysis_blocks_a_copy_that_is_not_on_syspath():
+    """Fila finnes i containeren, men ikke der prosessen importerer fra."""
+    target = ContainerRuntimeTarget(
+        name="c", working_dir="/repo",
+        mounts=(BindMount("/host/tools", "/app/tools"),))
+
+    path, why = target.resolve_loaded_path("/host/tools/mod.py")
+
+    assert path is None
+    assert "sys.path[0]=/repo" in why and "does not import this copy" in why
+
+
+def test_mount_analysis_blocks_when_the_working_directory_was_not_measured():
+    """Docker rapporterer tom WorkingDir for ethvert image uten WORKDIR.
+
+    Reviewer B3: import_root() returnerte da "/", som er prefiks til ALT, saa en
+    umaalt arbeidsmappe ble stilltiende til «alt ligger paa sys.path» -- og en
+    eneste synlig kopi ble godtatt som «den lastede» uten begrunnelse.
+    """
+    target = ContainerRuntimeTarget(
+        name="c", working_dir="", mounts=(BindMount("/host/tools", "/app/tools"),))
+
+    path, why = target.resolve_loaded_path("/host/tools/mod.py")
+
+    assert target.import_root() == ""
+    assert path is None
+    assert "no working directory" in why and "unmeasured" in why
+
+
+def test_mount_analysis_refuses_to_guess_between_two_candidates():
+    target = ContainerRuntimeTarget(
+        name="c", working_dir="/repo",
+        mounts=(BindMount("/host", "/repo"), BindMount("/host/tools", "/repo/tools2")))
+
+    path, why = target.resolve_loaded_path("/host/tools/mod.py")
+
+    assert path is None
+    assert "ambiguously" in why
+
+
+def test_mount_analysis_matches_the_dot12_module_contract():
+    """.12 kjoerer `python -u -m tools.<modul>` fra bind-mounten, ikke /app/<fil>.py."""
+    target = ContainerRuntimeTarget(
+        name="efc-tool", working_dir="/repo",
+        cmd=("python", "-u", "-m", "tools.graph_healer"),
+        mounts=(BindMount("/home/byopus/AGI/compose/tools", "/repo/tools"),))
+
+    path, why = target.resolve_loaded_path("/home/byopus/AGI/compose/tools/graph_healer.py")
+
+    assert path == "/repo/tools/graph_healer.py" and why == ""
+
+
+# --- steg 12: ADR-043 ------------------------------------------------------
+
+def test_retired_fleet_gate_blocks_when_the_local_fleet_is_not_empty():
+    result = RetiredFleetGate().evaluate(probed=True, container_names=["efc-unified-api"])
+
+    assert _blocks(result)
+    assert "ADR-043" in _reason(result)
+
+
+def test_retired_fleet_gate_blocks_when_it_was_never_probed():
+    """Uunder soekt er ikke tomt."""
+    result = RetiredFleetGate().evaluate(probed=False)
+
+    assert _blocks(result)
+    assert "unprobed is not empty" in _reason(result)
+
+
+def test_retired_fleet_gate_passes_on_a_measured_empty_fleet():
+    assert RetiredFleetGate().evaluate(
+        probed=True, container_names=()).status is cw.PreflightStatus.PASS
+
+
+# --- steg 13 ---------------------------------------------------------------
+
+def good_readback(**over):
+    base = dict(commit="a" * 40, resolved=True, reachable_from_head=True,
+                files=("agent/code_workflow.py",), subject="BL-4052 steg 12 og 13",
+                read_method="git diff-tree")
+    base.update(over)
+    return CommitReadback(**base)
+
+
+EXPECTED = ("agent/code_workflow.py",)
+
+
+def test_step13_a_commit_that_was_not_found_blocks_rather_than_logging():
+    result = PostcommitReadbackGate().evaluate(
+        CommitReadback(commit="a" * 40, resolved=False), expected_files=EXPECTED)
+
+    assert _blocks(result)
+    assert "could not be read back" in _reason(result)
+    assert "not a line in a log" in _reason(result)
+
+
+def test_step13_an_exact_commit_passes():
+    result = PostcommitReadbackGate().evaluate(
+        good_readback(), expected_files=EXPECTED, require_ref="BL-4052")
+
+    assert result.status is cw.PreflightStatus.PASS
+
+
+def test_step13_foreign_files_block():
+    """Sveipet fra ae832c8a4, fanget etter commit i stedet for foer."""
+    result = PostcommitReadbackGate().evaluate(
+        good_readback(files=("agent/code_workflow.py", "apps/desktop/electron/main.ts")),
+        expected_files=EXPECTED)
+
+    assert _blocks(result)
+    assert "never meant to touch" in _reason(result)
+    assert "apps/desktop/electron/main.ts" in _reason(result)
+
+
+def test_step13_a_missing_expected_file_blocks():
+    """Noeyaktig, ikke bare 'ingenting fremmed'."""
+    result = PostcommitReadbackGate().evaluate(
+        good_readback(files=("agent/code_workflow.py",)),
+        expected_files=("agent/code_workflow.py", "tests/test_code_workflow.py"))
+
+    assert _blocks(result)
+    assert "missing 1 file(s)" in _reason(result)
+
+
+def test_step13_unknown_and_empty_file_sets_are_different_and_both_block():
+    unknown = PostcommitReadbackGate().evaluate(good_readback(files=None), expected_files=EXPECTED)
+    empty = PostcommitReadbackGate().evaluate(good_readback(files=()), expected_files=EXPECTED)
+
+    assert _blocks(unknown) and "file set of" in _reason(unknown) and "unknown" in _reason(unknown)
+    assert _blocks(empty) and "touches no files" in _reason(empty)
+
+
+def test_step13_an_unstated_expectation_blocks():
+    """En 'noeyaktig'-sjekk uten fasit er en sjekk som ikke kan feile."""
+    result = PostcommitReadbackGate().evaluate(good_readback(), expected_files=())
+
+    assert _blocks(result)
+    assert "cannot fail is not a check" in _reason(result)
+
+
+def test_step13_unreachable_or_unmeasured_reachability_blocks():
+    orphan = PostcommitReadbackGate().evaluate(
+        good_readback(reachable_from_head=False), expected_files=EXPECTED)
+    unknown = PostcommitReadbackGate().evaluate(
+        good_readback(reachable_from_head=None), expected_files=EXPECTED)
+
+    assert _blocks(orphan) and "sits on no branch" in _reason(orphan)
+    assert _blocks(unknown) and "unknown is not reachable" in _reason(unknown)
+
+
+def test_step13_a_commit_without_its_bl_ref_blocks():
+    result = PostcommitReadbackGate().evaluate(
+        good_readback(subject="drive-by fix"), expected_files=EXPECTED, require_ref="BL-4052")
+
+    assert _blocks(result)
+    assert "does not carry BL-4052" in _reason(result)
+
+
+# --- integrasjon med PostcommitLoop ---------------------------------------
+
+def _loop_callbacks(**over):
+    base = {name: (lambda c, n=name: f"{n} ok") for name in
+            ("commit_closer", "brain_change_log", "selfstate", "readback",
+             "runtime_smoke", "rollback")}
+    base["tests"] = lambda: "tests ok"
+    base.update(over)
+    return base
+
+
+def test_postcommit_loop_preserves_a_blocked_step_reason():
+    """Tom streng er fail-closed, men stum. Begrunnelsen er verdien."""
+    def blocking(_commit):
+        raise StepBlocked("runtime_smoke", "source is NEWER than the running process")
+
+    result = PostcommitLoop().run(
+        commit="c" * 40, reviewer=ReviewVerdict.PASS,
+        **_loop_callbacks(runtime_smoke=blocking))
+
+    assert result.success is False
+    assert result.missing == ("runtime_smoke",)
+    assert "source is NEWER than the running process" in result.error
+
+
+def test_postcommit_loop_never_replays_a_step_that_proves_something(tmp_path):
+    """Et journalskriv skal ikke kunne gjoere steg 13 til DONE uten aa lese noe."""
+    journal = StepJournal(tmp_path / "journal.json")
+    sha = "d" * 40
+    for name in ("commit_closer", "brain_change_log", "selfstate",
+                 "readback", "rollback", "runtime_smoke", "tests"):
+        journal.complete(f"postcommit:{sha}:{name}", result={"evidence": "recorded earlier"})
+
+    ran: list[str] = []
+
+    def track(name):
+        def call(*_args):
+            ran.append(name)
+            return f"{name} ok"
+        return call
+
+    result = PostcommitLoop(journal=journal).run(
+        commit=sha, reviewer=ReviewVerdict.PASS,
+        **_loop_callbacks(**{n: track(n) for n in
+                             ("readback", "rollback", "runtime_smoke", "commit_closer")},
+                          tests=track("tests")))
+
+    assert result.success is True
+    # commit_closer only RECORDS, so replay is legitimate; the other four PROVE.
+    assert set(result.replayed) == {"commit_closer", "brain_change_log", "selfstate"}
+    assert set(ran) == {"readback", "rollback", "runtime_smoke", "tests"}
+
+
+# --- reviewer runde 2: vakter som fantes men var uovervaaket ---------------
+
+def test_step12_unparseable_timestamp_blocks_with_its_own_reason():
+    """R13: den naive grenen var testet, den ULESELIGE var ikke."""
+    result = RuntimeSmokeGate().evaluate(fresh_probe(started_at="not-a-timestamp"))
+
+    assert _blocks(result)
+    assert "unparseable timestamp" in _reason(result)
+
+
+def test_mount_analysis_does_not_match_a_sibling_directory_by_prefix():
+    """R14: /repofoo ligger ikke under /repo, uansett hvor likt det ser ut."""
+    target = ContainerRuntimeTarget(
+        name="c", working_dir="/repo", mounts=(BindMount("/host", "/repofoo"),))
+
+    path, why = target.resolve_loaded_path("/host/x.py")
+
+    assert path is None
+    assert "/repofoo/x.py" in why and "sys.path[0]=/repo" in why
+
+
+def test_mount_analysis_handles_a_root_working_directory():
+    """D4: WorkingDir="/" ble rstrip-et til "" og feildiagnostisert som umaalt."""
+    target = ContainerRuntimeTarget(
+        name="c", working_dir="/", mounts=(BindMount("/host/app", "/app"),))
+
+    assert target.import_root() == "/"
+    assert target.resolve_loaded_path("/host/app/mod.py") == ("/app/mod.py", "")
+
+
+def test_step13_a_readback_without_a_sha_blocks():
+    """R10."""
+    result = PostcommitReadbackGate().evaluate(
+        CommitReadback(commit="   ", resolved=True), expected_files=("a.py",))
+
+    assert _blocks(result)
+    assert "nothing to read back" in _reason(result)

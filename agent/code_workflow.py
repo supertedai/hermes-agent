@@ -917,6 +917,451 @@ class LandingScopeGate:
         return PreflightResult(status, tuple(reasons), ev)
 
 
+# =====================  BL-4052: steg 12 og steg 13  =======================
+# De to siste stegene i AUTOCODER_13_STEPS fantes bare som NAVN. Steg 1-11 har
+# vakter; 12 og 13 hadde en streng hver, og en streng er sann saa lenge den er
+# ikke-tom. `GoalLedger` krever `runtime_smoke` for aa naa MEASURED -- men bare
+# at feltet er utfylt, ikke at noe kjoerte.
+#
+# DEN GJENNOMGAAENDE REGELEN, som allerede staar i `LandingScopeGate` (steg 11),
+# `ScopeBudget`-kallet (steg 8) og `BlGate` (steg 5), og som er brutt 22 ganger
+# paa én dag:
+#
+#     FRAVAER AV DATA ER IKKE ET POSITIVT FUNN.
+#
+# En roeyktest som ikke fikk svar er ikke en bestaatt roeyktest. En tilbakelesing
+# som ikke fant commiten er ikke en tilbakelesing som fant den i orden. Tomt
+# resultat = BLOCK med begrunnelse, aldri PASS.
+
+
+def _parse_instant(value: object) -> "tuple[datetime | None, str]":
+    """Parse en tidsstempel-streng til et TIDSSONEBEVISST oeyeblikk.
+
+    Returnerer ``(None, grunn)`` naar verdien ikke kan sammenlignes, og grunnen
+    er med vilje forskjellig for «mangler», «uleselig» og «naiv».
+
+    **Naiv tid avvises, den antas ikke aa vaere UTC.** Maalt 2026-08-11 paa
+    ``efc-unified-api``:
+
+        .State.StartedAt   2026-08-10T19:07:07.602127692Z    (UTC)
+        fil-mtime          2026-08-10 20:17:35.934 +0200     (= 18:17:35Z)
+
+    Lest som strenger er ``20:17 > 19:07``, altsaa «fila er nyere enn prosessen»
+    -- FALSK BLOCK. Sannheten er motsatt: prosessen startet 50 minutter ETTER at
+    fila ble skrevet, saa den kjoerer riktig kode. En tidssoneloes sammenligning
+    snur konklusjonen. Derfor er en naiv tid uten sone ikke «antagelig UTC», den
+    er UMAALT -- og umaalt blokkerer.
+    """
+    if value is None or not str(value).strip():
+        return None, "missing"
+    text = str(value).strip().replace("Z", "+00:00").replace(" ", "T", 1)
+    # docker leverer 9 desimaler; fromisoformat taaler hoeyst 6 foer 3.11.
+    text = re.sub(r"(\.\d{6})\d+", r"\1", text)
+    try:
+        parsed = datetime.fromisoformat(text)
+    except ValueError:
+        return None, f"unparseable timestamp: {value!r}"
+    if parsed.tzinfo is None:
+        return None, (f"timestamp {value!r} carries no timezone; comparing it against a "
+                      "UTC container timestamp inverts the verdict, so it is unusable")
+    return parsed, ""
+
+
+@dataclass(frozen=True)
+class BindMount:
+    """En bind-mount slik ``docker inspect`` rapporterer den."""
+
+    source: str        #: sti paa VERTEN
+    destination: str   #: sti INNE i containeren
+
+    def maps(self, host_path: str) -> str | None:
+        """Container-stien for *host_path*, eller None om mounten ikke dekker den."""
+        src = str(self.source).rstrip("/")
+        dest = str(self.destination).rstrip("/")
+        host = str(host_path).rstrip("/")
+        if not src or not dest or not host:
+            return None
+        if host == src:
+            return dest or "/"
+        if host.startswith(src + "/"):
+            return dest + host[len(src):]
+        return None
+
+
+@dataclass(frozen=True)
+class ContainerRuntimeTarget:
+    """Hvor en landet fil FAKTISK havner i en kjoerende container -- og om den lastes.
+
+    Dette er «analyser riktig mount»-fella, gjort mekanisk. Maalt 2026-08-11 paa
+    ``efc-unified-api`` (.12): vertsfila
+    ``/home/byopus/AGI/apis/unified_api/main.py`` er synlig paa TO steder inne i
+    containeren samtidig --
+
+        /repo/apis/unified_api/main.py    (via bind /home/byopus/AGI -> /repo)
+        /app/apis/unified_api/main.py     (via egen fil-bind, read-only)
+
+    -- og ``WorkingDir=/repo``. For ``python -m`` er ``sys.path[0]`` arbeidsmappa,
+    saa det er ``/repo``-kopien som importeres. Aa maale ``/app``-kopien er aa
+    maale en sti prosessen ikke laster. Den gamle Mac-flaaten gjorde nettopp
+    denne feilen i motsatt retning: image-baket ``/app/<fil>.py`` mot ``.12``s
+    bind-monterte ``python -u -m tools.<modul>``.
+
+    Tvetydighet loeses ikke ved gjetning. Naar flere kandidater ligger under
+    ``sys.path[0]`` returneres None med begrunnelse -- en gate som gjetter hvilken
+    kopi som lastes, maaler ikke, den haaper.
+    """
+
+    name: str
+    working_dir: str
+    cmd: tuple[str, ...] = ()
+    mounts: tuple[BindMount, ...] = ()
+
+    def import_root(self) -> str:
+        """``sys.path[0]`` for ``python -m`` er arbeidsmappa, eller "" om den ikke er maalt.
+
+        BL-4052 (reviewer B3): dette returnerte "/" naar ``WorkingDir`` var tom,
+        og "/" er prefiks til ALT -- saa en umaalt arbeidsmappe ble stilltiende
+        til «alt ligger paa sys.path». Docker rapporterer tom ``WorkingDir`` for
+        ethvert image uten ``WORKDIR``, saa dette var ikke et kanttilfelle. Tom
+        streng er «ikke maalt», og :meth:`resolve_loaded_path` blokkerer paa den.
+        """
+        raw = str(self.working_dir or "")
+        # D4: rstrip("/") alene gjorde "/" til "", som diagnostiseres som
+        # «ingen arbeidsmappe maalt» -- feil melding, og det gjorde
+        # "/"-grenen i resolve_loaded_path uteaakkelig.
+        return "/" if raw.strip() == "/" else raw.rstrip("/")
+
+    def container_paths_for(self, host_path: str) -> tuple[str, ...]:
+        """ALLE stedene *host_path* er synlig inne i containeren."""
+        hits = {m.maps(host_path) for m in self.mounts}
+        return tuple(sorted(p for p in hits if p))
+
+    def resolve_loaded_path(self, host_path: str) -> "tuple[str | None, str]":
+        """Den ENE stien prosessen importerer, eller ``(None, grunn)``."""
+        candidates = self.container_paths_for(host_path)
+        if not candidates:
+            return None, (f"{host_path} is not visible inside {self.name or 'the container'} "
+                          "through any bind mount — the running process cannot be executing it")
+        root = self.import_root()
+        if not root:
+            return None, (f"{self.name or 'the container'} reports no working directory, so "
+                          "sys.path[0] is unmeasured — which copy the process imports cannot be "
+                          "determined, and a single visible copy is not proof it is the loaded one")
+        prefix = "" if root == "/" else root + "/"
+        under = [p for p in candidates if p == root or p.startswith(prefix)]
+        if not under:
+            return None, (f"{host_path} is visible only at {', '.join(candidates)}, none of which "
+                          f"is under sys.path[0]={root} — the process does not import this copy")
+        if len(under) > 1:
+            return None, (f"{host_path} resolves ambiguously under sys.path[0]={root}: "
+                          f"{', '.join(sorted(under))} — which copy is loaded is not measurable here")
+        return under[0], ""
+
+
+@dataclass(frozen=True)
+class RuntimeProbe:
+    """Én maaling av en KJOERENDE prosess, tatt fra innsiden av den.
+
+    Alle valgfrie felt er ``None`` som «ikke maalt», ikke som «greit». Skillet
+    er hele poenget: :class:`RuntimeSmokeGate` blokkerer paa None.
+    """
+
+    target: str
+    #: Fikk proben i det hele tatt SVAR? False naar docker mangler, verten er
+    #: uneaabar, containeren ikke finnes. Dette er feltet som gjoer «ingen svar»
+    #: til BLOCK i stedet for til stillhet.
+    answered: bool
+    running: bool | None = None
+    started_at: str | None = None       #: ``.State.StartedAt``
+    loaded_path: str | None = None      #: stien prosessen faktisk importerer
+    observed_digest: str | None = None  #: fila slik den ser ut INNE i prosessen
+    expected_digest: str | None = None  #: fila slik den ble landet
+    source_mtime: str | None = None     #: mtime for den lastede fila
+    probe_method: str = ""
+    note: str = ""
+
+
+class RuntimeSmokeGate:
+    """Steg 12: KJOERER det som ble landet, faktisk?
+
+    Ikke «kompilerer det», ikke «importerer kilden paa byggeverten» -- kjoerer
+    det, i prosessen som betjener trafikk.
+
+    Den ikke-trivielle delen: **Python laster kilde ved prosesstart.** En
+    oppdatert fil er ikke en oppdatert prosess. En deploy som skrev fila og
+    aldri restartet containeren gir en gruenn diff, en gruenn import-test og en
+    prosess som fortsatt kjoerer forrige ukes kode. Derfor sammenlignes
+    ``.State.StartedAt`` mot filas mtime FOER noe meldes «deployet»
+    (CLAUDE.md, «FELLE 2026-08-02»).
+
+    Fire ting maales, og hver av dem blokkerer naar den mangler:
+
+    1. **Fikk vi svar?** Uten svar er det ingen maaling. En roeyktest som ikke
+       fikk svar er ikke en bestaatt roeyktest.
+    2. **Leste vi fra innsiden?** Se :attr:`HOST_SIDE_PROBES`.
+    3. **Er fila prosessen leser den vi landet?** Digest mot digest.
+    4. **Startet prosessen ETTER at fila ble skrevet?** Ellers kjoerer den
+       gammel kode.
+    """
+
+    #: Den ENESTE probe-metoden som leser i prosessens eget navnerom.
+    #:
+    #: BL-4052 (reviewer B7): dette var en SVARTELISTE over metoder som ikke
+    #: kan feile. Den var trivielt omgaaelig -- ``docker  cp`` (to mellomrom),
+    #: ``docker container cp``, ``podman cp`` og «cat on host» slapp alle
+    #: gjennom -- og ``probe_method`` skrives av kalleren selv. En svarteliste
+    #: paa et selvrapportert felt fanger bare de som beskriver feilen sin med
+    #: nettopp de ordene listen kjenner. Ukjent metode blokkerer naa.
+    #:
+    #: Maalt 2026-08-11 paa ``efc-unified-api``: ``/repo`` er en bind-mount av
+    #: ``/home/byopus/AGI``, saa ``docker cp`` foelger mounten ut til verten::
+    #:
+    #:     docker cp efc-unified-api:/repo/apis/unified_api/main.py /tmp/x
+    #:     md5  /tmp/x                              97d8ede366b16b3117adee823bad8952
+    #:     md5  /home/byopus/AGI/.../main.py        97d8ede366b16b3117adee823bad8952
+    #:
+    #: En diff mellom de to sammenligner kilden med seg selv. Den er alltid lik,
+    #: uansett hva containeren gjoer -- selv om containeren er DOED. Det er samme
+    #: defektklasse som `SecretPolicy`-regexen som ikke kunne matche JSON: en
+    #: kontroll som ikke kan feile er verre enn ingen kontroll, fordi den siteres
+    #: som en. ``docker exec cat`` leser derimot i containerens eget navnerom.
+    ALLOWED_PROBE_METHODS: frozenset[str] = frozenset({"docker exec"})
+
+    def evaluate(self, probe: RuntimeProbe) -> PreflightResult:
+        target = str(probe.target).strip() or "<unnamed target>"
+
+        if not probe.answered:
+            detail = f" ({probe.note})" if probe.note.strip() else ""
+            return self._result((
+                f"runtime probe for {target} got no answer{detail} — a smoke test that was "
+                "not answered is not a passed smoke test; absence of data is not a positive finding",
+            ))
+
+        reasons: list[str] = []
+
+        method = str(probe.probe_method).strip()
+        if not method:
+            reasons.append(
+                "probe method was not recorded — a measurement that cannot say how it looked "
+                "cannot be trusted to have looked inside the process")
+        elif " ".join(method.lower().split()) not in self.ALLOWED_PROBE_METHODS:
+            reasons.append(
+                f"probe method '{method}' is not a recognised in-process read "
+                f"(allowed: {', '.join(sorted(self.ALLOWED_PROBE_METHODS))}) — host-side reads "
+                "such as `docker cp` return the source file itself on a bind-mounted path, so "
+                "the comparison cannot fail and measures nothing")
+
+        if probe.running is None:
+            reasons.append(f"running-state of {target} was not measured — unknown is not running")
+        elif not probe.running:
+            reasons.append(f"{target} is not running — landed code in a stopped container is not deployed")
+
+        if not (probe.loaded_path or "").strip():
+            reasons.append(
+                "no in-container path was resolved for the landed file — without knowing WHICH "
+                "copy the process imports, nothing here is about the running code")
+
+        observed = (probe.observed_digest or "").strip()
+        expected = (probe.expected_digest or "").strip()
+        unmeasured = [n for n, v in (("observed", observed), ("landed", expected)) if not v]
+        if unmeasured:
+            reasons.append(
+                f"digest not measured: {', '.join(unmeasured)} — an uncompared file cannot be "
+                "shown to be the file that was landed")
+        elif observed != expected:
+            reasons.append(
+                f"the running process reads a different file than the one landed: in-process "
+                f"{observed[:12]} != landed {expected[:12]} at {probe.loaded_path or '<unknown path>'}")
+
+        started, started_note = _parse_instant(probe.started_at)
+        mtime, mtime_note = _parse_instant(probe.source_mtime)
+        if started is None:
+            reasons.append(f"process start time unusable ({started_note}) — without it, "
+                           "'the file changed but the process did not restart' cannot be ruled out")
+        if mtime is None:
+            reasons.append(f"source mtime unusable ({mtime_note}) — see above; the comparison "
+                           "is the whole point of this step")
+        if started is not None and mtime is not None and started < mtime:
+            reasons.append(
+                f"source is NEWER than the running process: mtime {mtime.isoformat()} > "
+                f"start {started.isoformat()} — Python loads source at process start, so "
+                f"{probe.loaded_path or 'the landed file'} was written but never restarted into "
+                f"{target}; the file is deployed, the process is not")
+
+        return self._result(tuple(reasons), target=target)
+
+    @staticmethod
+    def _result(reasons: "tuple[str, ...]", *, target: str = "") -> PreflightResult:
+        status = PreflightStatus.PASS if not reasons else PreflightStatus.BLOCK
+        ev = PreflightInput(
+            git_clean=True, lease_clear=True,
+            cad_status="", adr_status="", bl_status="", obsidian_status="",
+            source_refs={"runtime": target} if target else {},
+        )
+        return PreflightResult(status, tuple(reasons), ev)
+
+
+class RetiredFleetGate:
+    """ADR-043: Mac-flaaten er pensjonert, saa lokal ``docker ps`` skal vaere TOM.
+
+    Tas med i steg 12 fordi avviket er et VARSEL, ikke stoey: den pensjonerte
+    skyggeflaaten hadde 249 Exited(137)-duplikater, 247 med navnetvilling paa
+    ``.12``, og den fikk en ``docker cp``-deploy til aa treffe en DOED container
+    paa feil vert. En roeyktest som kjoerer mot feil vert er den mest overbevisende
+    formen for falsk PASS som finnes: alt svarer, ingenting er riktig.
+
+    ``probed=False`` blokkerer. Uunder soekt er ikke tomt.
+    """
+
+    def evaluate(self, *, probed: bool, container_names: "Sequence[str]" = ()) -> PreflightResult:
+        if not probed:
+            return RuntimeSmokeGate._result((
+                "the local docker fleet was not probed — unprobed is not empty, and ADR-043 "
+                "makes a non-empty local fleet an alarm in its own right",))
+        names = [str(n).strip() for n in container_names if str(n).strip()]
+        if names:
+            shown = ", ".join(sorted(names)[:5])
+            more = f" (+{len(names) - 5} more)" if len(names) > 5 else ""
+            return RuntimeSmokeGate._result((
+                f"ADR-043 says the local docker fleet is retired, but {len(names)} container(s) "
+                f"are running here: {shown}{more} — a smoke test can silently address the wrong "
+                "host, so this deviation blocks before it can produce a confident wrong answer",))
+        return RuntimeSmokeGate._result(())
+
+
+@dataclass(frozen=True)
+class CommitReadback:
+    """Det som faktisk ble lest tilbake fra git etter en landing.
+
+    ``files=None`` betyr UKJENT og blokkerer. ``files=()`` betyr «commiten roerer
+    ingen filer» og blokkerer ogsaa. De to er forskjellige feil, og begge er feil.
+    """
+
+    commit: str
+    #: Fant git commiten i det hele tatt?
+    resolved: bool
+    reachable_from_head: bool | None = None
+    files: "tuple[str, ...] | None" = None
+    subject: str = ""
+    read_method: str = ""
+
+
+class PostcommitReadbackGate:
+    """Steg 13: finnes commiten, inneholder den NOEYAKTIG det den skulle, og
+    fulgte det noe fremmed med?
+
+    Steg 11 (:class:`LandingScopeGate`) spoer om det vi HADDE TENKT aa lande laa
+    innenfor leasen. Dette steget spoer noe annet, og det er derfor det ikke er
+    overfloedig: hva ble det faktisk. Intensjon leses foer commit, innhold leses
+    etter. Mellom dem ligger nettopp det uhellet CLAUDE.md dokumenterer
+    (``ae832c8a4``, og igjen i BL-4029): en ``git add`` av ÉN fil ble en commit
+    med 219, fordi indeksen deles mellom parallelle sesjoner i arbeidstreet og
+    ``git commit`` uten stier tar alt som ligger der.
+
+    Her er sjekken derfor en LIKHETS-test, ikke en delmengde-test. Steg 11
+    tillater aa lande faerre filer enn man leaset; steg 13 tillater ikke aa ha
+    landet andre filer enn dem man skulle. Fremmede filer og manglende filer er
+    begge brudd -- den foerste er et sveip, den andre er en landing som ikke
+    landet det den lovte.
+
+    En tilbakelesing som ikke fant commiten BLOKKERER. Den logger ikke og gaar
+    videre; det er den 22-gangers-feilen dette steget finnes for aa stoppe.
+    """
+
+    def evaluate(
+        self,
+        readback: CommitReadback,
+        *,
+        expected_files: "Sequence[str]",
+        require_ref: str = "",
+    ) -> PreflightResult:
+        sha = str(readback.commit).strip()
+        label = sha[:12] if sha else "<no sha>"
+
+        if not sha:
+            return self._result(("readback carries no commit sha — there is nothing to read back",))
+        if not readback.resolved:
+            return self._result((
+                f"commit {label} could not be read back from git — a readback that did not find "
+                "the commit is a BLOCK, not a line in a log; absence of data is not a positive finding",
+            ))
+
+        reasons: list[str] = []
+
+        if readback.reachable_from_head is None:
+            reasons.append(f"reachability of {label} from HEAD was not measured — unknown is not reachable")
+        elif not readback.reachable_from_head:
+            reasons.append(
+                f"commit {label} exists but is not reachable from HEAD — it sits on no branch, "
+                "so nothing that reads the branch will ever see it")
+
+        expected = {str(p).strip() for p in expected_files if str(p).strip()}
+        if not expected:
+            reasons.append(
+                "no expected file set was supplied — 'contains exactly what it should' cannot be "
+                "checked against an unstated expectation, and a check that cannot fail is not a check")
+
+        if readback.files is None:
+            reasons.append(
+                f"the file set of {label} is unknown — an unknown set cannot be shown to be free "
+                "of foreign files")
+        elif not readback.files:
+            reasons.append(
+                f"commit {label} touches no files — an empty commit is not a landing, and it is "
+                "not safe merely because there is nothing to inspect")
+        elif expected:
+            actual = {str(p).strip() for p in readback.files if str(p).strip()}
+            foreign = sorted(actual - expected)
+            missing = sorted(expected - actual)
+            if foreign:
+                reasons.append(
+                    f"commit {label} carries {len(foreign)} file(s) it was never meant to touch: "
+                    f"{', '.join(foreign[:10])}"
+                    + (f" (+{len(foreign) - 10} more)" if len(foreign) > 10 else "")
+                    + " — this is the shared-index sweep, caught after the fact")
+            if missing:
+                reasons.append(
+                    f"commit {label} is missing {len(missing)} file(s) it was meant to contain: "
+                    f"{', '.join(missing[:10])}"
+                    + (f" (+{len(missing) - 10} more)" if len(missing) > 10 else ""))
+
+        ref = str(require_ref).strip()
+        if ref and ref.lower() not in str(readback.subject).lower():
+            reasons.append(
+                f"commit subject does not carry {ref}: {readback.subject.strip()!r} — an "
+                "unattributed commit cannot be traced back to the work item that authorised it")
+
+        return self._result(tuple(reasons), sha=sha)
+
+    @staticmethod
+    def _result(reasons: "tuple[str, ...]", *, sha: str = "") -> PreflightResult:
+        status = PreflightStatus.PASS if not reasons else PreflightStatus.BLOCK
+        ev = PreflightInput(
+            git_clean=not reasons, lease_clear=True,
+            cad_status="", adr_status="", bl_status="", obsidian_status="",
+            source_refs={"commit": sha} if sha else {},
+        )
+        return PreflightResult(status, tuple(reasons), ev)
+
+
+class StepBlocked(Exception):
+    """Et postcommit-steg blokkerte MED begrunnelse.
+
+    `PostcommitLoop` hadde to avslagsveier: tom streng, som ga «postcommit step
+    returned empty evidence: <steg>» -- hvilket steg, men ikke hvorfor -- og en
+    ytre ``except Exception`` som beholdt teksten, men mistet hvilket steg det
+    gjaldt (``missing=()``). Denne beholder BEGGE deler. Naar steg 12 og 13 naa
+    har vakter med reelle begrunnelser, er begrunnelsen selve verdien: «tomt
+    resultat = BLOCK med begrunnelse» krever at begrunnelsen overlever opp til
+    den som leser resultatet.
+    """
+
+    def __init__(self, step: str, reason: str):
+        self.step = step
+        self.reason = reason
+        super().__init__(f"{step} BLOCK: {reason}")
+
+
 class DefinitionOfDone:
     """Post-work gate; all fields must be present and non-empty."""
 
@@ -997,7 +1442,11 @@ class PostcommitLoop:
         # reappearing one layer down. Replay is legitimate for steps that only
         # RECORD something; it is never legitimate for steps that PROVE
         # something.
-        never_replay = {"tests", "runtime_smoke"}
+        # BL-4052: readback and rollback were replayable, and both PROVE rather
+        # than RECORD. Replaying step 13 means a journal write makes "the commit
+        # contains exactly what it should" report DONE without reading anything
+        # back -- the same defect this step exists to catch, one layer down.
+        never_replay = {"tests", "runtime_smoke", "readback", "rollback"}
         replayed: list[str] = []
         executed: list[str] = []
         try:
@@ -1010,7 +1459,13 @@ class PostcommitLoop:
                     value = str((existing.get("result") or {}).get("evidence") or "").strip()
                     replayed.append(name)
                 else:
-                    value = str(callback(commit) or "").strip()
+                    try:
+                        value = str(callback(commit) or "").strip()
+                    except StepBlocked as blocked:
+                        # BL-4052: a reasoned refusal must not be flattened into
+                        # "returned empty evidence". The reason IS the evidence.
+                        return PostcommitResult(False, None, (blocked.step or name,),
+                                                f"postcommit step BLOCK: {blocked}")
                     executed.append(name)
                 if not value:
                     return PostcommitResult(False, None, (name,), f"postcommit step returned empty evidence: {name}")
