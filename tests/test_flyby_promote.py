@@ -4,6 +4,7 @@ from pathlib import Path
 import pytest
 
 from agent.code_workflow import (
+    DesignGate,
     FaberGoal,
     FaberGoalRegistry,
     GovernedCodeRunner,
@@ -38,6 +39,12 @@ def packet(**overrides):
         "rollback": "git revert",
         "next_step": "claim the lease",
         "acceptance": ["one criterion"],
+        # BL-4063: de tre grensefeltene er PAAKREVD ved inngangen. At 16 tester
+        # brakk da de kom inn er ikke stoey -- det er at hver KALLER naa maa
+        # erklaere hva endringen roerer foer noen kan plassere den.
+        "trust_boundary_change": "no",
+        "new_register": "no",
+        "contract_ref": "ADR-062",
     }
     base.update(overrides)
     return base
@@ -52,7 +59,12 @@ def passing_preflight():
             adr_status="accepted",
             bl_status="open",
             obsidian_status="fresh",
-            source_refs={k: k for k in ("git", "lease", "cad", "adr", "bl", "obsidian")},
+            # BL-4063: `lease` maa navngi FILER, ikke seg selv. Runneren splitter
+            # denne referansen paa komma til lease-settet som steg 11 sammenligner
+            # landingssettet mot (code_workflow.py:1669). Med "lease" ble
+            # lease-settet {"lease"}, og enhver ekte filsti falt utenfor det.
+            source_refs={**{k: k for k in ("git", "cad", "adr", "bl", "obsidian")},
+                         "lease": "agent/example.py"},
         )
     )
 
@@ -100,11 +112,46 @@ def test_promotion_never_fabricates_gate_evidence():
 
 # --- the promoted goal must not arrive pre-cleared -----------------------------
 
-def test_the_promoters_own_unknowns_are_what_block_preflight():
-    """Everything else is supplied as PASS-worthy, so only the promoter's
-    unknown CAD/ADR can be responsible for the BLOCK."""
+def test_the_promoters_own_unknowns_no_longer_block_at_step_4():
+    """BL-4063: denne testen hevdet en kontrakt som ble opphevet 2026-08-10.
+
+    `PreflightGate` KREVDE en gang CAD/ADR/BL/Brain paa steg 4, og resultatet var
+    `preflight_clear: 0 av 7` -- gaten spurte etter artefakter workflowen
+    produserer paa steg 7 og 13. BL-4029 L4 / ADR-062 V4 flyttet CAD/ADR til steg
+    7 der de hoerer hjemme, og gatens docstring sier det selv.
+
+    Testen ble roed i samme oeyeblikk og har staatt roed siden, fordi ingen kjoerte
+    DENNE fila -- den ligger utenfor de seks jeg kjoerte da steg 8 landet. En
+    test som hevder en opphevet kontrakt er ikke en vakt; den er stoey som ser ut
+    som en vakt, og den skjuler at ingen maaler det den het at den maalte.
+
+    Naa maaler den den GJELDENDE kontrakten: promoterens ukjente CAD/ADR slipper
+    gjennom steg 4, og blokkerer paa steg 7 i stedet.
+    """
     goal = build_goal(packet(), promoted_by="x", promoted_at="t")
     result = PreflightGate().evaluate(
+        PreflightInput(
+            git_clean=True,
+            lease_clear=True,
+            cad_status=goal.evidence["cad_status"],
+            adr_status=goal.evidence["adr_status"],
+            bl_status="open",
+            obsidian_status="fresh",
+            # BL-4063: `lease` maa navngi FILER, ikke seg selv. Runneren splitter
+            # denne referansen paa komma til lease-settet som steg 11 sammenligner
+            # landingssettet mot (code_workflow.py:1669). Med "lease" ble
+            # lease-settet {"lease"}, og enhver ekte filsti falt utenfor det.
+            source_refs={**{k: k for k in ("git", "cad", "adr", "bl", "obsidian")},
+                         "lease": "agent/example.py"},
+        )
+    )
+    assert result.status is PreflightStatus.PASS, (
+        "steg 4 skal IKKE lenger kreve CAD/ADR — det var sirkulariteten BL-4029 L4 loeste"
+    )
+    assert not any("CAD" in r or "ADR" in r for r in result.reasons)
+
+    # …og de ukjente blokkerer fortsatt, bare paa riktig steg.
+    design = DesignGate().evaluate(
         PreflightInput(
             git_clean=True,
             lease_clear=True,
@@ -115,9 +162,10 @@ def test_the_promoters_own_unknowns_are_what_block_preflight():
             source_refs={k: k for k in ("git", "lease", "cad", "adr", "bl", "obsidian")},
         )
     )
-    assert result.status is PreflightStatus.BLOCK
-    assert any("CAD" in reason for reason in result.reasons)
-    assert any("ADR" in reason for reason in result.reasons)
+    assert design.status is PreflightStatus.BLOCK
+    assert any("CAD" in r or "ADR" in r for r in design.reasons), (
+        "evidensen er ikke borte — den kreves paa steg 7"
+    )
 
 
 def test_owner_gated_goal_cannot_advance_even_on_a_passing_preflight():
@@ -145,10 +193,12 @@ def test_recorded_owner_approval_releases_the_gate():
     result = GovernedCodeRunner().run(
         approved,
         preflight=passing_preflight(),
-        build=lambda: {"tests": "pass", "diff_id": "d"},
+        build=lambda: {"tests": "pass", "diff_id": "d", "changed_files": 1, "changed_lines": 4},
         review=lambda evidence: ReviewEvidence(ReviewVerdict.PASS, "d", "sol"),
-        prelanding_evidence=LandingEvidence("sha", ReviewVerdict.PASS, "t", "r", "s", "rb", "l", "st", "c"),
-        landing=lambda evidence: LandingEvidence("sha", ReviewVerdict.PASS, "t", "r", "s", "rb", "l", "st", "c"),
+        prelanding_evidence=LandingEvidence("sha", ReviewVerdict.PASS, "t", "r", "s", "rb", "l", "st", "c",
+                                       landing_set=("agent/example.py",)),
+        landing=lambda evidence: LandingEvidence("sha", ReviewVerdict.PASS, "t", "r", "s", "rb", "l", "st", "c",
+                                       landing_set=("agent/example.py",)),
     )
     assert result.goal.state is GoalState.LANDED
 
@@ -157,10 +207,12 @@ def test_reviewer_gated_goal_is_not_caught_by_the_owner_gate():
     result = GovernedCodeRunner().run(
         build_goal(packet(cad_ref="CAD-M", adr_ref="ADR-038"), promoted_by="x", promoted_at="t"),
         preflight=passing_preflight(),
-        build=lambda: {"tests": "pass", "diff_id": "d"},
+        build=lambda: {"tests": "pass", "diff_id": "d", "changed_files": 1, "changed_lines": 4},
         review=lambda evidence: ReviewEvidence(ReviewVerdict.PASS, "d", "sol"),
-        prelanding_evidence=LandingEvidence("sha", ReviewVerdict.PASS, "t", "r", "s", "rb", "l", "st", "c"),
-        landing=lambda evidence: LandingEvidence("sha", ReviewVerdict.PASS, "t", "r", "s", "rb", "l", "st", "c"),
+        prelanding_evidence=LandingEvidence("sha", ReviewVerdict.PASS, "t", "r", "s", "rb", "l", "st", "c",
+                                       landing_set=("agent/example.py",)),
+        landing=lambda evidence: LandingEvidence("sha", ReviewVerdict.PASS, "t", "r", "s", "rb", "l", "st", "c",
+                                       landing_set=("agent/example.py",)),
     )
     assert result.goal.state is GoalState.LANDED
 
@@ -169,10 +221,12 @@ def test_goals_without_a_gate_field_are_unaffected():
     result = GovernedCodeRunner().run(
         FaberGoal("legacy", "pre-existing goal", cad_ref="CAD-M", adr_ref="ADR-038", bl_ref="BL-1"),
         preflight=passing_preflight(),
-        build=lambda: {"tests": "pass", "diff_id": "d"},
+        build=lambda: {"tests": "pass", "diff_id": "d", "changed_files": 1, "changed_lines": 4},
         review=lambda evidence: ReviewEvidence(ReviewVerdict.PASS, "d", "sol"),
-        prelanding_evidence=LandingEvidence("sha", ReviewVerdict.PASS, "t", "r", "s", "rb", "l", "st", "c"),
-        landing=lambda evidence: LandingEvidence("sha", ReviewVerdict.PASS, "t", "r", "s", "rb", "l", "st", "c"),
+        prelanding_evidence=LandingEvidence("sha", ReviewVerdict.PASS, "t", "r", "s", "rb", "l", "st", "c",
+                                       landing_set=("agent/example.py",)),
+        landing=lambda evidence: LandingEvidence("sha", ReviewVerdict.PASS, "t", "r", "s", "rb", "l", "st", "c",
+                                       landing_set=("agent/example.py",)),
     )
     assert result.goal.state is GoalState.LANDED
 
@@ -300,10 +354,12 @@ def test_an_autonomt_gate_is_not_mistaken_for_an_owner_gate():
     result = GovernedCodeRunner().run(
         build_goal(packet(gate="autonomt", cad_ref="CAD-M", adr_ref="ADR-038"), promoted_by="x", promoted_at="t"),
         preflight=passing_preflight(),
-        build=lambda: {"tests": "pass", "diff_id": "d"},
+        build=lambda: {"tests": "pass", "diff_id": "d", "changed_files": 1, "changed_lines": 4},
         review=lambda evidence: ReviewEvidence(ReviewVerdict.PASS, "d", "sol"),
-        prelanding_evidence=LandingEvidence("sha", ReviewVerdict.PASS, "t", "r", "s", "rb", "l", "st", "c"),
-        landing=lambda evidence: LandingEvidence("sha", ReviewVerdict.PASS, "t", "r", "s", "rb", "l", "st", "c"),
+        prelanding_evidence=LandingEvidence("sha", ReviewVerdict.PASS, "t", "r", "s", "rb", "l", "st", "c",
+                                       landing_set=("agent/example.py",)),
+        landing=lambda evidence: LandingEvidence("sha", ReviewVerdict.PASS, "t", "r", "s", "rb", "l", "st", "c",
+                                       landing_set=("agent/example.py",)),
     )
     assert result.goal.state is GoalState.LANDED
 

@@ -36,7 +36,39 @@ REQUIRED_FIELDS = (
     "repo_scope",
     "rollback",
     "next_step",
+    # BL-4063 -- the three the classifier (BL-4056, step 3) asks for. They are
+    # REQUIRED at the entrance, not derived later, and the difference matters:
+    #
+    #   MEASURED 2026-08-11: all 7 live goals reached step 1 and no further.
+    #   2 classified ADR, 5 DOUBT, 0 BL. Every reason was the same shape --
+    #   "ingen erklaering om tillits-/autonomi-grense; ubesvart er ikke nei".
+    #
+    # The classifier was right to ask and the promoter is right to refuse to
+    # invent (see the module docstring). What was missing is a PLACE for the
+    # answer to enter. A question no producer can answer is not a strict gate,
+    # it is an unpassable one -- and the only way through an unpassable gate is
+    # to fabricate, which is exactly what reviewer BLOCKed in cab10c5f9.
+    #
+    # Making them REQUIRED rather than optional-with-default is the whole point.
+    # A default of "no" would answer the boundary question on the proposer's
+    # behalf with the cheap answer, and the bias always runs toward the cheap
+    # answer. Absent stays absent, and absent BLOCKs promotion.
+    "trust_boundary_change",
+    "new_register",
+    "contract_ref",
 )
+
+#: The two boundary questions are TRISTATE on the wire: "yes" / "no" / "unknown".
+#: `unknown` is a legitimate, honest answer -- it routes the task to DOUBT and
+#: escalates, which is the designed behaviour. What is NOT legitimate is the
+#: field being missing, because a missing field is indistinguishable from a
+#: proposer who never considered the question.
+_TRISTATE = ("yes", "no", "unknown")
+
+#: Det eksplisitte ordet for «ingen kontrakt er navngitt». Et REQUIRED felt kan
+#: ikke vaere tomt, og et tomt felt ville dessuten ikke skilt «ingen kontrakt»
+#: fra «noen glemte feltet». Sentinelen sier hvilken av de to det er.
+_NO_CONTRACT = "none-declared"
 
 #: States a promotion must never overwrite.  Re-running the promoter is safe by
 #: design; silently resetting a goal that already advanced would not be.
@@ -79,6 +111,19 @@ def validate_packet(packet: Mapping[str, Any]) -> None:
         )
     if str(packet["bl_ref"]).strip().upper()[:3] != "BL-":
         raise PromotionBlocked(f"{packet['slug']}: bl_ref must be a BL-xxxx reference")
+    # BL-4063: the boundary answers must be one of three words, not free text.
+    # A proposer who writes "probably not" has not answered; the classifier
+    # would read it as an unrecognised value and fall back to doubt, which
+    # LOOKS like the honest path but hides that the packet was malformed.
+    # Rejecting it here keeps "unknown" meaning deliberately-unknown rather
+    # than accidentally-unparseable.
+    for field in ("trust_boundary_change", "new_register"):
+        value = str(packet[field]).strip().lower()
+        if value not in _TRISTATE:
+            raise PromotionBlocked(
+                f"{packet['slug']}: {field} must be one of {'/'.join(_TRISTATE)}, "
+                f"got {str(packet[field])!r} -- an unparseable answer is not an answer"
+            )
 
 
 def build_goal(packet: Mapping[str, Any], *, promoted_by: str, promoted_at: str) -> FaberGoal:
@@ -116,6 +161,25 @@ def build_goal(packet: Mapping[str, Any], *, promoted_by: str, promoted_at: str)
         "adr_status": str(packet.get("adr_status", "unknown")),
         "lease": str(packet.get("lease", "not_claimed")),
         "preflight": str(packet.get("preflight", "not_run")),
+        # BL-4063: passed THROUGH from the packet, never derived here. The
+        # promoter carries the proposer's declaration; it does not form one.
+        "trust_boundary_change": str(packet["trust_boundary_change"]),
+        "new_register": str(packet["new_register"]),
+        # BL-4063 / reviewer BLOCK-2: `none-declared` er en SENTINEL, ikke en
+        # kontrakt. Foer denne endringen fantes noekkelen ikke, saa broen falt
+        # tilbake paa `adr_ref`/`cad_ref` (faber_control_bridge:284). Med en
+        # alltid-utfylt noekkel var den fallbacken DOED for hvert promotert maal,
+        # og et maal med en ekte akseptert ADR klassifiserte DOUBT paa
+        # «none-declared er ikke en navngitt kontrakt».
+        #
+        # Et paakrevd felt som alltid har en verdi kan SKYGGE for en kilde som
+        # hadde et bedre svar. Sentinelen loeses derfor her, mot pakkens egne
+        # refs, foer den skrives.
+        "contract_ref": (str(packet["contract_ref"]).strip()
+                         if str(packet["contract_ref"]).strip() != _NO_CONTRACT
+                         else (str(packet.get("adr_ref", "")).strip()
+                               or str(packet.get("cad_ref", "")).strip()
+                               or _NO_CONTRACT)),
     }
     return FaberGoal(
         goal_id=f"{GOAL_ID_PREFIX}{slug}",

@@ -16,6 +16,8 @@ import pytest
 
 from agent.code_workflow import ScopeBudget
 from agent.task_classifier import (
+    DECLARED_UNKNOWN,
+    Signal,
     ADR_ALLOCATOR_CMD,
     Classification,
     DesignReviewRequest,
@@ -708,13 +710,60 @@ def test_scope_text_yields_paths_and_leaves_prose_alone():
     assert proposal.touched_paths == ("hermes_cli/kanban_db.py",)
 
 
-@pytest.mark.parametrize("raw", ["", "unknown", "kanskje", None, "n/a"])
-def test_anything_that_is_not_a_clear_no_stays_unanswered(raw):
-    """«unknown» er ikke «nei». Tri-state, ikke boolsk med default."""
+@pytest.mark.parametrize("raw", ["", "kanskje", None, "n/a"])
+def test_anything_that_is_not_a_clear_answer_stays_unanswered(raw):
+    """Ugjenkjennelig tekst er IKKE «nei», og heller ikke «vet ikke».
+
+    «kanskje» og «n/a» er ord en proposer kan ha ment som ukjent, men vi kan
+    ikke vite det — så de forblir UERKLÆRT. Å tolke dem som erklært-ukjent
+    ville gjort en slurvete pakke om til en vurdert en.
+    """
     goal = {**GOAL, "evidence": {**GOAL["evidence"], "trust_boundary_change": raw}}
     proposal = bridge.proposal_from_goal(goal)
     assert proposal.declared_trust_boundary_change is None
     assert TaskClassifier().classify(proposal).task_class is TaskClass.DOUBT
+
+
+def test_a_declared_unknown_is_not_the_same_as_an_absent_field():
+    """BL-4063 / reviewer BLOCK-1: «unknown» kollapset til `None`.
+
+    Promoteren KREVDE erklæringen, pakken BAR den, og broen kastet den — så
+    journalen skrev «ingen erklæring ble gitt» om sju pakker som hadde erklært.
+    Begge ruter til DOUBT, så utfallet var riktig og årsaken usann. Det er den
+    kombinasjonen som er vanskeligst å oppdage: et riktig utfall av en usann
+    årsak ser bekreftet ut.
+
+    Skillet bærer en handling: «ingen har vurdert» trenger en proposer, «vurdert
+    og vet ikke» trenger en undersøkelse.
+    """
+    declared = bridge.proposal_from_goal(
+        {**GOAL, "evidence": {**GOAL["evidence"], "trust_boundary_change": "unknown"}})
+    absent = bridge.proposal_from_goal(
+        {**GOAL, "evidence": {**GOAL["evidence"], "trust_boundary_change": None}})
+
+    assert declared.declared_trust_boundary_change is DECLARED_UNKNOWN
+    assert absent.declared_trust_boundary_change is None
+
+    sig_declared = {h.signal for h in TaskClassifier().classify(declared).hits}
+    sig_absent = {h.signal for h in TaskClassifier().classify(absent).hits}
+    assert Signal.DECLARED_UNKNOWN in sig_declared
+    assert Signal.UNDECLARED_BOUNDARY not in sig_declared
+    assert Signal.UNDECLARED_BOUNDARY in sig_absent
+    assert Signal.DECLARED_UNKNOWN not in sig_absent
+
+    # Begge er fortsatt DOUBT — skillet endrer BEGRUNNELSEN, ikke utfallet.
+    for p in (declared, absent):
+        assert TaskClassifier().classify(p).task_class is TaskClass.DOUBT
+
+
+def test_declared_unknown_refuses_to_be_read_as_a_boolean():
+    """`if declared_x:` ville lest «vet ikke» som «nei» — den billige klassen.
+
+    Sentinelen kaster heller enn å svare, så den feilen ikke kan skrives i det
+    hele tatt.
+    """
+    with pytest.raises(TypeError):
+        bool(DECLARED_UNKNOWN)
 
 
 @pytest.mark.parametrize("raw,expected", [(False, False), (True, True), (0, False)])

@@ -68,6 +68,7 @@ from pathlib import Path
 from typing import Any, Sequence
 
 from agent.task_classifier import (
+    DECLARED_UNKNOWN,
     Reversibility,
     TaskClass,
     TaskClassifier,
@@ -214,6 +215,7 @@ _PATHISH = re.compile(r"[\w./-]+\.(?:py|ts|tsx|js|json|ya?ml|md|sh|service|plist
 #: blir `None`, altså «ubesvart». Se `TaskProposal`: ubesvart er ikke «nei».
 _YES = frozenset({"ja", "yes", "true", "1"})
 _NO = frozenset({"nei", "no", "false", "0"})
+_UNKNOWN = frozenset({"unknown", "ukjent", "vet_ikke"})
 
 
 def _tri(value: object) -> bool | None:
@@ -231,6 +233,15 @@ def _tri(value: object) -> bool | None:
         return True
     if raw in _NO:
         return False
+    if raw in _UNKNOWN:
+        # BL-4063 (reviewer BLOCK-1): FØR dette falt «unknown» hit til `None` og
+        # ble bit-identisk med et FRAVÆRENDE felt. Promoteren krevde erklæringen,
+        # pakken bar den, og broen kastet den — så journalen skrev «ingen
+        # erklæring ble gitt» om sju pakker som hadde erklært.
+        #
+        # Utfallet var likevel DOUBT, altså riktig, og DET er grunnen til at det
+        # var vanskelig å se: et riktig utfall av en usann årsak ser bekreftet ut.
+        return DECLARED_UNKNOWN
     return None
 
 

@@ -213,6 +213,18 @@ class Signal(str, Enum):
     UNKNOWN_REVERSIBILITY = "unknown_reversibility"
     MISSING_CONTRACT_REF = "missing_contract_ref"
     UNDECLARED_BOUNDARY = "undeclared_boundary"
+    #: BL-4063 (reviewer BLOCK-1): proposeren SVARTE, og svaret var «vet ikke».
+    #: Foer dette kollapset `unknown` til `None` i broens `_tri()` og ble
+    #: BIT-IDENTISK med et fravaerende felt -- saa journalen skrev «ingen
+    #: erklaering ble gitt» om pakker som HADDE erklaert. Begge ruter til DOUBT,
+    #: saa utfallet var riktig og aarsaken usann, og det er den verste
+    #: kombinasjonen: den ser bekreftet ut.
+    #:
+    #: Skillet er ikke kosmetisk. «Ingen har vurdert spoersmaalet» krever en
+    #: proposer; «vi har vurdert det og vet ikke» krever en UNDERSOEKELSE. Det
+    #: er ulike neste-handlinger, og en gate som ikke kan si hvilken, sender
+    #: alle til samme sted.
+    DECLARED_UNKNOWN = "declared_unknown"
     TEXT_STRUCTURE_DISAGREEMENT = "text_structure_disagreement"
     EMPTY_PROPOSAL = "empty_proposal"
 
@@ -544,6 +556,39 @@ def parse_contract_ref(ref: str) -> str | None:
     return None
 
 
+class _DeclaredUnknown:
+    """Sentinel: proposeren erklaerte «vet ikke».
+
+    En egen TYPE og ikke strengen `"unknown"`, saa den ikke kan forveksles med
+    fritekst en proposer tilfeldigvis skrev, og ikke kan sammenlignes sant mot
+    `False` slik en tom streng ville.
+    """
+
+    __slots__ = ()
+
+    def __repr__(self) -> str:  # pragma: no cover - kun for feilsoeking
+        return "DECLARED_UNKNOWN"
+
+    #: KJENT EGENSKAP, ikke en overraskelse (reviewer, BL-4063): sentinelen er
+    #: IKKE json-serialiserbar. `json.dumps(asdict(proposal))` kaster TypeError.
+    #: Ingen kodesti gjoer det i dag -- broen serialiserer `classification.as_dict()`,
+    #: som er strenger og bools. Men den foerste som journalfoerer PROPOSALEN
+    #: i stedet for klassifiseringen faar en hard krasj, ikke en stille kollaps
+    #: tilbake til `None`. Det er riktig feilretning, og den er skrevet ned her
+    #: saa den er en egenskap og ikke et funn senere.
+
+    def __bool__(self) -> bool:
+        # Sperrer `if declared_x:` -- den ville lest «vet ikke» som «nei».
+        raise TypeError(
+            "DECLARED_UNKNOWN er ikke sant eller usant. Sjekk `is DECLARED_UNKNOWN` "
+            "eller `is True`/`is False` eksplisitt."
+        )
+
+
+#: Den ene instansen. Sammenlign med `is`.
+DECLARED_UNKNOWN = _DeclaredUnknown()
+
+
 @dataclass(frozen=True)
 class TaskProposal:
     """Det steg 3 har å gå på.
@@ -567,9 +612,12 @@ class TaskProposal:
     #: BL-arbeid.
     contract_ref: str = ""
     #: Rører denne en tillits- eller autonomi-grense? ``None`` = ubesvart.
-    declared_trust_boundary_change: bool | None = None
+    #: `True`/`False` = erklaert. `None` = ingen erklaerte noe.
+    #: :data:`DECLARED_UNKNOWN` = erklaert som ukjent -- en tredje verdi, ikke
+    #: en tredje maate aa vaere `None` paa.
+    declared_trust_boundary_change: "bool | None | _DeclaredUnknown" = None
     #: Innfører den et nytt register, navnerom eller kontrakt mellom flater?
-    declared_new_register: bool | None = None
+    declared_new_register: "bool | None | _DeclaredUnknown" = None
     #: Anslått blast-radius. Utelatt på steg 3 er normalt — diffen finnes ikke.
     estimated_changed_files: int | None = None
     estimated_changed_lines: int | None = None
@@ -715,17 +763,26 @@ class TaskClassifier:
                 "erklært «intet nytt register», men ordlyd/diff sier noe annet "
                 f"({register_hits[0].evidence})", "declared"))
 
-        # Erklæringen som ikke ble gitt.
-        if proposal.declared_trust_boundary_change is None:
-            hits.append(SignalHit(
-                Signal.UNDECLARED_BOUNDARY, Disposition.DOUBT,
-                "ingen erklæring om tillits-/autonomi-grense; ubesvart er ikke "
-                "«nei»", "declared"))
-        if proposal.declared_new_register is None:
-            hits.append(SignalHit(
-                Signal.UNDECLARED_BOUNDARY, Disposition.DOUBT,
-                "ingen erklæring om nytt register/navnerom/kontrakt; ubesvart "
-                "er ikke «nei»", "declared"))
+        # Erklæringen som ikke ble gitt — og den som ble gitt som «vet ikke».
+        # BL-4063: begge gir DOUBT, men av ULIKE grunner, og neste handling er
+        # ikke den samme. «Ingen har vurdert» trenger en proposer; «vi har
+        # vurdert og vet ikke» trenger en undersøkelse.
+        for value, undeclared_text, unknown_text in (
+            (proposal.declared_trust_boundary_change,
+             "ingen erklæring om tillits-/autonomi-grense; ubesvart er ikke «nei»",
+             "erklært UKJENT om tillits-/autonomi-grense — spørsmålet er vurdert, "
+             "ikke besvart; det krever en undersøkelse, ikke en ny proposer"),
+            (proposal.declared_new_register,
+             "ingen erklæring om nytt register/navnerom/kontrakt; ubesvart er ikke «nei»",
+             "erklært UKJENT om nytt register/navnerom/kontrakt — vurdert, ikke besvart"),
+        ):
+            if value is DECLARED_UNKNOWN:
+                hits.append(SignalHit(
+                    Signal.DECLARED_UNKNOWN, Disposition.DOUBT, unknown_text, "declared"))
+            elif value is None:
+                hits.append(SignalHit(
+                    Signal.UNDECLARED_BOUNDARY, Disposition.DOUBT,
+                    undeclared_text, "declared"))
 
         # Positiv evidens for den billige klassen. Fraværet er funnet.
         if proposal.reversibility is Reversibility.IRREVERSIBLE:
