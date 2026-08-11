@@ -707,3 +707,29 @@ class _PluginProvidersPutBody(BaseModel):
 class _PluginVisibilityBody(BaseModel):
     hidden: bool
 
+
+# --- BL-4055: second opinion (uavhengig Claude Opus-vurderer) ---
+
+class SecondOpinionRequest(BaseModel):
+    """Innsendt fra Hermes GUI for aa be om en UAVHENGIG andre-mening.
+
+    ``confidence``/``changed_files``/``changed_lines`` er ``Optional`` MED VILJE
+    og har ingen defaultverdi som later som om de er maalt: et manglende tall er
+    ``None``, og ``SecondOpinionTrigger`` behandler ``None`` som UMAALT, som
+    utloeser. En default paa 1.0 eller 0 her ville stilltiende gjort «vi vet
+    ikke» om til «det gaar bra» -- nettopp den slutningen kjeden forbyr.
+    """
+
+    diff: str
+    diff_id: str = ""
+    reviewer: str = ""
+    verdict: str = "PASS"
+    confidence: Optional[float] = None
+    changed_files: Optional[int] = None
+    changed_lines: Optional[int] = None
+    landing_set: List[str] = []
+    bl_ref: str = ""
+    summary: str = ""
+    #: Hent en mening selv om utloeseren ikke fyrer (Morten spoer for haand).
+    #: Forbigaar UTLOESEREN -- aldri fail-closed-reglene.
+    force: bool = False

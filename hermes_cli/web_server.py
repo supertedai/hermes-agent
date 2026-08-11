@@ -1336,6 +1336,7 @@ from hermes_cli.web_models import (  # noqa: F401
     MemoryProviderSelect,
     MemoryReset,
     BackupRequest,
+    SecondOpinionRequest,
     ImportRequest,
     HookCreate,
     HookDelete,
@@ -12635,6 +12636,94 @@ async def run_security_audit():
         _log.exception("Failed to spawn security audit")
         raise HTTPException(status_code=500, detail=f"Failed to run security audit: {exc}")
     return {"ok": True, "pid": proc.pid, "name": "security-audit"}
+
+
+# --- BL-4055: second opinion -- uavhengig Claude Opus-vurderer ---------------
+
+
+@app.post("/api/faber/second-opinion")
+async def faber_second_opinion(body: SecondOpinionRequest):
+    """Hent en UAVHENGIG andre-mening om en endring steg 10 allerede har PASSet.
+
+    **Denne ruta RAPPORTERER; den haandhever ikke.** Haandhevelsespunktet er
+    ``GovernedCodeRunner.run`` i ``agent/code_workflow.py``, som er det eneste
+    stedet en BLOCK faktisk stopper noe. Skillet er med vilje: en gate som bare
+    finnes bak en HTTP-rute er en gate produsenten kan la vaere aa kalle, og det
+    er akkurat defektklassen BL-4029 og denne BL-en rydder opp i. Ruta finnes
+    fordi Mortens direktiv var at andre-meningen skal kunne kalles fra Hermes
+    GUI -- for aa spoerre for haand og for aa SE begge stemmer.
+
+    ``force`` forbigaar UTLOESEREN (Morten kan be om en mening om hva som helst).
+    Den forbigaar ALDRI fail-closed-reglene: uten svar, med ugyldig JSON eller
+    fra en ikke-uavhengig kilde er utfallet fortsatt ``UNAVAILABLE``, og
+    ``allow`` er ``false``.
+
+    Ruta ligger under ``/api/`` og autentiseres derfor av auth-middlewaren som
+    alle andre ikke-offentlige API-ruter -- den staar bevisst IKKE i
+    ``PUBLIC_API_PATHS``: den bruker en API-noekkel og koster penger per kall.
+    """
+    try:
+        from agent.second_opinion import (
+            ChangeUnderReview,
+            SecondOpinionTrigger,
+            resolve_disagreement,
+        )
+        from agent.second_opinion_client import fetch_second_opinion
+    except Exception as exc:  # noqa: BLE001
+        _log.exception("second opinion module unavailable")
+        raise HTTPException(
+            status_code=500,
+            detail=f"second opinion unavailable: {type(exc).__name__}",
+        )
+
+    change = ChangeUnderReview(
+        diff_id=body.diff_id or "gui",
+        reviewer=body.reviewer or "hermes.gui",
+        verdict=body.verdict,
+        confidence=body.confidence,
+        changed_files=body.changed_files,
+        changed_lines=body.changed_lines,
+        landing_set=tuple(body.landing_set or ()),
+        bl_ref=body.bl_ref,
+        summary=body.summary,
+    )
+
+    trigger = SecondOpinionTrigger().evaluate(change)
+    if not trigger.required and not body.force:
+        # Ingen utloeser og ingen forespoersel: ikke bruk et Opus-kall. Dette er
+        # IKKE et bestaatt-stempel -- `consulted: false` sier at ingen ble spurt.
+        return {
+            "ok": True,
+            "triggered": False,
+            "consulted": False,
+            "reasons": [],
+            "allow": True,
+            "gate": "second_opinion_not_triggered",
+            "reason": "no trigger fired; the reviewer PASS stands on its own",
+        }
+
+    reasons = trigger.reasons or (("forced_by_operator",) if body.force else ())
+    opinion = await run_in_threadpool(
+        fetch_second_opinion, change, trigger_reasons=reasons, diff_text=body.diff
+    )
+    resolution = resolve_disagreement(change=change, opinion=opinion)
+
+    return {
+        "ok": True,
+        "triggered": bool(trigger.required),
+        "consulted": True,
+        "reasons": list(reasons),
+        "status": opinion.status.value,
+        "allow": resolution.allow,
+        "gate": resolution.gate,
+        "reason": resolution.reason,
+        "escalate_to_owner": resolution.escalate_to_owner,
+        # Begge stemmer, ALLTID -- ogsaa naar de er enige.
+        "votes": dict(resolution.votes),
+        "findings": list(opinion.findings),
+        "model": opinion.model,
+        "provenance": opinion.provenance,
+    }
 
 
 def _dashboard_backup_dir() -> Path:
