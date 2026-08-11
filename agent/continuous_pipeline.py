@@ -230,6 +230,7 @@ class MemoryScheduler:
 class MemoryHookResult:
     selection: MemorySelection
     context: str = ""
+    source_scope: str = ""
 
 
 class MemoryManagerBridge:
@@ -240,9 +241,18 @@ class MemoryManagerBridge:
     authoritative until the canonical layer registry exposes per-layer reads.
     """
 
-    def __init__(self, manager: Any, scheduler: MemoryScheduler):
+    def __init__(
+        self,
+        manager: Any,
+        scheduler: MemoryScheduler,
+        *,
+        strict: bool = False,
+        source_scope: str = "",
+    ):
         self.manager = manager
         self.scheduler = scheduler
+        self.strict = strict
+        self.source_scope = source_scope
 
     def before_turn(
         self,
@@ -276,15 +286,19 @@ class MemoryManagerBridge:
                 actual_tokens = estimate_memory_tokens(context)
                 mode = "per_layer_reader"
             else:
-                context = self.manager.prefetch_all(query, session_id=session_id, strict=True)
+                context = self.manager.prefetch_all(query, session_id=session_id, strict=self.strict)
                 context = trim_memory_to_budget(context or "", budget_tokens)
                 actual_tokens = estimate_memory_tokens(context)
         else:
-            context = self.manager.prefetch_all(query, session_id=session_id, strict=True)
+            context = self.manager.prefetch_all(query, session_id=session_id, strict=self.strict)
             context = trim_memory_to_budget(context or "", budget_tokens)
             actual_tokens = estimate_memory_tokens(context)
         selection = replace(selection, actual_tokens=actual_tokens, enforcement_mode=mode)
-        return MemoryHookResult(selection=selection, context=context)
+        return MemoryHookResult(
+            selection=selection,
+            context=context,
+            source_scope=self.source_scope,
+        )
 
     def after_turn(
         self,

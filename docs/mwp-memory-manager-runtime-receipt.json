@@ -1,0 +1,45 @@
+{
+  "artifact_id": "mwp-memory-manager-runtime-receipt-v1",
+  "recorded_at": "2026-08-10T05:56:17.970056+00:00",
+  "metadata_only": true,
+  "runtime_path": "hermes-agent-engine",
+  "endpoint": "http://192.168.40.12:8010/api/v1/memory/layers",
+  "provider": "symbiose-layer-status",
+  "principal_id": "morten",
+  "tenant_id": "personal",
+  "system_scope": "faber.codex",
+  "session_id": "runtime-receipt-session-verified",
+  "conversation_id": "runtime-receipt",
+  "correlation_id": "runtime-receipt-2026-08-10-verified",
+  "event_id": "mem-eb5fb54aa517c28a",
+  "payload_included": false,
+  "envelope_verdict": "VALID",
+  "validation_reasons": [],
+  "layer_status": {
+    "episodisk": {
+      "state": "measured",
+      "stale": false,
+      "ownership": "user-scoped"
+    },
+    "semantisk": {
+      "state": "measured",
+      "stale": false,
+      "ownership": "user-scoped"
+    },
+    "governance": {
+      "state": "blind",
+      "stale": false,
+      "ownership": "system-owned",
+      "blind_expected_for_principal": true,
+      "reader": null,
+      "n": 0,
+      "classification": "not-user-memory",
+      "reason": "Governance rules govern all principal types and belong to the system axis; a user-memory cell would be a category error.",
+      "source_assertion": "BL-3435 measured: governance rules are system-wide and not owned by user, agent, or system principal cells."
+    }
+  },
+  "read_status": "VERIFIED",
+  "write_status": "NOT_ATTEMPTED",
+  "rollback_status": "NOT_APPLICABLE",
+  "authority_status": "READ_ONLY_PROVIDER_REACHABLE"
+}
