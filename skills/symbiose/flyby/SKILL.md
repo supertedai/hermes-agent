@@ -23,9 +23,21 @@ Morten skriver noe som ikke er et spørsmål, men et **innspill**: en idé, en b
 ser. Ofte innledet med «flyby», men like ofte ikke — kjennetegnet er at det peker på noe som burde
 gjøres, ikke noe som skal besvares.
 
-## Hva du GJØR
+## Fortsettelse av store tråd-/flyby-oppslag
 
-### 1. Strukturer
+Når en flyby-sak kommer fra en annen tråd, skal oppslaget kjøres som en **bounded continuation** — aldri som ett bredt søk i hele chat-historikken, grafen og repoet samtidig:
+
+1. Opprett én continuation-id med kilde-tråd-id(er).
+2. Hent maksimalt én liten batch om gangen (standard: 4 metadata-poster).
+3. Etter hver batch: skriv atomisk checkpoint med cursor, total, status og continuation-id.
+4. Returner bare metadata-only readback: id, session-id, tittel, status, kilde og eventuell feilkode. Ikke rå innhold, intern resonnering eller store tool-resultater.
+5. Ved avbrudd/timeout: last inn siste checkpoint og fortsett fra cursor. Ikke start søket på nytt og ikke gjenta en uavklart skriving blindt.
+6. Stopp etter én batch per chat-turn og gi et kort mellomresultat før neste batch.
+
+`OPEN` betyr at continuationen skal kunne resume. `COMPLETE` krever cursor==total. Manglende checkpoint eller uverifisert remote-resultat skal rapporteres som `UNVERIFIED`, ikke som tomt resultat.
+
+Implementasjonskontrakten ligger i `agent/mwp_flyby_continuation.py`; den skal brukes av MWP-ruter som bygger flyby-status fra flere sessioner.
+
 
 ```
 problem            hva som er galt eller mangler, i én setning
