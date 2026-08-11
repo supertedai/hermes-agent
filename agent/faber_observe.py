@@ -20,7 +20,7 @@ import json
 import os
 import subprocess
 import sys
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Mapping, Sequence
@@ -55,6 +55,15 @@ class GoalObservation:
     stopped_by: str
     reasons: tuple[str, ...] = ()
     next_step: str = ""
+    #: BL-4087 PROVENANS, IKKE GATE. `git_clean` er naa scope-relativ (se
+    #: `scope_is_clean`), og da MAA det staa hvor mye skitt som faktisk finnes
+    #: rundt -- ellers leses en PASS som «treet var rent», og det er en paastand
+    #: ingen har maalt. -1 betyr at treet ikke lot seg lese.
+    repo_dirty_files: int = -1
+    #: Filene i MAALETS EGET scope som er skitne. Tom naar `git_clean` er sann.
+    scope_dirty: tuple[str, ...] = ()
+    #: Commiten treet sto paa da observasjonen ble gjort. MAALT, ikke oppgitt.
+    git_ref: str = ""
 
 
 @dataclass(frozen=True)
@@ -81,6 +90,25 @@ class ObserveResult:
                 "this tick has no capability to perform any of them. A goal counted in "
                 "preflight_clear still has the runner's build/review/landing gates ahead of it."
             ),
+            # BL-4087: hva `git_clean` NÅ betyr, sagt der resultatet leses.
+            "git_clean_semantics": (
+                "scope-relative: only the files each goal's own repo_scope names are "
+                "required to be clean. PreflightGate's own contract says 'those leased "
+                "files are clean'; measuring the whole repo contradicted it and, in a "
+                "worktree shared by parallel streams, made the gate unpassable by "
+                "construction (measured 2026-08-11: ~120-130 dirty files, a moving "
+                "number; 7 of 7 goals blocked, "
+                "uninterrupted). The surrounding dirt is not hidden — see "
+                "repo_dirty_files and scope_dirty per goal."
+            ),
+            # Observatoeren TAR ingen lease. At maal staar igjen med kun
+            # lease-grunner er derfor forventet og er selve overleveringen til
+            # steg 6 -- ikke en feil, og ikke noe aa «fikse» her.
+            "lease_note": (
+                "This tick never claims. A goal whose only remaining reasons are "
+                "lease-related has cleared everything step 4 can answer without acting; "
+                "the claim itself is step 6 (agent.faber_runtime.lease_take)."
+            ),
             "observations": [
                 {
                     "goal_id": o.goal_id,
@@ -91,6 +119,14 @@ class ObserveResult:
                     "stopped_by": o.stopped_by,
                     "reasons": list(o.reasons),
                     "next_step": o.next_step,
+                    # BL-4087 PROVENANS. Uten disse tre er en scope-relativ
+                    # `git_clean` en usagt smalning: leseren ville sett PASS og
+                    # antatt et rent tre. Nå står det hvor mye skitt som faktisk
+                    # er der, hvilke av MÅLETS EGNE filer som er skitne, og
+                    # hvilken commit renheten ble målt mot.
+                    "repo_dirty_files": o.repo_dirty_files,
+                    "scope_dirty": list(o.scope_dirty),
+                    "git_ref": o.git_ref,
                 }
                 for o in self.observations
             ],
@@ -101,24 +137,115 @@ def _now() -> str:
     return datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
 
 
-def git_is_clean(repo: str | os.PathLike[str] | None) -> bool:
-    """Measure the target tree rather than assuming it.
+def _porcelain(repo: str | os.PathLike[str] | None) -> "tuple[bool, frozenset[str]]":
+    """``(lesbart, skitne stier)``. Uleselig tre gir ``(False, frozenset())``.
 
-    An unreachable or non-git path is reported dirty: unknown is not clean.
+    Uleselig er IKKE rent. Kallerne skiller derfor paa flagget, ikke paa om
+    mengden er tom -- en tom mengde fra et uleselig tre ville lest som «alt er
+    rent», som er den samme fravaer-som-funn-feilen resten av kjeden er bygget
+    for aa hindre.
     """
     if not repo:
-        return False
+        return False, frozenset()
     try:
         proc = subprocess.run(
             ["git", "-C", str(repo), "status", "--porcelain"],
-            capture_output=True,
-            text=True,
-            timeout=30,
-            check=False,
+            capture_output=True, text=True, timeout=30, check=False,
         )
     except (OSError, subprocess.SubprocessError):
-        return False
-    return proc.returncode == 0 and not proc.stdout.strip()
+        return False, frozenset()
+    if proc.returncode != 0:
+        return False, frozenset()
+    paths: set[str] = set()
+    for line in proc.stdout.splitlines():
+        if len(line) > 3:
+            entry = line[3:].strip()
+            # rename-form: "gammel -> ny"; begge sider er beroert
+            if " -> " in entry:
+                a, b = entry.split(" -> ", 1)
+                paths.add(a.strip().strip('"'))
+                paths.add(b.strip().strip('"'))
+            else:
+                paths.add(entry.strip('"'))
+    return True, frozenset(paths)
+
+
+def git_head(repo: str | os.PathLike[str] | None) -> str:
+    """Commiten treet staar paa. MAALT -- ikke oppgitt av et maal.
+
+    BL-4087. `PreflightGate.REQUIRED_REFS` krever `git`, og `evidence_for` leste
+    den fra `goal.evidence["git_ref"]` -- et felt INGEN produsent skriver. Alle
+    sju maalene BLOKKERTE derfor paa «missing authoritative source refs: git»,
+    i HVER pakke sporet holder: 495 av 495, maalt 2026-08-11.
+
+    Det arvede BL-4029-tallet er «340 ... samples», og det staar i FEM filer --
+    `task_classifier.py`, `faber_fitness.py`, `code_workflow.py`,
+    `tests/test_faber_fitness.py`, `tests/test_task_classifier.py`. Ikke fire, og
+    INGEN av dem sier «observations»: den ordlyden fant denne endringen paa og
+    tilskrev deretter eldre kode. Tallet er dessuten 155 for lavt mot maalingen
+    over. Sporet roterer ved TRAIL_LIMIT=500, saa 495 er et GULV, ikke en start.
+
+    Det er BL-4029 L4s sirkularitet i sin minste form, ett lag lenger ut: gaten
+    ble rettet, produsenten ikke. Og «autoritativ» betyr her nettopp at den ikke
+    skal komme fra maalet -- en sha maalet oppgir om seg selv er et sitat.
+    """
+    if not repo:
+        return ""
+    try:
+        proc = subprocess.run(
+            ["git", "-C", str(repo), "rev-parse", "HEAD"],
+            capture_output=True, text=True, timeout=30, check=False,
+        )
+    except (OSError, subprocess.SubprocessError):
+        return ""
+    return proc.stdout.strip() if proc.returncode == 0 else ""
+
+
+def git_is_clean(repo: str | os.PathLike[str] | None) -> bool:
+    """Er HELE treet rent? Beholdt uendret for kallere som spoer om det.
+
+    Merk at dette IKKE lenger er det steg 4 spoer om -- se
+    :func:`scope_is_clean`.
+    """
+    ok, paths = _porcelain(repo)
+    return ok and not paths
+
+
+def scope_is_clean(repo: str | os.PathLike[str] | None, scope: str,
+                   ) -> "tuple[bool, tuple[str, ...], int]":
+    """Er FILENE DETTE MAALET SKAL ROERE rene? Returnerer ``(rent, skitne-i-scope, repo-skitne)``.
+
+    BL-4087, OG DETTE ER IKKE EN LOESNING JEG FANT PAA. `PreflightGate`s egen
+    docstring lister kontrakten sin i tre punkter, og punkt 2 lyder ordrett:
+
+        2. those leased files are clean
+
+    Implementasjonen maalte likevel `git status --porcelain` over HELE repoet.
+    I et delt arbeidstre med aatte parallelle stroemmer er repo-vid renhet
+    uoppnaaelig ved konstruksjon -- maalt 2026-08-11: rundt 120-130 skitne
+    filer (129 ved siste lesning; tallet BEVEGER SEG, og det er poenget), og alle
+    sju maal BLOKKERTE paa nettopp den grunnen, uavbrutt. Da er gaten ikke en
+    gate, den er en VEGG. Samme funn som BL-4055s andre-mening, og samme
+    falsifikator som BL-4029 L4 brukte: *finnes det en sekvens av legitime
+    handlinger som aapner den?* Repo-vidt: nei. Scope-relativt: ja.
+
+    ET SCOPE UTEN FILER ER IKKE RENT. Det er UKJENT, og en ukjent mengde kan
+    ikke vaere disjunkt fra noe -- samme regel som `LandingScopeGate` paa steg 11.
+
+    OG DEN VIDERE SKITTEN FORSVINNER IKKE, DEN BLIR REGISTRERT. Tredje
+    returverdi er antallet skitne filer i repoet, som kalleren skriver inn i
+    observasjonen. Ellers ville en PASS lest som «treet var rent», og det er en
+    paastand ingen har maalt. En maalings-mangel degraderer dekningen; en
+    POLICY-avgrensning registreres -- og dette er det siste.
+    """
+    ok, dirty = _porcelain(repo)
+    if not ok:
+        return False, (), -1
+    paths = _scope_paths(scope)
+    if not paths:
+        return False, (), len(dirty)
+    inside = tuple(sorted(p for p in paths if p in dirty))
+    return (not inside), inside, len(dirty)
 
 
 #: BL-4029 L3 -- scope tokens mapped to a CONTENT marker, never a directory or
@@ -225,7 +352,7 @@ def _resolve_lease_clear(ev: Mapping[str, Any]) -> tuple[bool, str]:
                    f"paastand og aeres ikke")
 
 
-def evidence_for(goal: FaberGoal, *, git_clean: bool) -> PreflightInput:
+def evidence_for(goal: FaberGoal, *, git_clean: bool, git_ref: str = "") -> PreflightInput:
     """Build the goal's preflight input from what it actually recorded.
 
     Nothing is upgraded on the way in: a status the goal never established stays
@@ -237,7 +364,10 @@ def evidence_for(goal: FaberGoal, *, git_clean: bool) -> PreflightInput:
     # never established one is missing it, and the gate names it in the BLOCK.
     refs = {}
     for name, value in (
-        ("git", ev.get("git_ref", "")),
+        # BL-4087: `git` MAALES (se `git_head`) og faller tilbake paa maalets eget
+        # felt bare hvis maalingen ikke lot seg gjoere. Rekkefoelgen er poenget:
+        # den autoritative kilden foerst, maalets selvrapport som nodloesning.
+        ("git", git_ref or ev.get("git_ref", "")),
         ("lease", ev.get("lease_ref", "")),
         ("cad", goal.cad_ref),
         ("adr", goal.adr_ref),
@@ -262,9 +392,10 @@ def evidence_for(goal: FaberGoal, *, git_clean: bool) -> PreflightInput:
     )
 
 
-def observe_goal(goal: FaberGoal, *, git_clean: bool, gate: PreflightGate) -> GoalObservation:
+def observe_goal(goal: FaberGoal, *, git_clean: bool, gate: PreflightGate,
+                 git_ref: str = "") -> GoalObservation:
     """Evaluate one goal without touching it."""
-    result = gate.evaluate(evidence_for(goal, git_clean=git_clean))
+    result = gate.evaluate(evidence_for(goal, git_clean=git_clean, git_ref=git_ref))
     # The runner's own predicate, imported rather than restated: a copy here
     # would silently diverge the moment the runner grows a condition.
     held_by = owner_gate_block(goal)
@@ -293,13 +424,22 @@ def observe(
 ) -> ObserveResult:
     """Read the whole backlog and report what each goal is waiting for."""
     gate = PreflightGate()
-    clean_cache: dict[str, bool] = {}
+    head_cache: dict[str, str] = {}
     observations = []
     for goal in sorted(registry.all(), key=lambda g: (g.bl_ref, g.goal_id)):
         repo = (repo_paths or {}).get(goal.goal_id, "")
-        if repo not in clean_cache:
-            clean_cache[repo] = git_is_clean(repo)
-        observations.append(observe_goal(goal, git_clean=clean_cache[repo], gate=gate))
+        if repo not in head_cache:
+            head_cache[repo] = git_head(repo)
+        # BL-4087: SCOPE-relativ renhet, per maal -- ikke repo-vid, én gang for
+        # alle. Cachen laa paa `repo` og var derfor blind for at ulike maal
+        # eier ulike filer i det SAMME treet. Det var ikke en optimalisering
+        # som ble feil; det var svaret paa feil spoersmaal, mellomlagret.
+        clean, scope_dirty, repo_dirty = scope_is_clean(
+            repo, str(goal.evidence.get("repo_scope", "")))
+        obs = observe_goal(goal, git_clean=clean, gate=gate, git_ref=head_cache[repo])
+        observations.append(replace(
+            obs, repo_dirty_files=repo_dirty, scope_dirty=scope_dirty,
+            git_ref=head_cache[repo]))
     return ObserveResult(
         observed_at=_now(),
         registry=str(registry.path) if registry.path else "(memory)",

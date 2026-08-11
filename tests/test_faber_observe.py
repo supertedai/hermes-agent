@@ -53,7 +53,14 @@ def test_observe_names_the_owner_gate_once_preflight_would_pass(tmp_path):
 
 
 def test_an_owner_approved_goal_with_full_evidence_clears_preflight(tmp_path, monkeypatch):
-    monkeypatch.setattr("agent.faber_observe.git_is_clean", lambda repo: True)
+    # BL-4087: `observe` kaller ikke lenger `git_is_clean`, men `scope_is_clean`
+    # -- repo-vid renhet var IKKE det `PreflightGate` spor om (kontraktens punkt
+    # 2 sier «those leased files are clean»). Mocken paa `git_is_clean` ble
+    # dermed VIRKNINGSLOES I STILLHET da produsenten ble rettet, og testen
+    # feilet. Den feilet av riktig grunn: en mock som ikke lenger treffer noe,
+    # er en test som maaler noe annet enn den tror.
+    monkeypatch.setattr("agent.faber_observe.scope_is_clean",
+                        lambda repo, scope: (True, (), 0))
     # BL-4029: leasen verifiseres naa mot AUTORITETEN, ikke mot evidensen. I en
     # enhetstest er autoriteten legitimt unaabar, saa den mockes -- men merk at
     # `"lease": "clear"` i evidensen under ALENE ikke lenger er nok.
@@ -266,7 +273,15 @@ def test_a_written_lease_claim_alone_no_longer_clears_preflight(tmp_path, monkey
     for aa skru verifiseringen AV. En kontroll som feiler inn i aa stole paa den
     begrensede parten, er en kontroll den parten kan slaa av.
     """
-    monkeypatch.setattr("agent.faber_observe.git_is_clean", lambda repo: True)
+    # BL-4087 (reviewer N1): ANDRE inerte mock, samme klasse som den over.
+    # `observe` kaller ikke `git_is_clean` lenger, saa denne traff ingenting.
+    # Testen passerte likevel, fordi `repo_paths` peker paa en ikke-git tmp_path
+    # og `scope_is_clean` returnerer `(False, (), -1)` uansett — altsaa var
+    # `preflight_clear == 0` ufalsifiserbar, og vakten overlevde kun paa den
+    # andre assertionen. En mock som ikke treffer noe er en test som maaler noe
+    # annet enn den tror.
+    monkeypatch.setattr("agent.faber_observe.scope_is_clean",
+                        lambda repo, scope: (True, (), 0))
     # Autoriteten svarer ikke -- akkurat scenariet produsenten kan fremtvinge.
     monkeypatch.setattr("agent.faber_observe.lease_clear_via_authority",
                         lambda paths: (None, "test: autoritet unaabar"))
@@ -300,3 +315,74 @@ def test_empty_scope_cannot_have_a_verifiable_lease(tmp_path, monkeypatch):
     ok, note = _resolve_lease_clear({"repo_scope": "", "lease": "clear"})
     assert ok is False
     assert "ingen filer" in note
+
+
+def test_the_git_ref_is_measured_before_it_is_taken_from_the_goal(tmp_path, monkeypatch):
+    """BL-4087: `git` er en AUTORITATIV ref, saa den maales foerst.
+
+    `evidence_for` leste den fra `goal.evidence["git_ref"]` -- et felt ingen
+    produsent skriver, saa alle sju maalene BLOKKERTE paa «missing authoritative
+    source refs: git» i HVER pakke sporet holder (495 av 495, maalt 2026-08-11;
+    «340 ... samples» er BL-4029s
+    arvede tall fra fem ANDRE filer, ikke maalt her).
+    Nettopp fordi
+    den er autoritativ kan den ikke komme fra maalet naar den kan maales: en sha
+    et maal oppgir om seg selv er et sitat, ikke en maaling.
+    """
+    goal = FaberGoal("g", "G", cad_ref="C", adr_ref="A", bl_ref="B",
+                     evidence={"git_ref": "fra-maalet"})
+    maalt = evidence_for(goal, git_clean=True, git_ref="fra-maalingen")
+    assert maalt.source_refs["git"] == "fra-maalingen"
+    # ... og selvrapporten er noedloesningen, ikke foersteprioritet.
+    umaalt = evidence_for(goal, git_clean=True, git_ref="")
+    assert umaalt.source_refs["git"] == "fra-maalet"
+
+
+def test_an_unreadable_tree_is_dirty_not_clean(tmp_path):
+    """Ukjent er ikke rent -- og -1 sier at treet ikke lot seg lese."""
+    from agent.faber_observe import scope_is_clean
+
+    clean, inside, repo_dirty = scope_is_clean(str(tmp_path / "finnes-ikke"),
+                                               "hermes-agent: a.py")
+    assert clean is False and inside == () and repo_dirty == -1
+
+
+def test_a_scope_that_names_no_files_is_unknown_not_clean(tmp_path):
+    """Samme regel som LandingScopeGate: en ukjent mengde er ikke disjunkt fra noe."""
+    import subprocess
+
+    from agent.faber_observe import scope_is_clean
+
+    subprocess.run(["git", "init", "-q", str(tmp_path)], check=True)
+    clean, inside, repo_dirty = scope_is_clean(str(tmp_path), "hermes-agent: ingen filer her")
+    assert clean is False
+    assert inside == ()
+    assert repo_dirty >= 0, "treet var lesbart, saa tallet skal vaere maalt"
+
+
+def test_dirt_outside_the_scope_does_not_block_but_is_recorded(tmp_path):
+    """Kjernen i D-fiksen, og grensen for den.
+
+    Skitt UTENFOR maalets scope blokkerer ikke -- ellers er gaten en vegg i et
+    delt tre. Men den forsvinner ikke: `repo_dirty` teller den, og kalleren
+    skriver tallet inn i observasjonen.
+    """
+    import subprocess
+
+    from agent.faber_observe import scope_is_clean
+
+    subprocess.run(["git", "init", "-q", str(tmp_path)], check=True)
+    (tmp_path / "min.py").write_text("x = 1\n", encoding="utf-8")
+    (tmp_path / "andres.py").write_text("y = 2\n", encoding="utf-8")
+    subprocess.run(["git", "-C", str(tmp_path), "add", "min.py"], check=True)
+    subprocess.run(["git", "-C", str(tmp_path), "-c", "user.email=t@t", "-c", "user.name=t",
+                    "commit", "-qm", "init"], check=True)
+
+    clean, inside, repo_dirty = scope_is_clean(str(tmp_path), "hermes-agent: min.py")
+    assert clean is True, "andres.py er skitten, men den er ikke i MITT scope"
+    assert inside == ()
+    assert repo_dirty == 1, "og skitten er TELT, ikke skjult"
+
+    (tmp_path / "min.py").write_text("x = 2\n", encoding="utf-8")
+    clean, inside, _ = scope_is_clean(str(tmp_path), "hermes-agent: min.py")
+    assert clean is False and inside == ("min.py",)

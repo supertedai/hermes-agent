@@ -9,9 +9,11 @@ from __future__ import annotations
 import argparse
 import json
 import os
+import subprocess
+import tempfile
 from dataclasses import asdict, dataclass, replace
 from pathlib import Path
-from typing import Callable, Mapping
+from typing import Callable, Mapping, Sequence
 
 from agent.code_workflow import (
     FaberGoal,
@@ -473,6 +475,345 @@ def postcommit_callable(payload: Mapping[str, object], observed: LandingObservat
     return _run
 
 
+
+#: Grunner som IKKE diskvalifiserer et maal fra en drevet tick, fordi steg 6 er
+#: nettopp det som fjerner dem. Alt annet er en ekte blokkering og maalet
+#: hoppes over med grunnen intakt.
+_LEASE_ONLY_REASONS = (
+    "missing authoritative source refs: lease",
+    "target lease is not clear",
+)
+
+
+def _drivable(reasons) -> bool:
+    """Er de gjenvaerende grunnene BARE de steg 6 fjerner?
+
+    Observatoeren claimer aldri (den er en lesning), saa et maal som staar igjen
+    med kun lease-grunner har klarert alt steg 4 kan svare paa uten aa handle.
+    Et maal med EN ANNEN grunn i tillegg hoppes over -- vi fjerner ikke en
+    blokkering ved aa la vaere aa se paa den.
+    """
+    if reasons is None:
+        # REVIEWER BLOCK 2. `all()` over tomt er vakuoest sant, saa en pakke UTEN
+        # `reasons`-noekkel i det hele tatt leste som «helt klar» — og da ble
+        # `git_clean: True` og `scope_executable: True` haevdet fra ingenting.
+        # Fravaer av en grunnliste er ikke fravaer av grunner.
+        return False
+    return all(r in _LEASE_ONLY_REASONS for r in reasons)
+
+
+def isolated_build_root(repo: str, into: str, ref: str = "HEAD") -> str:
+    """`git archive <ref>` inn i `into`. Ren LESING av det delte treet.
+
+    `ref` er DEN VERIFISERTE shaen, ikke `HEAD` (reviewer N1). Driveren
+    sammenligner `git_head(repo)` mot pakkens `git_ref` og arkiverer deretter —
+    men mellom de to kan en parallell stroem commite, og da bygger vi C mens
+    provenansen sier A. Det er BLOCK 2 om igjen med et millisekund-vindu i stedet
+    for tjue minutter. Aa arkivere den verifiserte shaen laaser ARKIVETS INNHOLD:
+    `git archive <sha>` leser commit-treet, saa en senere commit kan ikke endre
+    det vi bygger. Kalleren laaser den ANDRE halvdelen -- at renheten ble maalt
+    mot samme tilstand -- ved aa lese HEAD paa nytt etter `scope_is_clean`.
+
+    PRESIST: den laasingen gjelder COMMITS. To residualer staar igjen, begge
+    akseptable i dag: (a) ABA -- commit og reset tilbake til samme sha inne i
+    vinduet; arkivet er fortsatt riktig, men renheten ble maalt mot B. (b) En
+    parallell stroem som SKITNER en scope-fil uten aa commite: ingen av de to
+    lesningene beveger seg, saa ingenting fanger det. Skaden er i dag begrenset
+    til provenans-linja -- arkivet er pinnet, ingen reviewer doemmer, ingenting
+    lander.
+
+    HVORFOR STEG 8 IKKE FAAR SKRIVE I ARBEIDSTREET. `FaberImplementer.build`
+    kaller cortex og SKRIVER FILER. Peker vi den paa `/home/agent/agent-layer/
+    hermes-agent`, skriver en autonom sloeyfe inn i et tre aatte parallelle
+    stroemmer deler -- og en kraesj midt i en skriving etterlater halv kode som
+    neste `git add -A` fra en annen oekt kan lande. Det er noeyaktig faren
+    `tools/mutation_probe.py` ble skrevet om for aa unngaa, og den gjelder
+    dobbelt naar skriveren er en modell paa en timer.
+
+    Kopien er dessuten HEAD, ikke arbeidstreet: bygget skal ikke stables paa
+    andres ukommitterte arbeid. Det var BL-3643-defekten (levende kode utenfor
+    git) sett fra den andre siden.
+    """
+    from pathlib import Path
+
+    dest = Path(into)
+    dest.mkdir(parents=True, exist_ok=True)
+    # N4: STROEMMET, ikke bufret. `capture_output=True` holdt hele arkivet i
+    # minnet (maalt 160 MB) og `input=` holdt en kopi til -- ~320 MB topp per
+    # maal paa en vert med 9,3 GB ledig. Uholdbart naar dette skal paa en timer.
+    # N3: stderr dreneres FOERST etter at tar er ferdig. `git archive` skriver
+    # normalt ingenting dit; skulle den skrive >64 KB, blokkerer den til tars
+    # timeout paa 600 s framfor aa henge for alltid. Bevisst, og bundet.
+    with subprocess.Popen(["git", "-C", repo, "archive", ref],
+                          stdout=subprocess.PIPE, stderr=subprocess.PIPE) as src:
+        tar = subprocess.run(["tar", "-x", "-C", str(dest)], stdin=src.stdout,
+                             capture_output=True, timeout=600)
+        if src.stdout:
+            src.stdout.close()
+        src_err = (src.stderr.read().decode(errors="replace")[:200] if src.stderr else "")
+        rc = src.wait()
+    if rc != 0:
+        raise RuntimeError(f"git archive feilet: {src_err}")
+    if tar.returncode != 0:
+        raise RuntimeError(f"tar feilet: {tar.stderr.decode(errors='replace')[:200]}")
+    return str(dest)
+
+
+def skills_for_goal(observation: Mapping[str, object], goal: Mapping[str, object]) -> dict:
+    """TVERS: hvilke skills gjelder dette maalet? (BL-4087)
+
+    `skill_selector` var koblet til broen og til gateway-flaten, men den DREVNE
+    kjeden spurte den aldri -- saa steg 8 bygget uten aa vite hvilke skills som
+    gjaldt oppgaven. Seleksjonen feiler aldri: mangler indeksen blir dekningen
+    UNKNOWN, og UNKNOWN forplanter seg framfor aa bli en paastand om fravaer.
+    """
+    from agent.skill_selector import select_for_task
+
+    text = " ".join(str(x or "") for x in (
+        goal.get("title"), goal.get("bl_ref"),
+        (goal.get("evidence") or {}).get("repo_scope"),
+        observation.get("next_step"))).strip()
+    if not text:
+        return {"queryable": False, "coverage": "UNKNOWN", "selected": []}
+    return select_for_task(text, stage="chain:drive").to_json()
+
+
+def payload_for(observation: Mapping[str, object], goal: Mapping[str, object], *,
+                repo: str, build_root: str, test_command: Sequence[str]) -> dict:
+    """Bygg tick-payloaden for ett maal, fra det som ER MAALT.
+
+    Ingenting oppgraderes paa veien inn. `git`-refen kommer fra observasjonens
+    `git_ref` (maalt av `faber_observe.git_head`), lease-settet fra maalets eget
+    `repo_scope`, og statusene fra maalets egne felter -- ikke fra defaults som
+    ville aapnet en gate paa et grunnlag ingen har etablert.
+
+    SKYGGE VED KONSTRUKSJON: `land` og `postcommit` settes ALDRI her. Uten
+    `land` tar steg 11 den literale grenen, og uten `postcommit` returnerer steg
+    12/13 `None`. Aa gi denne stien landingsevne er ADR-062 V5 og hard-limit #3
+    -- Mortens beslutning, ikke en flagg-verdi i denne funksjonen.
+    """
+    ev = dict(goal.get("evidence") or {})
+    scope = str(ev.get("repo_scope", ""))
+    return {
+        "goal": {
+            "goal_id": str(goal.get("goal_id", "")),
+            "title": str(goal.get("title", "")),
+            "cad_ref": str(goal.get("cad_ref", "")),
+            "adr_ref": str(goal.get("adr_ref", "")),
+            "bl_ref": str(goal.get("bl_ref", "")),
+            "rollback": str(goal.get("rollback", "")),
+        },
+        "evidence": {
+            "git_clean": True,
+            "lease_clear": False,
+            "cad_status": str(ev.get("cad_status", "unknown")),
+            "adr_status": str(ev.get("adr_status", "unknown")),
+            "bl_status": str(ev.get("bl_status", "unknown")),
+            "obsidian_status": str(ev.get("obsidian_status", "unknown")),
+            # REVIEWER BLOCK 1. Foerste utkast skrev BARE `git` og `lease` her.
+            # `BlGate` (steg 5) krever `bl`; `DesignGate` (steg 7) krever `cad` og
+            # `adr`. De ble droppet — enda maalet baerer dem og `payload["goal"]`
+            # kopierer dem ett dict bortenfor. Resultatet var at INGEN legitim
+            # handlingssekvens kunne aapne steg 5 eller 7: alloker BL-en, aapne
+            # den, mint CAD-en, mint ADR-en — fortsatt blokkert, i kode.
+            #
+            # Det er noeyaktig defekten `git_head` nettopp lukket (`evidence_for`
+            # leste et felt ingen produsent skrev), gjenskapt for tre felter til,
+            # i produsenten jeg skrev i samme commit. Muren ble flyttet, ikke
+            # fjernet. `faber_observe.evidence_for` gjoer det riktig, og dette
+            # foelger den.
+            "source_refs": {
+                k: v for k, v in (
+                    ("git", str(observation.get("git_ref", ""))),
+                    ("lease", ""),
+                    ("cad", str(goal.get("cad_ref", "") or "")),
+                    ("adr", str(goal.get("adr_ref", "") or "")),
+                    ("bl", str(goal.get("bl_ref", "") or "")),
+                ) if v or k == "lease"
+            },
+            "scope_executable": True,
+            "scope_note": "",
+        },
+        "lease": {"paths": scope, "note": f"chain-drive {goal.get('goal_id', '')}"},
+        "implement": {
+            "goal_id": str(goal.get("goal_id", "")),
+            "repo_root": build_root,
+            "test_command": list(test_command),
+        },
+    }
+
+
+def drive_from_observe(packet_path: str, goals_path: str, *, repo: str,
+                       test_command: Sequence[str] = (),
+                       limit: int = 0) -> dict:
+    """A TIL AA: driv kjeden for hvert maal observasjonen sier er klart. (BL-4087)
+
+    HULLET DETTE LUKKER. `faber_observe` og `faber_goal_state` kjoerte hvert
+    tjuende minutt og MAALTE. `faber_live_adapter` kjoerte paa hver kodende
+    chat-tur og RAADET. De tretten stegene -- `FaberRuntime.tick` ->
+    `GovernedCodeRunner.run` -> de sju komponentene -- hadde NULL kallere:
+    `--tick-json` fantes ikke i én cron-linje, én systemd-enhet eller ett
+    skript. Sju oekter bygde sju komponenter, BL-4070 koblet dem sammen, og
+    ingenting kalte resultatet. Dette er kalleren.
+
+    HVOR LANGT DEN GAAR, OG HVORFOR DEN STOPPER DER.
+
+      steg 4   preflight, mot MAALTE refs (`git_head`, scope-relativ renhet)
+      steg 6   lease TATT hos autoriteten, og sluppet igjen etterpaa
+      steg 8   bygg -- i en ISOLERT KOPI av HEAD, aldri i det delte treet
+      tvers    skills valgt for maalet og registrert
+      steg 10  STOPPER. Verdikten er PENDING, og det er ikke en mangel.
+
+    Steg 10 er der fordi ingen har DOEMT bygget. Aa la driveren sende en PASS
+    ville vaert aa skrive en post for aa faa en gate til aa slippe seg selv
+    gjennom -- BL-3673, som reviewer blokkerte, gjenoppstaatt i en timer. Og
+    steg 11 er utenfor uansett: `land` settes aldri (se `payload_for`), saa
+    `landing_callable` tar den literale grenen og `prelanding` mangler, som
+    blokkerer maalet med en navngitt grunn.
+
+    Aa gi denne stien en reviewer og en landing er ADR-062 V5 og hard-limit #3.
+    Den beslutningen bor hos Morten, ikke i et flagg her.
+    """
+    from agent.code_workflow import ReviewEvidence, ReviewVerdict
+
+    packet = json.loads(Path(packet_path).expanduser().read_text(encoding="utf-8"))
+    registry = json.loads(Path(goals_path).expanduser().read_text(encoding="utf-8"))
+    by_id = {str(g.get("goal_id", "")): g
+             for g in (registry if isinstance(registry, list) else registry.get("goals") or [])}
+
+    driven, skipped = [], []
+    for obs in packet.get("observations") or []:
+        gid = str(obs.get("goal_id", ""))
+        goal = by_id.get(gid)
+        if goal is None:
+            skipped.append({"goal_id": gid, "why": "maalet finnes ikke i registeret"})
+            continue
+        if not _drivable(obs.get("reasons") if "reasons" in obs else None):
+            skipped.append({"goal_id": gid, "why": "blokkert av noe steg 6 ikke fjerner",
+                            "reasons": list(obs.get("reasons") or [])})
+            continue
+        if limit and len(driven) >= limit:
+            skipped.append({"goal_id": gid, "why": f"over grensen paa {limit} per tick"})
+            continue
+
+        # REVIEWER BLOCK 2, andre halvdel: PAKKEN er fra observe-tid, TREET er
+        # fra drive-tid. `isolated_build_root` tar den VERIFISERTE shaen (ikke
+        # live HEAD), mens
+        # `source_refs["git"]`, `git_clean` og `scope_executable` baeres uendret
+        # fra pakken. Observe kjoerer :20, en parallell stroem commiter, driveren
+        # kjoerer paa en annen commit — og ticken registrerer provenans A mens
+        # den bygger B. Det er stale-commit-klassen, og `git_clean: True` blir da
+        # noeyaktig den «maalingen som er et sitat» `git_head`s egen docstring
+        # advarer mot. Vi maaler paa nytt her, og hopper over med navngitt grunn
+        # hvis verden har flyttet seg.
+        from agent.faber_observe import git_head, scope_is_clean
+
+        scope = str((goal.get("evidence") or {}).get("repo_scope", ""))
+        live_head = git_head(repo)
+        observed_head = str(obs.get("git_ref", ""))
+        if not live_head or live_head != observed_head:
+            skipped.append({"goal_id": gid,
+                            "why": "treet har flyttet seg siden observasjonen",
+                            "observed_git_ref": observed_head, "live_head": live_head})
+            continue
+        clean_now, dirty_now, _repo_dirty = scope_is_clean(repo, scope)
+        if not clean_now:
+            skipped.append({"goal_id": gid,
+                            "why": "scope ikke lenger rent ved drive-tid",
+                            "scope_dirty": list(dirty_now)})
+            continue
+        # Reviewer runde 3: rekkefoelgen var `git_head` -> `scope_is_clean` ->
+        # `archive`. En commit som lander mellom de TO FOERSTE gjoer at renheten
+        # ble maalt mot en annen tilstand enn den vi arkiverer. Arkiv-INNHOLDET
+        # var allerede laast av `ref`-parameteren; DETTE laaser korrespondansen
+        # mellom renhetsmaalingen og arkivet. Jeg hadde skrevet at forrige fiks
+        # «LUKKER vinduet» — den lukket halve.
+        if git_head(repo) != live_head:
+            skipped.append({"goal_id": gid,
+                            "why": "treet flyttet seg mens renheten ble maalt",
+                            "observed_git_ref": observed_head, "live_head": live_head})
+            continue
+
+        entry_note = ""
+        skills = {"coverage": "UNKNOWN", "selected": []}
+        with tempfile.TemporaryDirectory(prefix="faber-drive-") as tmp:
+            try:
+                # Reviewer runde 3, N4: laa UTENFOR denne `try`. Reiste
+                # import-linja, slapp den forbi baade denne og CLI-ens
+                # `except`-tuppel -- saa ETT maals importfeil drepte hele
+                # kjoeringen uten aa skrive én rapport, og de andre maalenes
+                # resultater gikk tapt. En planlagt skygge-maaling som doer uten
+                # rapport er en maaling man ikke faar.
+                skills = skills_for_goal(obs, goal)
+                # Den VERIFISERTE shaen, ikke HEAD -- se isolated_build_root.
+                root = isolated_build_root(repo, tmp, live_head)
+                payload = payload_for(obs, goal, repo=repo, build_root=root,
+                                      test_command=test_command)
+                runtime = FaberRuntime()
+                evidence = lease_take(payload, PreflightInput(**payload["evidence"]))
+                try:
+                    result = runtime.tick(
+                        FaberGoal(**payload["goal"]),
+                        evidence,
+                        build=build_callable(payload, runtime.runner, evidence),
+                        # Verdikten er PENDING, med den MAALTE diff-id-en. Runneren
+                        # blokkerer paa den, og det er svaret: ingen har doemt.
+                        review=lambda b: ReviewEvidence(
+                            verdict=ReviewVerdict.PENDING,
+                            diff_id=str((b or {}).get("diff_id") or ""),
+                            reviewer="", confidence=0.0),
+                        landing=landing_callable(payload, None, LandingEvidence(
+                            commit="", reviewer=ReviewVerdict.PENDING, tests="",
+                            readback="", runtime_smoke="", rollback="",
+                            brain_change_log="", selfstate="")),
+                        prelanding_evidence=None,
+                    )
+                    entry = {
+                        "goal_id": gid,
+                        "state": result.run.goal.state.value,
+                        "preflight": result.preflight.status.value,
+                        "preflight_reasons": list(result.preflight.reasons),
+                        "blocker": result.run.goal.blocker,
+                        "gate": (result.run.handoff.required_gate
+                                 if result.run.handoff else ""),
+                        "next_step": result.run.goal.next_step,
+                        "lease": evidence.source_refs.get("lease", ""),
+                        "lease_authority": evidence.source_refs.get("lease_authority", ""),
+                        "skills_selected": [x.get("name") for x in (skills.get("selected") or [])],
+                        "skill_coverage": skills.get("coverage", "UNKNOWN"),
+                        "build_root": f"isolert kopi av {live_head[:12]} (kastet etter ticken)",
+                    }
+                finally:
+                    # N3: settes i `finally`, som ogsaa kjoerer naar `tick` kaster.
+                    # Den ytre `except` nullstilte den foer, saa rapporten sa at
+                    # leasen IKKE var sluppet naar den var det.
+                    entry_note = lease_release(payload, evidence)
+            except Exception as exc:  # bygget eller kopien feilet
+                entry = {"goal_id": gid, "state": "ERROR",
+                         "blocker": f"{type(exc).__name__}: {exc}",
+                         "skills_selected": [x.get("name") for x in (skills.get("selected") or [])],
+                         "skill_coverage": skills.get("coverage", "UNKNOWN")}
+        entry["lease_released"] = entry_note
+        driven.append(entry)
+
+    errors = sum(1 for d in driven if d.get("state") == "ERROR")
+    return {
+        "artifact": "faber-chain-drive-v1",
+        "errors": errors,
+        "observed_at": packet.get("observed_at", ""),
+        "repo": repo,
+        "driven": len(driven),
+        "skipped": len(skipped),
+        "results": driven,
+        "skipped_detail": skipped,
+        "shadow": True,
+        "shadow_note": (
+            "Ingen landing og ingen postcommit: `land` og `postcommit` settes aldri "
+            "i payloaden, og bygget skjer i en isolert kopi av den VERIFISERTE "
+            "commiten, som kastes etter ticken. Det delte arbeidstreet skrives aldri til. Reviewer-verdikten er "
+            "PENDING fordi ingen har doemt bygget -- ikke fordi noe manglet."),
+    }
+
 def _cli() -> int:
     parser = argparse.ArgumentParser(description="Run one governed Faber runtime tick.")
     group = parser.add_mutually_exclusive_group(required=True)
@@ -480,8 +821,25 @@ def _cli() -> int:
     group.add_argument("--tick-json", help="JSON object containing goal, evidence and deterministic tick evidence")
     group.add_argument("--memory-measure-query", help="Run one real MemoryManager enforcement measurement")
     group.add_argument("--propose-job-json", help="Create one consent-first Faber cron suggestion")
+    group.add_argument("--drive-observe",
+                       help="Driv kjeden for hvert maal denne observe-pakken sier er klart "
+                            "(skygge: bygger i isolert kopi, lander aldri)")
+    parser.add_argument("--goals", default="~/.hermes-gui/faber/goals.json")
+    parser.add_argument("--repo", default=str(Path(__file__).resolve().parents[1]))
+    parser.add_argument("--test-command", default="")
+    parser.add_argument("--limit", type=int, default=1)
     args = parser.parse_args()
     try:
+        if args.drive_observe:
+            report = drive_from_observe(
+                args.drive_observe, args.goals, repo=args.repo,
+                test_command=tuple(args.test_command.split()) if args.test_command else (),
+                limit=args.limit)
+            print(json.dumps(report, default=str, ensure_ascii=False))
+            # Reviewer runde 3: returnerte 0 ubetinget, saa «0 drevet, 7 ERROR»
+            # og «alt gikk bra» hadde samme exit-kode. En scheduler leser
+            # exit-koden, ikke JSON-en.
+            return 2 if report.get("errors") else 0
         if args.propose_job_json:
             from agent.faber_tui_egress import propose_faber_job
             record = propose_faber_job(**json.loads(args.propose_job_json))

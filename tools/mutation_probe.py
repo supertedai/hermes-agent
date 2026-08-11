@@ -112,6 +112,9 @@ T_GUARD = "tests/test_chain_is_wired.py"
 AUTHORITY = "agent/lease_authority.py"
 CLASSIFIER = "agent/task_classifier.py"
 T_AUTHORITY = "tests/test_lease_authority.py"
+#: BL-4087 A-til-AA: produsenten og driveren.
+OBSERVE = "agent/faber_observe.py"
+T_OBSERVE = "tests/test_faber_observe.py"
 
 #: Filene hvis ARBEIDSTRE-tilstand er det som maales. Legges ALLTID over det
 #: `git archive` leverte -- ikke bare naar de mangler. Den tidligere
@@ -135,7 +138,7 @@ T_AUTHORITY = "tests/test_lease_authority.py"
 #: paastaar en LEVENDE maaling den ikke lenger har, er samme defektklasse som
 #: proben jakter paa. Skriv maalinger med dato og utfall, aldri i presens.
 OVERLAY = (HAND, T_HAND, RUNTIME, BRIDGE, T_SEAM, T_GUARD,
-           AUTHORITY, CLASSIFIER, T_AUTHORITY)
+           AUTHORITY, CLASSIFIER, T_AUTHORITY, OBSERVE, T_OBSERVE)
 
 #: (navn, fil, anker, erstatning, testfil, testen som MAA bli roed)
 MUTANTS: tuple[tuple[str, str, str, str, str, str], ...] = (
@@ -373,6 +376,84 @@ MUTANTS: tuple[tuple[str, str, str, str, str, str], ...] = (
      "    refs = dict(evidence.source_refs)",
      T_SEAM,
      "test_the_cli_never_leaks_a_lease_on_any_abort_path[source_refs er ikke en mapping-extra5]"),
+
+    # --- BL-4087: produsenten (steg 4s inngangsdata) ---
+    ("AA scope-renhet blir repo-vid igjen (gaten blir en vegg)", OBSERVE,
+     "    inside = tuple(sorted(p for p in paths if p in dirty))\n    return (not inside), inside, len(dirty)",
+     "    inside = tuple(sorted(dirty))\n    return (not dirty), inside, len(dirty)",
+     T_OBSERVE, "test_dirt_outside_the_scope_does_not_block_but_is_recorded"),
+    ("AA tomt scope leses som rent", OBSERVE,
+     "    if not paths:\n        return False, (), len(dirty)",
+     "    if not paths:\n        return True, (), len(dirty)",
+     T_OBSERVE, "test_a_scope_that_names_no_files_is_unknown_not_clean"),
+    ("AA uleselig tre leses som rent", OBSERVE,
+     "    if not ok:\n        return False, (), -1",
+     "    if not ok:\n        return True, (), -1",
+     T_OBSERVE, "test_an_unreadable_tree_is_dirty_not_clean"),
+    ("AA git-refen tas fra maalet foer maalingen", OBSERVE,
+     '        ("git", git_ref or ev.get("git_ref", "")),',
+     '        ("git", ev.get("git_ref", "") or git_ref),',
+     T_OBSERVE, "test_the_git_ref_is_measured_before_it_is_taken_from_the_goal"),
+
+    # --- BL-4087: driveren (den som endelig KALLER kjeden) ---
+    ("AA driveren sender en reviewer-PASS for aa komme videre", RUNTIME,
+     "                            verdict=ReviewVerdict.PENDING,",
+     "                            verdict=ReviewVerdict.PASS,",
+     T_SEAM, "test_the_driver_can_never_fabricate_a_reviewer_pass"),
+    ("AA driveren kjoerer maal som er blokkert av noe annet", RUNTIME,
+     "    return all(r in _LEASE_ONLY_REASONS for r in reasons)",
+     "    return True",
+     T_SEAM, "test_a_goal_blocked_by_something_step_6_cannot_fix_is_skipped_with_its_reason"),
+    ("AA payloaden faar en land-noekkel (skyggen brytes)", RUNTIME,
+     '        "lease": {"paths": scope, "note": f"chain-drive {goal.get(\'goal_id\', \'\')}"},',
+     '        "land": {"message": "auto"},\n'
+     '        "lease": {"paths": scope, "note": f"chain-drive {goal.get(\'goal_id\', \'\')}"},',
+     T_SEAM, "test_shadow_is_by_construction_not_by_flag"),
+    ("AA bygget peker paa det DELTE treet", RUNTIME,
+     "                root = isolated_build_root(repo, tmp, live_head)",
+     "                root = repo",
+     T_SEAM, "test_the_build_root_is_never_the_shared_worktree"),
+    ("AA driveren spor aldri skill-velgeren", RUNTIME,
+     "        skills = skills_for_goal(obs, goal)",
+     '        skills = {"coverage": "UNKNOWN", "selected": []}',
+     T_SEAM, "test_the_driver_selects_skills_for_the_goal"),
+    ("AA driveren slipper ikke leasen den tok", RUNTIME,
+     "                    entry_note = lease_release(payload, evidence)",
+     '                    entry_note = "sluppet"',
+     T_SEAM, "test_the_driver_takes_the_lease_and_gives_it_back"),
+
+    # --- BL-4087 runde 2: reviewer-BLOCKene, som mutanter ---
+    ("AA payloaden dropper bl/cad/adr (muren flyttes, ikke fjernes)", RUNTIME,
+     '                    ("cad", str(goal.get("cad_ref", "") or "")),',
+     '                    ("cad_ubrukt", ""),',
+     T_SEAM, "test_the_payload_carries_the_refs_steps_5_and_7_actually_read"),
+    ("AA driveren stoler paa pakkens commit i stedet for aa maale", RUNTIME,
+     "        if not live_head or live_head != observed_head:",
+     "        if False:",
+     T_SEAM, "test_the_driver_refuses_a_packet_observed_against_another_commit"),
+    ("AA driveren stoler paa pakkens renhet i stedet for aa maale", RUNTIME,
+     "        if not clean_now:",
+     "        if False:",
+     T_SEAM, "test_the_driver_refuses_when_the_scope_got_dirty_after_the_observation"),
+    ("AA manglende reasons-noekkel leses som helt klar", RUNTIME,
+     "    if reasons is None:\n        # REVIEWER BLOCK 2.",
+     "    if False:\n        # REVIEWER BLOCK 2.",
+     T_SEAM, "test_a_packet_without_a_reasons_key_is_not_drivable"),
+    ("AA arkivet tas av HEAD i stedet for den verifiserte shaen", RUNTIME,
+     "                root = isolated_build_root(repo, tmp, live_head)",
+     "                root = isolated_build_root(repo, tmp)",
+     T_SEAM, "test_the_build_root_is_never_the_shared_worktree"),
+    # Reviewer runde 3: mutanten over rammer KALLSTEDET. Denne rammer KROPPEN --
+    # og foer `test_isolated_build_root_actually_archives_the_given_sha` fantes,
+    # overlevde den taust, fordi funksjonen var stubbet i alle aatte testbruk.
+    ("AA den andre HEAD-lesningen droppes (renhet mot annen tilstand)", RUNTIME,
+     "        if git_head(repo) != live_head:",
+     "        if False:",
+     T_SEAM, "test_a_commit_landing_while_cleanliness_is_measured_skips_the_goal"),
+    ("AA arkiv-kroppen ignorerer ref og tar HEAD", RUNTIME,
+     '    with subprocess.Popen(["git", "-C", repo, "archive", ref],',
+     '    with subprocess.Popen(["git", "-C", repo, "archive", "HEAD"],',
+     T_SEAM, "test_isolated_build_root_actually_archives_the_given_sha"),
 )
 
 
@@ -407,7 +488,8 @@ def main() -> int:
         isolated_copy(repo)
         print(f"isolert kopi: {repo}  (det delte arbeidstreet roeres ikke)")
 
-        baseline = subprocess.run([*pytest_base, T_HAND, T_GATE, T_SEAM], cwd=str(repo),
+        baseline = subprocess.run([*pytest_base, T_HAND, T_GATE, T_SEAM, T_OBSERVE],
+                                  cwd=str(repo),
                                   capture_output=True, text=True, timeout=1800, env=env)
         if baseline.returncode != 0:
             print("GRUNNLINJEN ER ROED — et mutasjonsresultat maalt over den betyr ingenting:")

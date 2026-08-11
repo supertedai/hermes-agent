@@ -945,3 +945,428 @@ def test_the_downstream_abort_paths_really_do_claim_first(monkeypatch, label, ex
         "sys.argv", ["faber_runtime", "--tick-json", _json.dumps({**_TICK_BASE, **extra})])
     fr._cli()
     assert claimed == [("a.py",)], label
+
+
+# ---------------------------------------------------------------------------
+# A TIL AA — driveren (BL-4087)
+#
+# `tests/test_chain_is_wired.py` spor om komponentene er NAABARE. Testene over
+# spor om SOEMMENE utfoeres. Disse spor det siste: KALLER noen kjeden i det hele
+# tatt? Foer BL-4087 var svaret nei -- `--tick-json` hadde null kallere i cron,
+# systemd og skript, mens observe-stien maalte hvert 20. minutt og chat-stien
+# raadet paa hver kodende tur. Tre stier, og den som kunne gjoere arbeidet ble
+# aldri kalt.
+# ---------------------------------------------------------------------------
+
+def _observe_packet(reasons=(), git_ref="deadbeef", gid="g1"):
+    return {"observed_at": "2026-08-11T00:00:00Z",
+            "observations": [{"goal_id": gid, "reasons": list(reasons),
+                              "git_ref": git_ref, "next_step": "bygg noe"}]}
+
+
+def _registry(gid="g1", *, bl_status="open", scope="hermes-agent: agent/x.py"):
+    return [{"goal_id": gid, "title": "koble kjeden", "bl_ref": "BL-4087",
+             "cad_ref": "CAD-1", "adr_ref": "ADR-062", "rollback": "git revert",
+             "evidence": {"repo_scope": scope, "bl_status": bl_status,
+                          "cad_status": "accepted", "adr_status": "accepted"}}]
+
+
+def _drive_world(monkeypatch, *, head="deadbeef", heads=None, clean=True, dirty=()):
+    """Verden slik driveren MAALER den ved drive-tid.
+
+    BL-4087 reviewer BLOCK 2: driveren stoler ikke lenger paa pakken. Den maaler
+    HEAD og scope-renheten paa nytt og hopper over hvis verden har flyttet seg
+    siden observasjonen. Testriggen maa derfor SI hva verden er -- ellers maaler
+    testen bare at treet tilfeldigvis ikke matcher `deadbeef`.
+    """
+    # `heads` gjoer at de TO lesningene kan gi ulike svar. Reviewer runde 4,
+    # BLOCK 3: riggen patchet `git_head` til en KONSTANT, og en konstant kan ikke
+    # returnere to verdier — saa den sanne grenen i TOCTOU-vakten var uoppnaaelig
+    # i hver eneste test, og aa slette vakten lot 504 tester staa groenne.
+    seq = list(heads) if heads else [head]
+
+    def _head(repo):
+        return seq.pop(0) if len(seq) > 1 else seq[0]
+
+    monkeypatch.setattr("agent.faber_observe.git_head", _head)
+    monkeypatch.setattr("agent.faber_observe.scope_is_clean",
+                        lambda repo, scope: (clean, tuple(dirty), 0))
+
+
+def _stub_lease(monkeypatch, claimed=None, released=None):
+    from agent import lease_authority as la
+
+    monkeypatch.setattr(la, "claim", lambda paths, ttl=0, note="": (
+        (claimed.append(tuple(paths)) if claimed is not None else None)
+        or la.LeaseOutcome(ok=True, acquired=tuple(paths), reason="stub")))
+    monkeypatch.setattr(la, "release", lambda paths: (
+        (released.append(tuple(paths)) if released is not None else None)
+        or (True, "stub sluppet")))
+
+
+def _write_drive_inputs(tmp_path, packet, registry):
+    import json as _json
+
+    p = tmp_path / "observe.json"
+    g = tmp_path / "goals.json"
+    p.write_text(_json.dumps(packet), encoding="utf-8")
+    g.write_text(_json.dumps(registry), encoding="utf-8")
+    return str(p), str(g)
+
+
+def test_only_lease_reasons_are_drivable():
+    """Steg 6 fjerner lease-grunnene. Alt annet er en ekte blokkering.
+
+    REVIEWER N2: foerste versjon hardkodet de samme to strengene som
+    `_LEASE_ONLY_REASONS`, saa en omformulering i `PreflightGate.evaluate` ville
+    holdt testen groenn og gjort driveren til en permanent no-op. Fail-silent,
+    ikke fail-safe. Strengene UTLEDES derfor naa ved aa kjoere gaten med evidens
+    der kun leasen mangler — hvis gaten omformulerer, feiler denne testen.
+    """
+    from agent.code_workflow import PreflightGate, PreflightInput
+
+    lease_only = PreflightGate().evaluate(PreflightInput(
+        git_clean=True, lease_clear=False, cad_status="accepted",
+        adr_status="accepted", bl_status="open", obsidian_status="fresh",
+        source_refs={"git": "abc"}, scope_executable=True))
+    assert lease_only.reasons, "riggen maalte ingenting — gaten hadde ingen innvending"
+    assert fr._drivable(list(lease_only.reasons)), (
+        f"gaten sier {lease_only.reasons!r}, men driveren kjenner "
+        f"{fr._LEASE_ONLY_REASONS!r} — driveren er naa en no-op")
+
+    assert fr._drivable([])
+    assert not fr._drivable(["git target is dirty or has unowned changes"])
+    assert not fr._drivable(["target lease is not clear",
+                             "scope is not executable on this host: agi"])
+
+
+def test_the_driver_takes_the_lease_and_gives_it_back(tmp_path, monkeypatch):
+    """Steg 6 UTFOERES av driveren -- og etterlater ingen foreldreloes lease."""
+    from agent import lease_authority as la
+
+    claimed, released = [], []
+    _stub_lease(monkeypatch, claimed, released)
+    _drive_world(monkeypatch)
+    monkeypatch.setattr(fr, "isolated_build_root",
+                        lambda repo, into, ref="HEAD": into)
+
+    p, g = _write_drive_inputs(tmp_path, _observe_packet(), _registry())
+    out = fr.drive_from_observe(p, g, repo=str(REPO), limit=1)
+    assert out["driven"] == 1
+    assert claimed == [("agent/x.py",)]
+    assert released == claimed
+    assert out["results"][0]["lease_released"] == "stub sluppet"
+
+
+def test_the_driver_can_never_fabricate_a_reviewer_pass(tmp_path, monkeypatch):
+    """DEN VIKTIGSTE VAKTEN HER.
+
+    En driver som sender `ReviewVerdict.PASS` for aa komme videre, ville vaert
+    BL-3673 i en timer: aa skrive en post for aa faa en gate til aa slippe seg
+    selv gjennom. Verdikten skal vaere PENDING, og runneren skal blokkere paa
+    den -- ingen har DOEMT bygget.
+    """
+    from agent.code_workflow import ReviewVerdict
+
+    from agent import lease_authority as la
+
+    _stub_lease(monkeypatch)
+    _drive_world(monkeypatch)
+    monkeypatch.setattr(fr, "isolated_build_root",
+                        lambda repo, into, ref="HEAD": into)
+
+    seen = {}
+    real_tick = fr.FaberRuntime.tick
+
+    def _spy(self, goal, evidence, **kw):
+        seen["review"] = kw["review"]({"diff_id": "d1"})
+        return real_tick(self, goal, evidence, **kw)
+
+    monkeypatch.setattr(fr.FaberRuntime, "tick", _spy)
+    p, g = _write_drive_inputs(tmp_path, _observe_packet(), _registry())
+    fr.drive_from_observe(p, g, repo=str(REPO), limit=1)
+    assert seen["review"].verdict is ReviewVerdict.PENDING
+    assert seen["review"].reviewer == ""
+    assert seen["review"].diff_id == "d1", "diff-id-en skal vaere den MAALTE"
+
+
+def test_shadow_is_by_construction_not_by_flag(tmp_path):
+    """`land` og `postcommit` finnes ikke i payloaden i det hele tatt.
+
+    Et skygge-FLAGG kan settes feil. En noekkel som aldri skrives kan ikke det.
+    """
+    obs = {"goal_id": "g1", "git_ref": "abc", "reasons": [], "next_step": ""}
+    payload = fr.payload_for(obs, _registry()[0], repo=str(REPO),
+                             build_root=str(tmp_path), test_command=("pytest",))
+    assert "land" not in payload
+    assert "postcommit" not in payload
+    assert payload["implement"]["repo_root"] == str(tmp_path)
+    assert payload["evidence"]["source_refs"]["git"] == "abc"
+
+
+def test_the_build_root_is_never_the_shared_worktree(tmp_path, monkeypatch):
+    """Steg 8 SKRIVER filer. Den skal aldri peke paa det delte treet.
+
+    En autonom sloeyfe som skriver inn i et tre aatte stroemmer deler, er
+    presist faren `tools/mutation_probe.py` ble skrevet om for aa unngaa.
+    """
+    from agent import lease_authority as la
+
+    _stub_lease(monkeypatch)
+    _drive_world(monkeypatch)
+
+    roots = []
+
+    def _root(repo, into, ref="HEAD"):
+        roots.append((repo, into, ref))
+        return into
+
+    monkeypatch.setattr(fr, "isolated_build_root", _root)
+    p, g = _write_drive_inputs(tmp_path, _observe_packet(git_ref="deadbeef"), _registry())
+    fr.drive_from_observe(p, g, repo=str(REPO), limit=1)
+    assert roots, "bygget fikk aldri en rot -- testen maalte ingenting"
+    for repo, into, ref in roots:
+        assert into != repo
+        assert str(REPO) not in into
+        # Reviewer N1: arkivet tas av den VERIFISERTE shaen, ikke av `HEAD`.
+        # Med `HEAD` kunne en parallell commit i vinduet mellom sjekken og
+        # arkiveringen gi et bygg mot C mens provenansen sa A.
+        assert ref == "deadbeef", (
+            "bygget ble arkivert fra noe annet enn shaen driveren nettopp "
+            "verifiserte — TOCTOU-vinduet er gjenaapnet")
+
+
+def test_the_driver_selects_skills_for_the_goal(tmp_path, monkeypatch):
+    """TVERS: kjeden spurte aldri skill-velgeren. Naa gjoer den det."""
+    from agent import lease_authority as la
+    from agent import skill_selector
+
+    _stub_lease(monkeypatch)
+    _drive_world(monkeypatch)
+    monkeypatch.setattr(fr, "isolated_build_root",
+                        lambda repo, into, ref="HEAD": into)
+
+    seen = {}
+
+    class _Sel:
+        def to_json(self):
+            return {"coverage": "complete", "considered": 9,
+                    "selected": [{"name": "faber-landing"}]}
+
+    def _spy(task_text, *, stage="unspecified", **kw):
+        seen["text"] = task_text
+        seen["stage"] = stage
+        return _Sel()
+
+    monkeypatch.setattr(skill_selector, "select_for_task", _spy)
+    p, g = _write_drive_inputs(tmp_path, _observe_packet(), _registry())
+    out = fr.drive_from_observe(p, g, repo=str(REPO), limit=1)
+    assert seen["stage"] == "chain:drive"
+    assert "koble kjeden" in seen["text"] and "BL-4087" in seen["text"]
+    assert out["results"][0]["skills_selected"] == ["faber-landing"]
+    assert out["results"][0]["skill_coverage"] == "complete"
+
+
+def test_a_goal_blocked_by_something_step_6_cannot_fix_is_skipped_with_its_reason(tmp_path):
+    """Vi fjerner ikke en blokkering ved aa la vaere aa se paa den."""
+    p, g = _write_drive_inputs(
+        tmp_path,
+        _observe_packet(reasons=["scope is not executable on this host: agi"]),
+        _registry())
+    out = fr.drive_from_observe(p, g, repo=str(REPO), limit=1)
+    assert out["driven"] == 0 and out["skipped"] == 1
+    assert "agi" in out["skipped_detail"][0]["reasons"][0]
+
+
+def test_a_reserved_bl_stops_the_chain_at_step_5(tmp_path, monkeypatch):
+    """Maalt mot de sju ekte maalene: alle har `bl_status=reserved`.
+
+    BL-3673: et RESERVERT nummer betyr at et nummer ble delt ut, ikke at arbeid
+    finnes. Kjeden skal stoppe her, og driveren skal IKKE oppgradere statusen
+    for aa komme videre.
+    """
+    from agent import lease_authority as la
+
+    _stub_lease(monkeypatch)
+    _drive_world(monkeypatch)
+    monkeypatch.setattr(fr, "isolated_build_root",
+                        lambda repo, into, ref="HEAD": into)
+
+    p, g = _write_drive_inputs(tmp_path, _observe_packet(),
+                               _registry(bl_status="reserved"))
+    out = fr.drive_from_observe(p, g, repo=str(REPO), limit=1)
+    r = out["results"][0]
+    assert r["preflight"] == "PASS", "steg 4 skal aapne — det er steg 5 som stopper"
+    assert r["gate"] == "bl_gate"
+    assert "reserved" in r["blocker"]
+
+def test_the_driver_refuses_a_packet_observed_against_another_commit(tmp_path, monkeypatch):
+    """REVIEWER BLOCK 2: pakken er fra observe-tid, treet fra drive-tid.
+
+    Observe kjoerer :20 og skriver ref A. En parallell stroem commiter -- dette
+    treet deles av aatte. Driveren kjoerer paa HEAD = B og ville registrert
+    provenans A mens den bygget B, og haevdet scope-renhet maalt mot A.
+    """
+    _stub_lease(monkeypatch)
+    _drive_world(monkeypatch, head="EN-ANNEN-COMMIT")
+    monkeypatch.setattr(fr, "isolated_build_root",
+                        lambda repo, into, ref="HEAD": into)
+    p, g = _write_drive_inputs(tmp_path, _observe_packet(git_ref="deadbeef"), _registry())
+    out = fr.drive_from_observe(p, g, repo=str(REPO), limit=1)
+    assert out["driven"] == 0
+    assert "flyttet seg" in out["skipped_detail"][0]["why"]
+    assert out["skipped_detail"][0]["live_head"] == "EN-ANNEN-COMMIT"
+
+
+def test_the_driver_refuses_when_the_scope_got_dirty_after_the_observation(tmp_path, monkeypatch):
+    _stub_lease(monkeypatch)
+    _drive_world(monkeypatch, clean=False, dirty=("agent/x.py",))
+    monkeypatch.setattr(fr, "isolated_build_root",
+                        lambda repo, into, ref="HEAD": into)
+    p, g = _write_drive_inputs(tmp_path, _observe_packet(), _registry())
+    out = fr.drive_from_observe(p, g, repo=str(REPO), limit=1)
+    assert out["driven"] == 0
+    assert out["skipped_detail"][0]["scope_dirty"] == ["agent/x.py"]
+
+
+def test_a_packet_without_a_reasons_key_is_not_drivable():
+    """`all()` over tomt er vakuoest sant.
+
+    En observasjon UTEN `reasons`-noekkel leste derfor som «helt klar», og da ble
+    `git_clean: True` haevdet fra ingenting. Fravaer av en grunnliste er ikke
+    fravaer av grunner.
+    """
+    assert fr._drivable(None) is False
+
+
+def test_the_payload_carries_the_refs_steps_5_and_7_actually_read(tmp_path):
+    """REVIEWER BLOCK 1, som regresjon.
+
+    `BlGate` krever `bl`, `DesignGate` krever `cad` og `adr`. Foerste utkast
+    skrev bare `git` og `lease`, saa INGEN legitim handlingssekvens kunne aapne
+    steg 5 eller 7 -- muren var flyttet, ikke fjernet.
+    """
+    obs = {"goal_id": "g1", "git_ref": "abc", "reasons": [], "next_step": ""}
+    refs = fr.payload_for(obs, _registry()[0], repo=str(REPO),
+                          build_root=str(tmp_path), test_command=())["evidence"]["source_refs"]
+    assert refs["bl"] == "BL-4087"
+    assert refs["cad"] == "CAD-1"
+    assert refs["adr"] == "ADR-062"
+    assert refs["git"] == "abc"
+
+
+def test_a_goal_without_cad_or_adr_reaches_step_7_and_blocks_there(tmp_path, monkeypatch):
+    """Beviset reviewer krevde: muren staar i VERDEN, ikke i koden.
+
+    Maalt paa den levende backloggen: alle sju maal baerer `cad_ref=""` og
+    `adr_ref=""`. Med en handlingsbar BL naar kjeden derfor steg 7 og blokkerer
+    der -- paa et ekte fravaer, ikke paa en droppet payload-noekkel.
+    """
+    _stub_lease(monkeypatch)
+    _drive_world(monkeypatch)
+    monkeypatch.setattr(fr, "isolated_build_root",
+                        lambda repo, into, ref="HEAD": into)
+
+    reg = _registry(bl_status="open")
+    reg[0]["cad_ref"] = ""
+    reg[0]["adr_ref"] = ""
+    p, g = _write_drive_inputs(tmp_path, _observe_packet(), reg)
+    out = fr.drive_from_observe(p, g, repo=str(REPO), limit=1)
+    r = out["results"][0]
+    assert r["preflight"] == "PASS", "steg 4 skal aapne"
+    # OG HER ER FUNNET, som ikke var det jeg antok da jeg skrev testen.
+    # Fravaeret av CAD/ADR fanges -- men av LEDGEREN, som et unntak fra
+    # `FaberGoalLedger.transition` ("goal references required before build"),
+    # ikke av `DesignGate` (steg 7). Overgangsvakten fyrer foer gaten, saa den
+    # gaten som FINNES for nettopp dette kjoerer aldri. Konsekvensen er synlig i
+    # utfallet: `gate="runner"` og `next_step="inspect and retry"` -- en
+    # next_step som ikke navngir en handling, som er den ene tingen BL-4029 sa
+    # den alltid skal gjoere.
+    #
+    # Registrert som G12 i BL-HERMES-CHAIN-DRIVE-001. Aa flytte gate-rekkefoelgen
+    # i runneren er en egen beslutning med egen review; testen pinner derfor det
+    # SANNE utfallet, ikke det jeg haapet paa.
+    assert r["gate"] == "runner", r
+    assert "cad_ref" in r["blocker"] and "adr_ref" in r["blocker"], r["blocker"]
+    assert r["next_step"] == "inspect and retry", (
+        "naar dette endrer seg har noen flyttet sjekken til DesignGate — "
+        "oppdater G12 i BL-HERMES-CHAIN-DRIVE-001 sammen med den endringen")
+
+
+def test_isolated_build_root_actually_archives_the_given_sha(tmp_path):
+    """G5, MAALT — ikke lenger paastaatt. (reviewer runde 3, BLOCK 2)
+
+    `isolated_build_root` var monkeypatchet i ALLE aatte testbruk, saa den ble
+    aldri utfoert. Den forrige vakten sammenlignet `ref` mot en STUB hvis default
+    speilet den ekte signaturen — den testet altsaa ikke arkivet i det hele tatt,
+    og en mutasjon i selve kroppen (`ref` -> `"HEAD"`) lot 62 mutanter og 605
+    tester staa groenne.
+
+    Dette er den lastbaerende sikkerhetsegenskapen i ADR-ens Decision 1: fremmede
+    UKOMMITTERTE filer er FYSISK FRAVAERENDE fra treet bygget og testene kjoerer i.
+    Det er den som avviser BL-3643-moteksempelet, og den hadde null dekning.
+    """
+    import subprocess
+
+    repo = tmp_path / "repo"
+    repo.mkdir()
+    run = lambda *a: subprocess.run(["git", "-C", str(repo), *a], check=True,  # noqa: E731
+                                    capture_output=True)
+    subprocess.run(["git", "init", "-q", str(repo)], check=True)
+    (repo / "f.py").write_text("GAMMEL\n", encoding="utf-8")
+    run("add", "f.py")
+    run("-c", "user.email=t@t", "-c", "user.name=t", "commit", "-qm", "a")
+    sha_a = subprocess.run(["git", "-C", str(repo), "rev-parse", "HEAD"],
+                           capture_output=True, text=True, check=True).stdout.strip()
+    (repo / "f.py").write_text("NY\n", encoding="utf-8")
+    run("add", "f.py")
+    run("-c", "user.email=t@t", "-c", "user.name=t", "commit", "-qm", "b")
+    # En fremmed, UKOMMITTERT fil — den parallelle stroemmens arbeid.
+    (repo / "andres_ukommitterte.py").write_text("import noe_som_ikke_finnes\n",
+                                                 encoding="utf-8")
+
+    into = tmp_path / "kopi"
+    root = fr.isolated_build_root(str(repo), str(into), sha_a)
+
+    from pathlib import Path
+
+    assert (Path(root) / "f.py").read_text(encoding="utf-8").strip() == "GAMMEL", (
+        "arkivet fulgte HEAD i stedet for shaen som ble oppgitt — TOCTOU-vinduet "
+        "er aapent igjen")
+    assert not (Path(root) / "andres_ukommitterte.py").exists(), (
+        "en parallell stroems ukommitterte fil havnet i byggetreet — det er "
+        "BL-3643-moteksempelet, og hele grunnen scope-relativ renhet er trygg")
+
+
+def test_isolated_build_root_refuses_an_unknown_ref(tmp_path):
+    """En ugyldig sha skal KASTE, ikke stille falle tilbake paa HEAD."""
+    import subprocess
+
+    repo = tmp_path / "repo"
+    subprocess.run(["git", "init", "-q", str(repo)], check=True)
+    (repo / "f.py").write_text("x\n", encoding="utf-8")
+    subprocess.run(["git", "-C", str(repo), "add", "f.py"], check=True)
+    subprocess.run(["git", "-C", str(repo), "-c", "user.email=t@t", "-c",
+                    "user.name=t", "commit", "-qm", "a"], check=True, capture_output=True)
+    with pytest.raises(RuntimeError, match="git archive feilet"):
+        fr.isolated_build_root(str(repo), str(tmp_path / "ut"), "0" * 40)
+
+
+def test_a_commit_landing_while_cleanliness_is_measured_skips_the_goal(tmp_path, monkeypatch):
+    """BLOCK 3: den ANDRE HEAD-lesningen, som ingenting daekket.
+
+    Rekkefoelgen er `git_head` -> `scope_is_clean` -> `git_head` -> `archive`.
+    Uten den andre lesningen kunne en commit lande mellom de to foerste, slik at
+    renheten ble maalt mot én tilstand og arkivet tatt av en annen. Arkivets
+    INNHOLD var allerede laast av `ref`; dette laaser KORRESPONDANSEN.
+
+    Testen lar de to lesningene gi ulike svar — noe riggens konstant ikke kunne.
+    """
+    _stub_lease(monkeypatch)
+    _drive_world(monkeypatch, heads=["deadbeef", "EN-ANNEN-COMMIT"])
+    monkeypatch.setattr(fr, "isolated_build_root",
+                        lambda repo, into, ref="HEAD": into)
+    p, g = _write_drive_inputs(tmp_path, _observe_packet(git_ref="deadbeef"), _registry())
+    out = fr.drive_from_observe(p, g, repo=str(REPO), limit=1)
+    assert out["driven"] == 0
+    assert "flyttet seg mens renheten ble maalt" in out["skipped_detail"][0]["why"]
