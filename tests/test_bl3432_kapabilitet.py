@@ -186,4 +186,5 @@ finally:
     us.resolve_disabled_skills = _orig
 
 print("\n" + ("ALLE PASSERTE" if not FAIL else "FEIL: " + "; ".join(FAIL)))
-sys.exit(1 if FAIL else 0)
+if FAIL:
+    raise AssertionError("; ".join(FAIL))
