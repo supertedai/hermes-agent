@@ -38,6 +38,22 @@ i dag vet ingen hvor kjeden faktisk stopper, fordi ingen har kjørt den.
 Skillet er verdt å holde skarpt: *shadow* betyr at ingen ser resultatet.
 Dette resultatet blir lest, journalført og dømt av `faber_fitness` — det
 påvirker, det lander bare ikke.
+
+## BL-4056: steg 3 spør nå HVA SLAGS oppgave dette er
+
+Kjeden hadde `bl_gate` (steg 5) og `design_gate` (steg 7), men ingenting
+klassifiserte oppgaven først — alt ble behandlet som en kodeendring med et
+BL-nummer. En forespørsel som flytter en grense gikk rett i bygging.
+
+Steg 3 heter `ranking_planning_architecture`, og det er der spørsmålet hører
+hjemme: FØR nummeret deles ut på steg 5, ikke etter. Se
+`agent/task_classifier.py` for hvorfor tvil er en egen klasse som eskalerer,
+og hvorfor ingen signal kan tale FOR den billige klassen.
+
+Klassifiseringen er ren lesning her — den blokkerer ingenting i denne modulen,
+fordi `dry_run_13_step` uansett ikke utfører noe. Den rapporteres per mål, med
+signalene som fyrte, slik at «hvor mange av målene våre er egentlig
+arkitekturvedtak» blir et tall i stedet for en magefølelse.
 """
 
 from __future__ import annotations
@@ -45,10 +61,18 @@ from __future__ import annotations
 import argparse
 import json
 import os
+import re
 import sys
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Sequence
+
+from agent.task_classifier import (
+    Reversibility,
+    TaskClass,
+    TaskClassifier,
+    TaskProposal,
+)
 
 _MWP = os.environ.get("MWP_REPO", "/home/agent/agent-layer/mwp-uosh-automation-01")
 
@@ -180,6 +204,91 @@ def control_task_from_goal(goal: dict[str, Any], principal: str) -> ControlTask:
     )
 
 
+#: `repo_scope` er fritekst med formen `"hermes-agent: a/b.py, c/d.py, skills/…"`.
+#: Bare fragmenter som ser ut som filstier plukkes ut; «20-minute scheduler» er
+#: ikke en sti og skal ikke bli til en. Feil-retningen er bevisst: en sti vi ikke
+#: gjenkjenner blir utelatt fra det MÅLTE grunnlaget, ikke gjettet inn i det.
+_PATHISH = re.compile(r"[\w./-]+\.(?:py|ts|tsx|js|json|ya?ml|md|sh|service|plist)$")
+
+#: Ja/nei-erklæringer på et mål. ALT annet — inkludert fravær og «unknown» —
+#: blir `None`, altså «ubesvart». Se `TaskProposal`: ubesvart er ikke «nei».
+_YES = frozenset({"ja", "yes", "true", "1"})
+_NO = frozenset({"nei", "no", "false", "0"})
+
+
+def _tri(value: object) -> bool | None:
+    # `bool` FØRST. `str(value or "")` gjør `False` til `""` og dermed til
+    # `None` -- altså «ubesvart» -- så et ekte JSON-`false` kunne ikke uttrykkes
+    # i det hele tatt. Err-safe i retning, men det betyr at en erklært `nei`
+    # var umulig gjennom denne broen, og at 0-BL-målingen delvis var en
+    # parser-artefakt. Målt av reviewer.
+    if isinstance(value, bool):
+        return value
+    if value is None:
+        return None
+    raw = str(value).strip().lower()
+    if raw in _YES:
+        return True
+    if raw in _NO:
+        return False
+    return None
+
+
+def _paths_from_scope(scope: str) -> tuple[str, ...]:
+    body = scope.split(":", 1)[1] if ":" in scope else scope
+    out: list[str] = []
+    for frag in re.split(r"[,\s]+", body):
+        frag = frag.strip().strip(".,;")
+        if frag and _PATHISH.match(frag):
+            out.append(frag)
+    return tuple(out)
+
+
+def proposal_from_goal(goal: dict[str, Any]) -> TaskProposal:
+    """Projiser ett Faber-mål inn i klassifisererens vokabular.
+
+    Samme regel som `control_task_from_goal`: felter som ikke finnes settes
+    TOMME eller `None`, aldri gjettet. `rollback` er den ene positive evidensen
+    et mål allerede bærer — den er et felt `DefinitionOfDone` (steg 13) også
+    krever, så den er ikke en status noen skrev for å åpne en port.
+
+    MÅLT 2026-08-11 mot de sju levende målene: ingen av dem erklærer noen av de
+    to grensespørsmålene, og ingen navngir en eksisterende kontrakt. Alle sju
+    klassifiseres derfor som DOUBT eller ADR. Det skiller seg fra
+    `PreflightGate`-sirkulariteten på ett avgjørende punkt: det som mangler er
+    noe en proposer KAN svare på steg 3, ikke et artefakt kjeden produserer på
+    steg 7 eller 13.
+
+    **MEN LES DETTE FØR DU SITERER TALLET.** Reviewer fant at ingen produsent
+    noe sted skriver `evidence.trust_boundary_change`, `evidence.new_register`
+    eller `evidence.contract_ref` — nøklene finnes i dag bare som LESERE, her.
+    Så lenge det er tilfellet er 0-BL strukturelt garantert, og fem av de sju
+    DOUBT-dommene drives utelukkende av «du svarte ikke», uten et eneste
+    innholdssignal. Splitten måler altså at feltene er utfylt, ikke noe om
+    målene. Produsentsiden — flyby-promoteren som skriver `goals.json` — er den
+    navngitte oppfølgeren, og den bor i en annen fil enn denne.
+    """
+    ev = goal.get("evidence") or {}
+    scope = str(ev.get("repo_scope", ""))
+    description = " ".join(x for x in (
+        str(goal.get("next_step", "")),
+        str(ev.get("gate_class", "")),
+        scope,
+    ) if x)
+    return TaskProposal(
+        title=str(goal.get("title", "")),
+        description=description,
+        touched_paths=_paths_from_scope(scope),
+        reversibility=(Reversibility.REVERSIBLE if str(goal.get("rollback", "")).strip()
+                       else Reversibility.UNKNOWN),
+        contract_ref=str(ev.get("contract_ref", "")
+                         or goal.get("adr_ref", "")
+                         or goal.get("cad_ref", "")),
+        declared_trust_boundary_change=_tri(ev.get("trust_boundary_change")),
+        declared_new_register=_tri(ev.get("new_register")),
+    )
+
+
 def identity_for(principal: str) -> IdentitySnapshot:
     """Identiteten Faber kjører under.
 
@@ -202,6 +311,10 @@ def run_goal(goal: dict[str, Any], all_tasks: dict[str, ControlTask],
     """Kjør de 13 stegene for ett mål. Ingen sideeffekter."""
     task = control_task_from_goal(goal, principal)
     result = dry_run_13_step(task, all_tasks, identity_for(principal))
+    # STEG 3 (BL-4056). Kjøres FØR stegrapporten leses, fordi svaret på «hva
+    # slags oppgave er dette» endrer hva resten av rapporten betyr: et mål som
+    # står på steg 4 er en helt annen sak hvis det egentlig er et ADR.
+    classification = TaskClassifier().classify(proposal_from_goal(goal))
 
     steps = []
     stopped_at = None
@@ -228,6 +341,10 @@ def run_goal(goal: dict[str, Any], all_tasks: dict[str, ControlTask],
         "steps_planned": sum(1 for s in steps if s["status"] == DryRunStatus.PLANNED.value),
         "steps_not_executed": sum(1 for s in steps if s["status"] == DryRunStatus.NOT_EXECUTED.value),
         "steps": steps,
+        # BL-4056: hele klassifiseringen, ikke bare dommen. Signalene som fyrte
+        # er det som gjør den etterprøvbar — og fraværet av treff er et
+        # registrert faktum, ikke en stillhet.
+        "task_classification": classification.as_dict(),
     }
 
 
@@ -238,6 +355,15 @@ def run_all(goals: Sequence[dict[str, Any]], principal: str) -> dict[str, Any]:
     # Hvor langt kommer kjeden faktisk? Aggregatet er det Morten spurte om:
     # «har Hermes en fungerende 13-stegs flyt» — dette er tallet som svarer.
     reached = [g["stopped_at_step"] for g in per_goal if g["stopped_at_step"]]
+
+    # BL-4056: «hvor mange av målene våre er egentlig arkitekturvedtak?» blir
+    # et tall. DOUBT telles for seg og skal IKKE slås sammen med BL — det er
+    # sammenslåingen som er defekten: tvil som avrundes nedover ser ut som
+    # arbeid som er klarert.
+    by_class = {c.value: 0 for c in TaskClass}
+    for g in per_goal:
+        by_class[g["task_classification"]["task_class"]] += 1
+
     return {
         "artifact": "faber-control-bridge-v1",
         "at": _now(),
@@ -245,7 +371,17 @@ def run_all(goals: Sequence[dict[str, Any]], principal: str) -> dict[str, Any]:
         "goals": len(per_goal),
         "deepest_step_reached": max(reached) if reached else None,
         "shallowest_stop": min(reached) if reached else None,
+        "task_class_counts": by_class,
+        "needs_design_review": sum(
+            1 for g in per_goal if g["task_classification"]["design_review_required"]),
         "results": per_goal,
+        "classification_note": (
+            "Steg 3 (BL-4056). DOUBT er en egen klasse som eskalerer — den er "
+            "IKKE BL med forbehold. Et mål uten erklærte grensesvar og uten "
+            "navngitt eksisterende kontrakt kan ikke plasseres, og skjevheten "
+            "går alltid mot den lette klassen. ADR-numre hentes fra "
+            "`python3 tools/allocate_adr.py` på .13, aldri for hånd (BL-3824)."
+        ),
         "not_executed_note": (
             "dry_run_13_step planlegger alle 13 stegene uten sideeffekter. Steg 6/8/11/12/13 "
             "rapporteres NOT_EXECUTED med begrunnelse. Aa gi denne stien landingsevne er en "
