@@ -1,16 +1,16 @@
 {
   "status": "RUNNING",
   "lease": {
-    "status": "READY",
-    "lease": "ACTIVE",
+    "status": "BLOCKED",
+    "lease": "FAILED",
     "task_id": "",
-    "blocker": "",
+    "blocker": "canonical authority or principal is not verified",
     "result": {}
   },
   "canonical_parent_lease": {
-    "verified": true,
+    "verified": false,
     "task_id": "t_fe6a5950",
-    "task_status": "running"
+    "task_status": "blocked"
   },
   "ready_lane_ids": [
     "git-deploy-daemon-status",
@@ -23,74 +23,81 @@
   ],
   "autocoder_ingress": [
     {
-      "status": "BLOCKED",
+      "status": "READY",
       "task_id": "git-deploy-daemon-status",
       "principal_id": "morten",
-      "executor_allowed": false,
-      "blocker": "child Kanban lease is not verified",
-      "next_action": "claim and heartbeat the canonical child lane",
+      "executor_allowed": true,
+      "blocker": "",
+      "next_action": "metadata-only lane may proceed without a write lease",
       "parent_lease_verified": false,
-      "child_lease_verified": false
+      "child_lease_verified": false,
+      "execution_mode": "read_only"
     },
     {
-      "status": "BLOCKED",
+      "status": "READY",
       "task_id": "daemon-bl-health-alignment",
       "principal_id": "morten",
-      "executor_allowed": false,
-      "blocker": "child Kanban lease is not verified",
-      "next_action": "claim and heartbeat the canonical child lane",
+      "executor_allowed": true,
+      "blocker": "",
+      "next_action": "metadata-only lane may proceed without a write lease",
       "parent_lease_verified": false,
-      "child_lease_verified": false
+      "child_lease_verified": false,
+      "execution_mode": "read_only"
     },
     {
       "status": "BLOCKED",
       "task_id": "per-user-topology",
       "principal_id": "morten",
       "executor_allowed": false,
-      "blocker": "child Kanban lease is not verified",
-      "next_action": "claim and heartbeat the canonical child lane",
+      "blocker": "parent Kanban lease is not verified",
+      "next_action": "claim and heartbeat the canonical parent",
       "parent_lease_verified": false,
-      "child_lease_verified": false
+      "child_lease_verified": false,
+      "execution_mode": "mutating"
     },
     {
-      "status": "BLOCKED",
+      "status": "READY",
       "task_id": "world-model-hub-alignment",
       "principal_id": "morten",
-      "executor_allowed": false,
-      "blocker": "child Kanban lease is not verified",
-      "next_action": "claim and heartbeat the canonical child lane",
+      "executor_allowed": true,
+      "blocker": "",
+      "next_action": "metadata-only lane may proceed without a write lease",
       "parent_lease_verified": false,
-      "child_lease_verified": false
+      "child_lease_verified": false,
+      "execution_mode": "read_only"
     },
     {
-      "status": "BLOCKED",
+      "status": "READY",
       "task_id": "chat-cortex-shared-readview",
       "principal_id": "morten",
-      "executor_allowed": false,
-      "blocker": "child Kanban lease is not verified",
-      "next_action": "claim and heartbeat the canonical child lane",
+      "executor_allowed": true,
+      "blocker": "",
+      "next_action": "metadata-only lane may proceed without a write lease",
       "parent_lease_verified": false,
-      "child_lease_verified": false
+      "child_lease_verified": false,
+      "execution_mode": "read_only"
     },
     {
-      "status": "BLOCKED",
+      "status": "READY",
       "task_id": "lateral-agent-bus",
       "principal_id": "morten",
-      "executor_allowed": false,
-      "blocker": "child Kanban lease is not verified",
-      "next_action": "claim and heartbeat the canonical child lane",
+      "executor_allowed": true,
+      "blocker": "",
+      "next_action": "metadata-only lane may proceed without a write lease",
       "parent_lease_verified": false,
-      "child_lease_verified": false
+      "child_lease_verified": false,
+      "execution_mode": "read_only"
     },
     {
-      "status": "BLOCKED",
+      "status": "READY",
       "task_id": "asi-control-spine",
       "principal_id": "morten",
-      "executor_allowed": false,
-      "blocker": "child Kanban lease is not verified",
-      "next_action": "claim and heartbeat the canonical child lane",
+      "executor_allowed": true,
+      "blocker": "",
+      "next_action": "metadata-only lane may proceed without a write lease",
       "parent_lease_verified": false,
-      "child_lease_verified": false
+      "child_lease_verified": false,
+      "execution_mode": "read_only"
     }
   ],
   "chips": [
@@ -195,6 +202,6 @@
     }
   ],
   "metadata_only": true,
-  "authority_verified": true,
+  "authority_verified": false,
   "source": "docs/mwp-final-closeout-readback.json"
 }
