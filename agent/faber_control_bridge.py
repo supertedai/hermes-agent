@@ -246,13 +246,17 @@ def _tri(value: object) -> bool | None:
 
 
 def _paths_from_scope(scope: str) -> tuple[str, ...]:
-    body = scope.split(":", 1)[1] if ":" in scope else scope
-    out: list[str] = []
-    for frag in re.split(r"[,\s]+", body):
-        frag = frag.strip().strip(".,;")
-        if frag and _PATHISH.match(frag):
-            out.append(frag)
-    return tuple(out)
+    """BL-4070 (D2): ÉN parser. Denne delegerer, den duplikerer ikke.
+
+    Før dette fantes to: denne godtok ti filformer, `lease_authority.scope_paths`
+    kun `.py`. Samme `repo_scope` ga altså to filer her og null der — og steg 6
+    rapporterte «scope navngir ingen filer» som et SVAR om leasen, når det
+    egentlig betydde at spørsmålet aldri ble stilt. To parsere for én grense er
+    samme feilform som to kilder for ett lease-sett.
+    """
+    from agent.lease_authority import scope_paths
+
+    return tuple(scope_paths(scope))
 
 
 def proposal_from_goal(goal: dict[str, Any]) -> TaskProposal:
@@ -317,9 +321,72 @@ def identity_for(principal: str) -> IdentitySnapshot:
     )
 
 
+
+def lease_state_for(task_scope: str) -> dict[str, object]:
+    """STEG 6, LEST — ikke tatt. (BL-4070)
+
+    Broen er en tørrkjøring uten sideeffekter, så den skal ikke CLAIME noe. Men
+    å rapportere steg 6 som NOT_EXECUTED uten å spørre er en annen sak: det er
+    en påstand om en tilstand ingen har målt. Autoriteten svarer på nettopp det
+    spørsmålet, og et oppslag er ikke en sideeffekt.
+
+    Tre utfall, med vilje ikke to:
+
+    ``clear=True``   leasen er ren for disse stiene
+    ``clear=False``  noen holder dem
+    ``clear=None``   UVERIFISERT — ingen token, eller autoriteten svarte ikke
+
+    Den tredje er poenget. `lease_authority.check` returnerer `None` framfor
+    `False` når den ikke fikk spurt, fordi «ingen lease finnes» er en påstand
+    man ikke har grunnlag for uten svar. Broen viderefører den forskjellen i
+    stedet for å flate den ut — en kaller som leser «ikke ren» og «vi vet ikke»
+    likt, produserer falske funn.
+    """
+    from agent.lease_authority import check, scope_paths
+
+    paths = scope_paths(task_scope)
+    if not paths:
+        return {"clear": None, "paths": [], "note": "scope navngir ingen filer — ingenting å spørre om"}
+    clear, note = check(paths)
+    return {"clear": clear, "paths": list(paths), "note": note}
+
+
+def skill_selection_for(goal: dict) -> dict[str, object]:
+    """TVERS — hvilke skills gjelder denne oppgaven? (BL-4070)
+
+    `skill_selector` kjørte allerede via gateway-flaten, men ingen av de tretten
+    stegene spurte den. «LIVE» og «koblet til kjeden» er to forskjellige svar med
+    to forskjellige neste-handlinger, og vakten i `tests/test_chain_is_wired.py`
+    skiller dem nettopp derfor.
+
+    `select_for_task` feiler aldri: mangler indeksen, blir dekningen UNKNOWN, og
+    UNKNOWN forplanter seg videre framfor å bli til en påstand om fravær. Den
+    ENESTE sideeffekten er en append-only sporingslinje — se `run_goal`.
+    """
+    from agent.skill_selector import select_for_task
+
+    text = " ".join(str(goal.get(k, "") or "") for k in ("title", "description", "repo_scope")).strip()
+    if not text:
+        return {"queryable": False, "coverage": "UNKNOWN",
+                "note": "målet bærer ingen tekst å velge skills fra"}
+    # Reviewer 8: «step3» var feil etikett — steg 3 i broen er
+    # klassifiseringen. Skill-valget er tverrgaaende.
+    selection = select_for_task(text, stage="bridge:cross")
+    return selection.to_json()
+
+
 def run_goal(goal: dict[str, Any], all_tasks: dict[str, ControlTask],
              principal: str) -> dict[str, Any]:
-    """Kjør de 13 stegene for ett mål. Ingen sideeffekter."""
+    """Kjør de 13 stegene for ett mål.
+
+    Ingen sideeffekter PÅ REPOET: ingenting claimes, bygges, commites eller
+    startes. BL-4070 la til én skrivning, og den står her framfor i en
+    docstring som fortsatt sier «ingen sideeffekter»: `skill_selector.trace`
+    føyer én append-only JSONL-linje til skill-sporet. Å slå den av ville
+    koblet inn modulen og samtidig fjernet dens egen grunn til å finnes — «en
+    seleksjon ingen kan observere er ikke koblet». Sporet bærer en hash av
+    teksten, ikke teksten.
+    """
     task = control_task_from_goal(goal, principal)
     result = dry_run_13_step(task, all_tasks, identity_for(principal))
     # STEG 3 (BL-4056). Kjøres FØR stegrapporten leses, fordi svaret på «hva
@@ -347,6 +414,12 @@ def run_goal(goal: dict[str, Any], all_tasks: dict[str, ControlTask],
         "scope": task.scope[:80],
         # DETTE er det nye: ikke «blokkert», men blokkert PAA HVILKET STEG av 13.
         "stopped_at_step": stopped_at["number"] if stopped_at else None,
+        # BL-4070 (D1): hvor langt målet FAKTISK kom. Et ublokkert mål har
+        # `stopped_at_step is None`, og falt derfor ut av aggregatet.
+        "reached_step": max(
+            (s["number"] for s in steps
+             if s["status"] == DryRunStatus.PLANNED.value and s["number"]),
+            default=None),
         "stopped_at_name": stopped_at["name"] if stopped_at else None,
         "stopped_reason": stopped_at["note"] if stopped_at else "",
         "steps_planned": sum(1 for s in steps if s["status"] == DryRunStatus.PLANNED.value),
@@ -356,6 +429,14 @@ def run_goal(goal: dict[str, Any], all_tasks: dict[str, ControlTask],
         # er det som gjør den etterprøvbar — og fraværet av treff er et
         # registrert faktum, ikke en stillhet.
         "task_classification": classification.as_dict(),
+        # BL-4070 steg 6, LEST. Erstatter ikke NOT_EXECUTED-raden — den står,
+        # fordi broen fortsatt ikke TAR leasen — men den sier nå hva
+        # autoriteten svarte, med UVERIFISERT som en egen tredje verdi.
+        "lease_state": lease_state_for(task.scope),
+        # BL-4070 tvers. Hvilke skills kjeden ville hatt for denne oppgaven.
+        # Ufullstendig dekning rapporteres som ufullstendig; et tomt utvalg
+        # under UNKNOWN er ikke en påstand om at ingen skills passer.
+        "skill_selection": skill_selection_for(goal),
     }
 
 
@@ -363,9 +444,29 @@ def run_all(goals: Sequence[dict[str, Any]], principal: str) -> dict[str, Any]:
     tasks = {g.get("goal_id", ""): control_task_from_goal(g, principal) for g in goals}
     per_goal = [run_goal(g, tasks, principal) for g in goals]
 
-    # Hvor langt kommer kjeden faktisk? Aggregatet er det Morten spurte om:
-    # «har Hermes en fungerende 13-stegs flyt» — dette er tallet som svarer.
-    reached = [g["stopped_at_step"] for g in per_goal if g["stopped_at_step"]]
+    # Hvor langt kommer kjeden faktisk?
+    #
+    # ADVARSEL, OG DEN ER MAALT (reviewer runde 2, NB1). Aggregatet er IKKE
+    # tallet som svarer på «har Hermes en fungerende 13-stegs flyt» — den
+    # setningen sto her og var feil også etter D1-fiksen. `dry_run_13_step` er
+    # alt-eller-ingenting: et tillatt mål får alle planleggingsstegene PLANNED
+    # og lander derfor alltid på 10 (`canonical_reviewer_gate`), et ikke-tillatt
+    # får null PLANNED og dermed `None`. `deepest_step_reached` er altså en
+    # LIVENESS-BIT forkledd som en dybde: «minst ett mål er tillatt».
+    #
+    # Det ærlige artefaktet er `reached_step` PER MÅL, som står i hver rad.
+    # BL-4070 (D1). FØR: `max` over `stopped_at_step`, altså kun over mål som
+    # STOPPET — et mål som planla seg gjennom alt falt helt ut av tallet. Målt
+    # mot flåtens sju ekte mål (4 planlegger alt, 3 stopper på steg 1) ble
+    # `deepest_step_reached` = 1. Kommentaren under sier at dette er tallet som
+    # svarer på «virker 13-stegs-flyten». Det svarte på det motsatte: jo bedre
+    # flyten gikk, jo lavere ble tallet.
+    #
+    # NÅ: dypeste steg som faktisk ble PLANLAGT, per mål. Ikke 13 for et
+    # ublokkert mål — steg 6/8/11/12/13 rapporteres NOT_EXECUTED med vilje, og
+    # å telle dem som nådd ville vært den motsatte løgnen.
+    reached = [g["reached_step"] for g in per_goal if g["reached_step"]]
+    stops = [g["stopped_at_step"] for g in per_goal if g["stopped_at_step"]]
 
     # BL-4056: «hvor mange av målene våre er egentlig arkitekturvedtak?» blir
     # et tall. DOUBT telles for seg og skal IKKE slås sammen med BL — det er
@@ -381,7 +482,11 @@ def run_all(goals: Sequence[dict[str, Any]], principal: str) -> dict[str, Any]:
         "principal": principal,
         "goals": len(per_goal),
         "deepest_step_reached": max(reached) if reached else None,
-        "shallowest_stop": min(reached) if reached else None,
+        # `shallowest_stop` handler om STOPP og skal fortsatt kun telle dem.
+        # Den leste tidligere den samme lista som `deepest_step_reached`, så
+        # navnet stemte bare så lenge begge var feil på samme måte.
+        "shallowest_stop": min(stops) if stops else None,
+        "goals_that_stopped": len(stops),
         "task_class_counts": by_class,
         "needs_design_review": sum(
             1 for g in per_goal if g["task_classification"]["design_review_required"]),

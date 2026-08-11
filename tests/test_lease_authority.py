@@ -442,6 +442,37 @@ def test_the_env_token_is_for_tests_and_wins(token_file, monkeypatch) -> None:
 
 def test_scope_paths_matches_what_the_check_route_is_asked_about() -> None:
     """`check` og `claim` MÅ se samme sett. Er de uenige om hva som er i scope,
-    verifiserer vi én mengde og leaser en annen."""
+    verifiserer vi én mengde og leaser en annen.
+
+    BL-4070 (D2) UTVIDET SETTET, og grunnen over står uendret — den er nettopp
+    hvorfor utvidelsen måtte skje HER og ikke hos kalleren. Det fantes to
+    parsere: denne leste kun `.py`, mens `faber_control_bridge._paths_from_scope`
+    leste ti filformer. Samme streng ga altså to filer hos den ene og «scope
+    navngir ingen filer» hos den andre, og steg 6 rapporterte det siste som et
+    SVAR om leasen. Autoriteten selv har aldri hatt noen filtype-begrensning —
+    den holder lease på hva som helst — så `.py`-filteret utelukket ikke noe
+    autoriteten ikke kunne svare på; det gjorde bare spørsmålet ustillbart.
+
+    Broen delegerer nå hit, og `faber_observe` importerte allerede denne
+    funksjonen (BL-4059). Det finnes ÉN parser, så de kan ikke divergere igjen.
+    """
     assert la.scope_paths("hermes-agent: a.py, b.py") == ["a.py", "b.py"]
-    assert la.scope_paths("hermes-agent: a.py, notes.md") == ["a.py"]
+    assert la.scope_paths("hermes-agent: a.py, notes.md") == ["a.py", "notes.md"]
+    assert la.scope_paths("hermes-agent: hermes-dashboard.service") == [
+        "hermes-dashboard.service"]
+    # Utvidelsen er en LISTE, ikke «alt»: en vilkårlig setning er fortsatt ikke
+    # en filsti, ellers ville scope-lesingen blitt sin egen kontroll-som-ikke-
+    # kan-feile.
+    assert la.scope_paths("hermes-agent: se ADR-061 for detaljer") == []
+
+
+def test_the_bridge_and_the_authority_cannot_disagree_about_a_scope() -> None:
+    """D2 som regresjon: to parsere for én grense er samme feilform som to
+    kilder for ett lease-sett."""
+    from agent.faber_control_bridge import _paths_from_scope
+
+    for scope in ("hermes-agent: a.py, notes.md, unit.service",
+                  "hermes-agent: agent/x.py",
+                  "hermes-agent: ingenting her",
+                  ""):
+        assert list(la.scope_paths(scope)) == list(_paths_from_scope(scope)), scope

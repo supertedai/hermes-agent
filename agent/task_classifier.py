@@ -515,6 +515,22 @@ _CONTRACT_FORMS: tuple[tuple[object, str], ...] = (
     (re.compile(r"^ADR-(?:0\d{2}|[1-9]\d{2,})(?:-F\d+)?\b", re.IGNORECASE | re.ASCII), "ADR"),
     (re.compile(r"^BL-[1-9]\d*\b", re.IGNORECASE | re.ASCII), "BL"),
     (re.compile(r"^CAD-[A-Z0-9][A-Z0-9.-]*\b", re.IGNORECASE | re.ASCII), "CAD"),
+    # BL-4070 (D3). MWP fører EGNE registre med EGNE numre (CLAUDE.md), og
+    # `CAD-HERMES-*` passerte allerede fordi CAD-formen er alfanumerisk. `ADR-`
+    # og `BL-` var derimot rent numeriske, så `ADR-HERMES-001`, `ADR-TRUTH-001`,
+    # `ADR-H10-SEMANTIC-BOUNDARY-001`, `BL-HERMES-*` og `BL-MWP-*` falt til
+    # `missing_contract_ref` -> DOUBT -> «IKKE bygg». Alt MWP-arbeid som siterte
+    # sin egen ADR KORREKT ble altså straffet for det. Det er BL-4029 L6 én
+    # etasje opp: projeksjonen ble fikset, klassifisereren ikke.
+    #
+    # EGNE FORM-NAVN, IKKE "ADR"/"BL". Å returnere "ADR" for `ADR-HERMES-001`
+    # ville slått to registre sammen — det CLAUDE.md forbyr i klartekst
+    # («bland dem aldri»). Formen er gyldig; den er bare fra et annet register,
+    # og navnet sier hvilket.
+    (re.compile(r"^ADR-(?:HERMES|TRUTH|MWP|H\d+)-[A-Z0-9][A-Z0-9.-]*\b",
+                re.IGNORECASE | re.ASCII), "ADR-MWP"),
+    (re.compile(r"^BL-(?:HERMES|MWP)-[A-Z0-9][A-Z0-9.-]*\b",
+                re.IGNORECASE | re.ASCII), "BL-MWP"),
     (re.compile(r"^[\w./-]+\.(?:py|ts|tsx|js|json|ya?ml|sh)\b"), "fil"),
     (_is_module_ref, "modul/symbol"),
 )

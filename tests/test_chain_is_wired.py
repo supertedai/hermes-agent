@@ -118,7 +118,28 @@ CALLER_SURFACES = ("agent", "hermes_cli", "tui_gateway", "tools")
 #:
 #: Tallet skal bare gaa NED. Naar BL-4050 lander, faller HEAD til 4 og taket kan
 #: strammes -- det er en egen, bevisst handling.
-MAX_UNREACHED = 5
+#: BL-4070 STRAMMET 5 -> 0. Alle sju er naa naabare fra en kjede-inngang.
+#:
+#: Fra dette punktet er ratsjetten ikke lenger en nedtelling, men en LAAS: 0 er
+#: gulvet, og enhver frakobling er nedenfra og roed. Det er den sterkeste formen
+#: denne vakten kan ha, og den eneste som ikke krever vedlikehold.
+#:
+#: PRISEN STAAR FORTSATT, og den er viktigere naa enn foer: et tak paa 0 sier at
+#: hver komponent er NAABAR, ikke at den KJOERER. En import er ikke et kall.
+#: Beviset for at soemmene faktisk utfoeres bor i `tests/test_chain_seam_wiring.py`,
+#: som driver hver soem og maaler at det MAALTE svaret -- ikke avsenderens --
+#: er det som brukes nedstroems. De to filene svarer paa to spoersmaal som kan
+#: ha ulike svar, og skal derfor ikke slaas sammen.
+#:
+#: OG DET ER STERKERE ENN DET: 0 LAASER IKKE FIRE SOEMMER. Reviewer viste
+#: at `faber_postcommit_adapters` faar kreditt transitivt via `faber_landing`,
+#: saa hele steg-12/13-wiringen kunne slettes uten at tallet roert seg. Det
+#: samme gjelder `lease_authority`, som ogsaa naas fra broen. Transitiv
+#: kreditt er iboende i en NAABARHETS-vakt og kan ikke fikses her. Det som
+#: baerer den vekten er `tests/test_chain_seam_wiring.py`, som DRIVER hver
+#: soem. Leser du 0 her, har du ikke lest at kjeden kjoerer -- du har lest at
+#: ingen komponent er utilgjengelig.
+MAX_UNREACHED = 0
 
 
 class UnreadableModule(RuntimeError):
@@ -153,6 +174,16 @@ def _agent_imports(module: str) -> set[str]:
         if isinstance(node, ast.ImportFrom) and node.module:
             if node.module.startswith("agent."):
                 out.add(node.module.split(".", 1)[1])
+            elif node.module == "agent":
+                # BL-4070 (reviewer BLOCK 2). `from agent import X as y` har
+                # `node.module == "agent"` og navnet i `names` -- formen ble ikke
+                # sett i det hele tatt. MAALT: hele steg-12/13-wiringen kunne
+                # slettes uten at ratsjetten roert seg, fordi komponenten fikk
+                # kreditt TRANSITIVT via `faber_landing`. En vakt som er
+                # tilfreds enten ledningen finnes eller ikke, maaler ingenting --
+                # noeyaktig feilklassen denne fila ble skrevet for.
+                for alias in node.names:
+                    out.add(alias.name)
         elif isinstance(node, ast.Import):
             for alias in node.names:
                 if alias.name.startswith("agent."):

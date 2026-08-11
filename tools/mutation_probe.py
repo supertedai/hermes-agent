@@ -104,12 +104,38 @@ HAND = "agent/faber_landing.py"
 RUNTIME = "agent/faber_runtime.py"
 T_GATE = "tests/test_code_workflow.py"
 T_HAND = "tests/test_faber_landing.py"
+#: BL-4070 — soemmene mellom kjedens inngang og de sju komponentene.
+BRIDGE = "agent/faber_control_bridge.py"
+T_SEAM = "tests/test_chain_seam_wiring.py"
+T_GUARD = "tests/test_chain_is_wired.py"
+#: BL-4070 D1-D3: de tre defektene en LIVE bro-kjoering fant.
+AUTHORITY = "agent/lease_authority.py"
+CLASSIFIER = "agent/task_classifier.py"
+T_AUTHORITY = "tests/test_lease_authority.py"
 
 #: Filene hvis ARBEIDSTRE-tilstand er det som maales. Legges ALLTID over det
 #: `git archive` leverte -- ikke bare naar de mangler. Den tidligere
 #: «kopier hvis fraevaerende»-regelen sluttet stille aa virke i det oeyeblikket
 #: filene landet, og gjorde en mutant vakuoes uten aa si fra. Se docstringen.
-OVERLAY = (HAND, T_HAND)
+#: BL-4070: RUNTIME, BRIDGE og T_SEAM maa ogsaa legges over. Uten dem leser
+#: proben HEADs versjon av soemmene, og en mutant mot en linje som ikke finnes
+#: i kopien er ikke et drap -- det er en maaling av ingenting. Porten under
+#: (`source.count(anchor) != 1`) fanger det som overlever, ikke som seier.
+#:
+#: HISTORIKK, OG DEN ER UTLOEPT — MED VILJE BEHOLDT SOM EKSEMPEL. Mens BL-4070
+#: ble skrevet var grunnlinjen ROED i det delte arbeidstreet, fordi `T_HAND`
+#: ble lagt over fra et tre der BL-4055 hadde tester som krevde
+#: `GovernedCodeRunner(second_opinion=...)` — en parameter som bare fantes i
+#: DERES ulandede `code_workflow.py`. BL-4055 landet som `5a9a6547c`, og
+#: tilstanden loeste seg selv slik den skulle. Reviewer maalte etterpaa:
+#: grunnlinje groenn, 43 av 43 drept, med den EKTE overlay-lista.
+#:
+#: Den forrige versjonen av dette avsnittet sa «OG DET GJELDER FORTSATT NAAR
+#: DU LESER DETTE» om en maaling som var timer gammel. En kommentar som
+#: paastaar en LEVENDE maaling den ikke lenger har, er samme defektklasse som
+#: proben jakter paa. Skriv maalinger med dato og utfall, aldri i presens.
+OVERLAY = (HAND, T_HAND, RUNTIME, BRIDGE, T_SEAM, T_GUARD,
+           AUTHORITY, CLASSIFIER, T_AUTHORITY)
 
 #: (navn, fil, anker, erstatning, testfil, testen som MAA bli roed)
 MUTANTS: tuple[tuple[str, str, str, str, str, str], ...] = (
@@ -212,6 +238,141 @@ MUTANTS: tuple[tuple[str, str, str, str, str, str], ...] = (
      "            landing=landing,",
      "            landing=lambda _: prelanding_evidence,",
      T_HAND, "test_the_runtime_tick_lands_through_the_executor"),
+
+    # --- BL-4070 STEG 6: er det AUTORITETENS svar som blir kjedens lease-sett? ---
+    ("SOEM steg 6 beholder payloadens lease-sett", RUNTIME,
+     '    refs["lease"] = ",".join(outcome.acquired) if outcome.ok else ""',
+     '    refs["lease"] = str(evidence.source_refs.get("lease", ""))',
+     T_SEAM, "test_authority_answer_replaces_the_payloads_lease_set"),
+    ("SOEM steg 6 melder klart selv naar claimet feilet", RUNTIME,
+     "    return replace(evidence, lease_clear=bool(outcome.ok), source_refs=refs)",
+     "    return replace(evidence, lease_clear=True, source_refs=refs)",
+     T_SEAM, "test_failed_claim_clears_the_lease_set_and_the_flag"),
+
+    # --- BL-4070 STEG 11: kalles handen, eller ekkoes literalen? ---
+    ("SOEM steg 11 faller alltid tilbake paa literalen", RUNTIME,
+     '    if "land" not in payload:\n        return lambda _: literal',
+     "    if True:\n        return lambda _: literal",
+     T_SEAM, "test_the_hand_is_called_with_the_judged_set_and_the_measured_answer_wins"),
+    ("SOEM steg 11 registrerer ikke den maalte landingen", RUNTIME,
+     "        observed.evidence = result\n        return result",
+     "        return result",
+     T_SEAM, "test_the_hand_is_called_with_the_judged_set_and_the_measured_answer_wins"),
+
+    # --- BL-4070 STEG 12/13: leses commiten tilbake mot det MAALTE settet? ---
+    ("SOEM steg 13 godtar en tom observasjon", RUNTIME,
+     "        if landed is None:",
+     "        if False:",
+     T_SEAM, "test_postcommit_refuses_when_no_hand_measured_a_landing"),
+    ("SOEM steg 13 leser tilbake mot payloadens filsett", RUNTIME,
+     "        expected = tuple(landed.landing_set or ())",
+     '        expected = tuple(spec.get("expected_files") or ("payload/said.py",))',
+     T_SEAM, "test_postcommit_reads_back_against_the_measured_set_not_the_payloads"),
+
+    # --- BL-4070: naervaer, ikke sannhetsverdi ---
+    ("SOEM tom postcommit-spec hopper stille over steg 12/13", RUNTIME,
+     '    if "postcommit" not in payload:\n        return None',
+     '    if not payload.get("postcommit"):\n        return None',
+     T_SEAM, "test_empty_postcommit_object_is_an_error_not_a_silent_skip"),
+
+    # --- BL-4070 BROEN: overlever UVERIFISERT som egen verdi? ---
+    ("SOEM broen flater UVERIFISERT ut til «ikke ren»", BRIDGE,
+     '    return {"clear": clear, "paths": list(paths), "note": note}',
+     '    return {"clear": bool(clear), "paths": list(paths), "note": note}',
+     T_SEAM, "test_bridge_keeps_unverified_distinct_from_not_clear"),
+    ("SOEM broen paastaar fravaer for et maal uten tekst", BRIDGE,
+     "    if not text:",
+     "    if False:",
+     T_SEAM, "test_bridge_never_claims_absence_for_a_textless_goal"),
+
+    # --- BL-4070 runde 2: de fire reviewer-BLOCKene, som mutanter ---
+    ("SOEM steg 12 slipper igjennom uten kjoeretidssvar", RUNTIME,
+     "    if bool(container) == bool(no_runtime_target):",
+     "    if False:",
+     T_SEAM, "test_postcommit_requires_exactly_one_runtime_answer"),
+    ("SOEM steg 12/13 godtar fravaer av testmaal", RUNTIME,
+     "    if not test_paths:\n        raise ValueError(",
+     "    if False:\n        raise ValueError(",
+     T_SEAM, "test_postcommit_requires_a_test_target"),
+    ("SOEM steg 12/13 stoler paa LANDED uten aa se etter", RUNTIME,
+     "        if result.goal.state is not GoalState.LANDED:",
+     "        if False:",
+     T_SEAM, "test_postcommit_refuses_on_a_goal_that_never_landed"),
+    ("SOEM tom implement-spec reverterer stille til literalen", RUNTIME,
+     '    if "implement" in payload:',
+     '    if payload.get("implement"):',
+     T_SEAM, "test_empty_implement_object_cannot_silently_revert_step_8"),
+    ("SOEM ticken slipper ikke leasen den tok", RUNTIME,
+     "        ok, note = release(held)",
+     '        ok, note = True, "sluppet"',
+     T_SEAM, "test_the_tick_releases_what_it_took"),
+    ("VAKT ser ikke `from agent import X`", T_GUARD,
+     '            elif node.module == "agent":',
+     "            elif False:",
+     T_SEAM, "test_the_guard_sees_from_agent_import_x"),
+
+    # --- BL-4070 D1: svarer aggregatet paa spoersmaalet det sier det svarer paa? ---
+    ("D1 dybden regnes kun over maal som STOPPET", BRIDGE,
+     '    reached = [g["reached_step"] for g in per_goal if g["reached_step"]]',
+     '    reached = [g["stopped_at_step"] for g in per_goal if g["stopped_at_step"]]',
+     T_SEAM, "test_d1_a_goal_that_never_stopped_still_counts_toward_the_depth"),
+    ("D1 NOT_EXECUTED telles som naadd", BRIDGE,
+     '             if s["status"] == DryRunStatus.PLANNED.value and s["number"]),',
+     '             if s["number"]),',
+     T_SEAM, "test_d1_reached_step_never_counts_a_not_executed_step_as_reached"),
+
+    # --- BL-4070 D2: én parser, ikke to ---
+    ("D2 autoriteten smalner igjen til .py", AUTHORITY,
+     '_SCOPE_PATH = re.compile(r"^[\\w./-]+\\.(?:py|ts|tsx|js|json|ya?ml|md|sh|service|plist)$")',
+     '_SCOPE_PATH = re.compile(r"^[\\w./-]+\\.py$")',
+     T_SEAM, "test_d2_a_non_python_scope_is_now_askable"),
+    ("D2 broen faar sin egen parser tilbake", BRIDGE,
+     "    from agent.lease_authority import scope_paths\n\n    return tuple(scope_paths(scope))",
+     "    return tuple(x for x in re.split(r\"[,\\s]+\", scope) if x.endswith(\".py\"))",
+     T_SEAM, "test_d2_the_two_scope_parsers_are_now_one"),
+
+    # --- BL-4070 D3: MWPs eget navnerom ---
+    ("D3 ADR-MWP-formen fjernes", CLASSIFIER,
+     '    (re.compile(r"^ADR-(?:HERMES|TRUTH|MWP|H\\d+)-[A-Z0-9][A-Z0-9.-]*\\b",\n'
+     '                re.IGNORECASE | re.ASCII), "ADR-MWP"),',
+     "",
+     T_SEAM, "test_d3_mwp_contract_refs_are_a_named_form_not_a_missing_one"),
+    ("D3 registrene slaas sammen til ett", CLASSIFIER,
+     '                re.IGNORECASE | re.ASCII), "ADR-MWP"),',
+     '                re.IGNORECASE | re.ASCII), "ADR"),',
+     T_SEAM, "test_d3_the_two_registers_do_not_merge"),
+    ("D3 utvidelsen godtar et bart prefiks", CLASSIFIER,
+     '    (re.compile(r"^BL-(?:HERMES|MWP)-[A-Z0-9][A-Z0-9.-]*\\b",',
+     '    (re.compile(r"^BL-(?:HERMES|MWP)",',
+     T_SEAM, "test_d3_a_bare_namespace_prefix_still_buys_nothing"),
+
+    # --- reviewer runde 2: de to BLOCKene, som mutanter ---
+    ("R2 leasen slippes ikke naar ticken avbryter", RUNTIME,
+     "        finally:\n            note = lease_release(payload, evidence)",
+     "        finally:\n            note = \"\"",
+     T_SEAM, "test_the_cli_never_leaks_a_lease_on_any_abort_path[exactly-one-brudd-extra0]"),
+    ("R2 signaturvakten leser tilbake den patchede faken", T_SEAM,
+     "    fakes = _fake_adapters(monkeypatch, apply=False)",
+     "    fakes = _fake_adapters(monkeypatch)",
+     T_SEAM, "test_every_faked_adapter_matches_the_real_signature"),
+
+    # --- reviewer runde 4: de to sistene ---
+    ("R4 broen returnerer en literal i stedet for aa spoerre selektoren", BRIDGE,
+     "    selection = select_for_task(text, stage=\"bridge:cross\")\n    return selection.to_json()",
+     '    return {"queryable": True, "coverage": "UNKNOWN", "selected": []}',
+     T_SEAM, "test_bridge_hands_the_selector_the_goals_text_and_the_right_stage"),
+    # Reviewer runde 5: foerste versjon SLETTET linja og drepte via NameError —
+    # et proxy-drap, ikke defektens form. Denne FLYTTER den tilbake under claimet,
+    # noeyaktig slik runde 3-defekten saa ut.
+    ("R4 claim-vinduet aapnes igjen (refs under claim)", RUNTIME,
+     '    refs = dict(evidence.source_refs)\n'
+     '    outcome = claim(paths, ttl=int(spec.get("ttl") or DEFAULT_TTL),\n'
+     '                    note=str(spec.get("note") or ""))',
+     '    outcome = claim(paths, ttl=int(spec.get("ttl") or DEFAULT_TTL),\n'
+     '                    note=str(spec.get("note") or ""))\n'
+     "    refs = dict(evidence.source_refs)",
+     T_SEAM,
+     "test_the_cli_never_leaks_a_lease_on_any_abort_path[source_refs er ikke en mapping-extra5]"),
 )
 
 
@@ -246,7 +407,7 @@ def main() -> int:
         isolated_copy(repo)
         print(f"isolert kopi: {repo}  (det delte arbeidstreet roeres ikke)")
 
-        baseline = subprocess.run([*pytest_base, T_HAND, T_GATE], cwd=str(repo),
+        baseline = subprocess.run([*pytest_base, T_HAND, T_GATE, T_SEAM], cwd=str(repo),
                                   capture_output=True, text=True, timeout=1800, env=env)
         if baseline.returncode != 0:
             print("GRUNNLINJEN ER ROED — et mutasjonsresultat maalt over den betyr ingenting:")

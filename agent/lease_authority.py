@@ -72,16 +72,20 @@ fikse det krever et server-generert lease-token (kaller-oppgitt kjørings-id vil
 vært forfalskbart — jf. `surface:`-reservasjonen), altså en endring i autoriteten
 på `.13`. Det er ikke gjort her, og steg 6 later ikke som noe annet.
 
-**2. `scope_paths` leser bare `.py`.** Arvet fra `faber_observe._scope_paths`, og
-beholdt uendret med vilje: `/surface/lease/check` og `/surface/lease/claim` MÅ se
-det samme settet, og å utvide filteret på én side ville gjort at de to stille
-uenige om hva som er leaset. En endring hører hjemme begge steder samtidig.
+**2. `scope_paths` leste bare `.py` — UTVIDET I BL-4070 (D2).** Begrensningen sa
+at en endring hørte hjemme begge steder samtidig. Den betingelsen er nå oppfylt
+ved konstruksjon: `faber_observe` importerer denne funksjonen i stedet for å ha
+sin egen (BL-4059), og `faber_control_bridge._paths_from_scope` delegerer hit
+(BL-4070). Det finnes ÉN parser, så `check` og `claim` kan ikke se ulike sett.
+Målt før fiksen: broen leste to filer der denne leste null, og steg 6 meldte
+«scope navngir ingen filer» som om det var et svar om leasen.
 """
 from __future__ import annotations
 
 import json
 import logging
 import os
+import re
 import urllib.error
 import urllib.parse
 import urllib.request
@@ -141,14 +145,48 @@ def surface_token() -> str:
         return ""
 
 
+#: Filformene et `repo_scope` kan navngi. UTVIDET FRA `.py` I BL-4070 (D2).
+#:
+#: `faber_control_bridge._paths_from_scope` bar allerede denne formen, og de to
+#: parserne var UENIGE: samme streng ga to filer hos broen og «scope navngir
+#: ingen filer» her. Skaden var ikke at lease-gaten ble vakuøs — `LandingScopeGate`
+#: feiler lukket på tomt lease-sett — men at steg 6 ikke KUNNE oppdage en ekte
+#: konflikt for et scope som navnga en `.service`-enhet eller en `.md`, og
+#: rapporterte det som et svar. «Ingen filer å spørre om» og «ingen konflikt» er
+#: ikke det samme, og en parser som gjør dem like produserer falske grønne.
+#:
+#: Modulens begrensning 2 sa at en utvidelse hører hjemme begge steder samtidig.
+#: Det er oppfylt ved konstruksjon nå: `faber_observe` importerer denne
+#: funksjonen (BL-4059), og broen delegerer hit fra BL-4070. Det finnes ÉN
+#: parser, så de kan ikke divergere igjen.
+#:
+#: TO KONSEKVENSER SOM IKKE FULGTE AV D2-BEGRUNNELSEN, NAVNGITT (reviewer NB3):
+#: 1. I `faber_observe._resolve_lease_clear` ga et ikke-`.py`-scope FOER dette
+#:    hardt `False` («scope lister ingen filer»). Naa blir det et EKTE
+#:    autoritetssvar som kan vaere `True`. Det er en bevisst LOESNING av
+#:    `*/20`-preflighten — riktig, fordi et scope som navngir en `.service`
+#:    alltid var et sporsmaal ingen stilte, ikke et nei.
+#: 2. Moensteret er ANKRET (`^...$`), saa det er ogsaa en INNSNEVRING: en
+#:    `.py`-sti med et tegn utenfor `[\\w./-]` faller naa ut der
+#:    `endswith('.py')` beholdt den. Maalt mot flaatens sju ekte mål: null
+#:    endring. Utvidelsen er en LISTE, ikke «alt».
+_SCOPE_PATH = re.compile(r"^[\w./-]+\.(?:py|ts|tsx|js|json|ya?ml|md|sh|service|plist)$")
+
+
 def scope_paths(repo_scope: str) -> list[str]:
     """Trekk ut filstier fra et `repo_scope` som ``"hermes-agent: a.py, b.py"``.
 
-    Bare `.py` — se modul-docstringens begrensning 2 for hvorfor det ikke er
-    utvidet her.
+    Autoriteten selv har ingen filtype-begrensning — den holder lease på hva som
+    helst. Filteret her er kallersidens, og det er nå det samme filteret overalt;
+    se :data:`_SCOPE_PATH`.
     """
     tail = repo_scope.split(":", 1)[1] if ":" in repo_scope else repo_scope
-    return [x.strip() for x in tail.split(",") if x.strip().endswith(".py")]
+    out: list[str] = []
+    for frag in re.split(r"[,\s]+", tail):
+        frag = frag.strip().strip(".,;")
+        if frag and _SCOPE_PATH.match(frag):
+            out.append(frag)
+    return out
 
 
 @dataclass(frozen=True)
