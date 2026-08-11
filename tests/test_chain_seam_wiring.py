@@ -1370,3 +1370,174 @@ def test_a_commit_landing_while_cleanliness_is_measured_skips_the_goal(tmp_path,
     out = fr.drive_from_observe(p, g, repo=str(REPO), limit=1)
     assert out["driven"] == 0
     assert "flyttet seg mens renheten ble maalt" in out["skipped_detail"][0]["why"]
+
+
+def test_the_bridge_readback_carries_the_whole_handoff_contract(monkeypatch):
+    """En blokkering uten eier og uten navngitt neste handling er en melding
+    ingen kan handle paa.
+
+    Readbacken sa HVOR og HVORFOR, men ikke HVEM som eier det, hvilken evidens
+    som er knyttet til, eller HVA neste handling er. Alle tre laa alt i
+    `ControlTask` -- de var bare ikke projisert ut.
+    """
+    from agent import faber_control_bridge as bridge
+
+    monkeypatch.setattr(bridge, "lease_state_for",
+                        lambda scope: {"clear": None, "paths": [], "note": "test"})
+    out = bridge.run_all([{
+        "goal_id": "g1", "title": "t", "owner": "faber", "bl_ref": "BL-4095",
+        "adr_ref": "ADR-HERMES-CHAIN-DRIVE-001",
+        "evidence": {"repo_scope": "hermes-agent: agent/x.py"},
+    }], "faber")
+    r = out["results"][0]
+    assert r["owner"] == "faber"
+    assert "BL-4095" in r["evidence_refs"]
+    assert r["next_action"], "en readback uten neste handling navngir ingen handling"
+    assert "owners_blocking" in out
+
+
+def test_a_blocked_goal_names_the_owner_that_must_act(monkeypatch):
+    from agent import faber_control_bridge as bridge
+
+    monkeypatch.setattr(bridge, "lease_state_for",
+                        lambda scope: {"clear": None, "paths": [], "note": "test"})
+    out = bridge.run_all([{
+        "goal_id": "g1", "title": "flytt hard-limit for landing", "owner": "faber",
+        # `gate` gir `required_gate`, som gir OWNER_GATE, som gjoer `permitted`
+        # falsk -- og DA blokkerer `dry_run_13_step` paa steg 1. Uten det ble
+        # raden aldri blokkert, og testen maalte ingenting.
+        "evidence": {"repo_scope": "hermes-agent: hermes-dashboard.service",
+                     "gate": "morten"},
+    }], "faber")
+    r = out["results"][0]
+    # UBETINGET. Foerste utkast la alt under `if r["stopped_at_step"]:`, og for
+    # det maalet var den None -- saa testen utfoerte NULL assertions mens navnet
+    # paastod at den bandt eierskap paa en blokkert rad.
+    assert r["stopped_at_step"], (
+        "riggen produserte ikke en blokkert rad — testen ville maalt ingenting")
+    assert r["owner"] == "faber", r
+    # DEN AVGJOERENDE: eier og blokkerende part er ULIKE her, som i alle tre
+    # ekte blokkerte maal (`owner=faber`, `required_gate=morten`). Foerste
+    # utkast hadde owner == gate i riggen, saa `owners_blocking` kunne
+    # projisere FEIL felt og likevel passere — og gjorde det: mot de sju ekte
+    # maalene svarte den `faber`, altsaa agenten selv.
+    assert r["blocked_by"] == "morten", r
+    assert out["owners_blocking"] == ["morten"], out["owners_blocking"]
+    # INNHOLDET, ikke bare at feltet er ikke-tomt. Mutasjonsproben viste at en
+    # ikke-tom-sjekk passerte selv naar feltet ble lest fra feil objekt, fordi
+    # fallbacken gjorde den ikke-tom uansett.
+    assert r["next_action"] != r["stopped_reason"], (
+        f"next_action er bare en omskrivning av blokkeringen: {r['next_action']!r}")
+    assert "resolve blockers" in r["next_action"] or "discovery" in r["next_action"], r
+
+
+def test_an_incomplete_design_is_refused_before_it_is_stored(tmp_path):
+    """`assert_actionable()` foer lagring, ikke ett steg senere.
+
+    Uten den blokkerer steg 8 med en generisk grunn paa noe steg 7 skulle ha
+    fanget -- og designet ligger allerede i butikken naar det skjer.
+    """
+    from agent.faber_implementer import ImplementationBlocked
+
+    with pytest.raises(ImplementationBlocked, match="not actionable"):
+        fr.author_design({"goal_id": "g", "design": "noe"},
+                         design_root=str(tmp_path))
+    assert not list(tmp_path.rglob("*.json")), "et ugyldig design ble lagret"
+
+
+def test_the_builder_route_names_model_url_and_role_explicitly(tmp_path):
+    """Den farlige: uten EKSPLISITT modell resolver rollen til Luna.
+
+    `builder`, `builder_120b` og `builder` peker alle til `gpt-5.6-luna` via
+    Hermes-konfigurasjonens default. Droppes `cortex_model`, sendes altsaa en
+    Luna-forespoersel til `.12:8002` -- en vert som ikke serverer Luna -- og
+    kallet feiler paa feil modell, ikke paa noe leseren kan se.
+    """
+    obs = {"goal_id": "g1", "git_ref": "abc", "reasons": [], "next_step": ""}
+    spec = fr.payload_for(obs, _registry()[0], repo=str(REPO),
+                          build_root=str(tmp_path), test_command=())["implement"]
+    assert spec["cortex_model"], "modellen maa vaere eksplisitt, ikke resolvert"
+    assert spec["cortex_url"], "endepunktet maa foelge modellen"
+    assert spec["cortex_role"], "rollen maa staa, saa loggen viser hvilken rute"
+    # Og den maa faktisk naa generatoren.
+    from agent.code_workflow import GovernedCodeRunner
+    seen = {}
+
+    import agent.faber_implementer as fi
+    real = fi.CortexPatchGenerator
+
+    class _Spy(real):
+        def __init__(self, **kw):
+            seen.update(kw)
+            super().__init__(**kw)
+
+    built = {}
+    real_bound = fi.FaberImplementer.bound_to
+
+    @classmethod
+    def _capture(cls, runner, **kw):
+        impl = real_bound.__func__(cls, runner, **kw)
+        built["implementer"] = impl
+        return impl
+
+    fi.CortexPatchGenerator = _Spy
+    fi.FaberImplementer.bound_to = _capture
+    try:
+        fr.build_callable({"implement": spec}, GovernedCodeRunner(),
+                          _evidence(source_refs={"lease": "agent/x.py"}))
+    finally:
+        fi.CortexPatchGenerator = real
+        fi.FaberImplementer.bound_to = real_bound
+
+    assert seen.get("model") == spec["cortex_model"], seen
+    assert seen.get("base_url") == spec["cortex_url"], seen
+    assert seen.get("role") == spec["cortex_role"], seen
+    # OG AT IMPLEMENTEREN FAKTISK HOLDER DEN. Foerste utkast bygde spionen og
+    # sjekket hva den ble bygget MED -- ikke at den naadde utfoereren. Slettes
+    # `generator=generator,` faller `FaberImplementer` tilbake paa
+    # `CortexPatchGenerator()` med default-rollen, altsaa Luna mot en vert som
+    # ikke serverer Luna. Testen passerte med den linja borte.
+    impl = built.get("implementer")
+    assert impl is not None, "bound_to ble aldri kalt — testen maalte ingenting"
+    assert isinstance(impl.generator, _Spy), (
+        "utfoereren holder en annen generator enn den ruten bygde — "
+        "byggeruten naar ikke steg 8")
+    assert impl.generator.model == spec["cortex_model"]
+    assert impl.generator.base_url == spec["cortex_url"].rstrip("/")
+
+
+def test_a_goal_blocked_by_its_own_state_names_no_party(monkeypatch):
+    """Terminal tilstand: INGEN part kan handle, og da skal ingen navngis.
+
+    Reviewer viste at `or task.owner`-fallbacken gjeninnfoerte BLOCK 1 her: et
+    maal i `BLOCKED` har tomt `required_gate`, saa aggregatet svarte `faber` --
+    agenten selv. Fire av de sju levende maalene baerer `gate: reviewer`, som
+    gir tomt `required_gate`, og staar én tilstandsendring fra dette.
+    """
+    from agent import faber_control_bridge as bridge
+
+    monkeypatch.setattr(bridge, "lease_state_for",
+                        lambda scope: {"clear": None, "paths": [], "note": "test"})
+    out = bridge.run_all([{
+        "goal_id": "g1", "title": "t", "owner": "faber", "state": "blocked",
+        "evidence": {"repo_scope": "hermes-agent: agent/x.py", "gate": "reviewer"},
+    }], "faber")
+    r = out["results"][0]
+    assert r["stopped_at_step"], "riggen produserte ikke en blokkert rad"
+    assert r["blocked_by"] == "", (
+        f"tilstanden blokkerer, ingen part kan laase opp — men feltet sier "
+        f"{r['blocked_by']!r}")
+    assert out["owners_blocking"] == [], out["owners_blocking"]
+
+
+def test_the_bridge_uses_one_control_plane_instance():
+    """ÉN instans. Kontrollplanet sammenligner enums med `is`.
+
+    To `exec_module`-kall gir to modulobjekter, og da beregnes `OWNER_GATE` --
+    den ene verdikten som ruter til Morten -- som vanlig `BLOCK`.
+    """
+    from agent import faber_control_bridge as bridge
+
+    assert bridge._CP is bridge._cp, (
+        "broen holder to kontrollplan-instanser; enum-identitet brytes")
+    assert bridge._CP.TaskState is bridge._cp.TaskState

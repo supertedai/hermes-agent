@@ -167,8 +167,21 @@ def build_callable(payload: Mapping[str, object], runner: GovernedCodeRunner,
             "source_refs['lease'] names no files — the writer cannot be confined to "
             "a lease that does not say what it covers")
     goal_spec = payload.get("goal") or {}
+    from agent.faber_implementer import CortexPatchGenerator
+
+    role = str(spec.get("cortex_role") or "").strip()
+    generator = None
+    if role:
+        # Bare naar rollen er OPPGITT. Uten den er defaulten uendret, saa
+        # eksisterende kallere ikke flyttes i stillhet.
+        generator = CortexPatchGenerator(
+            role=role,
+            model=str(spec["cortex_model"]) if spec.get("cortex_model") else None,
+            base_url=str(spec["cortex_url"]) if spec.get("cortex_url") else None,
+        )
     implementer = FaberImplementer.bound_to(
         runner,
+        generator=generator,
         goal_id=str(spec.get("goal_id") or (goal_spec.get("goal_id") if isinstance(goal_spec, Mapping) else "")),
         repo_root=str(spec["repo_root"]),
         lease_set=lease,
@@ -476,6 +489,50 @@ def postcommit_callable(payload: Mapping[str, object], observed: LandingObservat
 
 
 
+#: ROLLEN STEG 8 BYGGER MED — og bare den.
+#:
+#: Maalt 2026-08-11, samme prompt fra `.15`:
+#:
+#:     .13  cogito-v2-preview-deepseek-671b-moe    4,3 s per token
+#:     .12  gpt-oss-120b                       0,0067 s per token
+#:
+#: Et kodekall mot 671B-en gikk i timeout: den er rundt 640 ganger for treg til
+#: aa produsere en patch innenfor noen fornuftig grense. Det er ikke en defekt i
+#: kjeden -- den kjoerte hele veien til steg 8 og kalte modellen. Det er en
+#: kapasitetsgrense i substratet.
+#:
+#: `builder` ruter til Luna via `default_live_model_resolver`. `designer`,
+#: `reviewer` og `designer_reviewer` er UROERT og gaar fortsatt til Cortex paa
+#: `.13` -- det var hele presiseringen i direktivet.
+#:
+#: HVORFOR IKKE `builder`-rollen, som resolver til Luna. Morten ba om at Luna
+#: tar kodingen. Det lar seg ikke gjoere med denne generatoren i dag, og grunnen
+#: er maalt, ikke antatt: `_post_chat_completion` sender INGEN
+#: `Authorization`-header -- den er skrevet for lokale, uautentiserte
+#: endepunkter. Luna serveres over `model.provider = openai-api` med tom
+#: `base_url`, altsaa `api.openai.com`, og et kall dit uten noekkel gir 401.
+#:
+#: Aa legge til auth er kreditiv-haandtering og en ny egress for KILDEKODE
+#: (steg 8s prompt baerer pre-images av filene som skal endres; `SecretPolicy.vet`
+#: kjoerer paa patchen, ikke paa prompten). Begge deler er Mortens beslutning,
+#: ikke en default noen setter i forbifarten.
+#:
+#: Defaulten er derfor den LOKALE koderen som er maalt aa virke. Naar Luna faar
+#: en auth-sti, er den ett miljoevariabel-par unna:
+#:     FABER_BUILDER_ROLE=builder  FABER_BUILDER_URL=<lunas base_url>
+#: MODELLEN OPPGIS EKSPLISITT. Rolletabellen `builder`, `builder_120b` og
+#: `builder` peker alle til `gpt-5.6-luna` via Hermes-konfigurasjonens default,
+#: saa en ROLLE alene kan ikke velge den lokale koderen. En eksplisitt modell
+#: kan, og den kortslutter resolveren helt.
+_BUILDER_ROLE = os.environ.get("FABER_BUILDER_ROLE", "builder_120b")
+_BUILDER_URL = os.environ.get("FABER_BUILDER_URL", "http://192.168.40.12:8002/v1")
+_BUILDER_MODEL = os.environ.get("FABER_BUILDER_MODEL", "gpt-oss-120b")
+
+#: Der steg 7 legger designet og steg 8 henter det. Samme default som
+#: `DesignStore`, men SAGT -- se `payload_for`.
+_DESIGN_ROOT = (Path(os.environ.get("HERMES_HOME", str(Path.home() / ".hermes-gui")))
+                / "faber" / "designs")
+
 #: Grunner som IKKE diskvalifiserer et maal fra en drevet tick, fordi steg 6 er
 #: nettopp det som fjerner dem. Alt annet er en ekte blokkering og maalet
 #: hoppes over med grunnen intakt.
@@ -666,6 +723,18 @@ def payload_for(observation: Mapping[str, object], goal: Mapping[str, object], *
             "goal_id": str(goal.get("goal_id", "")),
             "repo_root": build_root,
             "test_command": list(test_command),
+            # G15: pek eksplisitt paa butikken `author_design` skriver til.
+            # `DesignStore()` defaulter riktig, men en usagt default er en
+            # kobling ingen kan se — og steg 8s blokkering navnga en sti leseren
+            # ikke fant igjen noe sted i payloaden.
+            "design_root": str(_DESIGN_ROOT),
+            # BARE KODINGEN FLYTTES. Morten 2026-08-11: «la Luna ta koding, men
+            # ikke hele Cortex». `cortex_role` gjelder KUN steg 8s
+            # patch-generering; `designer`, `reviewer` og `designer_reviewer`
+            # ruter uendret til Cortex paa `.13`.
+            "cortex_role": _BUILDER_ROLE,
+            "cortex_url": _BUILDER_URL,
+            "cortex_model": _BUILDER_MODEL,
         },
     }
 
@@ -841,6 +910,73 @@ def drive_from_observe(packet_path: str, goals_path: str, *, repo: str,
             "PENDING fordi ingen har doemt bygget -- ikke fordi noe manglet."),
     }
 
+
+def author_design(spec: Mapping[str, object], *, design_root: str = "") -> dict:
+    """STEG 7s UTDATA: legg designet steg 8 bygger fra. (BL-4095, G15)
+
+    HULLET DETTE LUKKER, OG HVA DET IKKE GJOER. Den drevne kjeden naadde steg 8
+    og blokkerte paa::
+
+        ImplementationBlocked: no step-7 design for <goal>
+          "an implementation without a design is a guess with write access"
+
+    Ingenting i kjeden produserte et design. `DesignGate` DOEMMER CAD/ADR; den
+    FORFATTER ikke. `DesignStore.save()` fantes og hadde null kallere -- fjerde
+    forekomst av produsent-gapet i denne kjeden: gaten ble bygget, produsenten
+    ikke.
+
+    **DENNE FUNKSJONEN FINNER IKKE PAA ET DESIGN.** `design`, `tests` og
+    `acceptance` er selve innholdet: hva som skal bygges, hvilken test som
+    beviser det, og naar det er godt nok. De kan ikke utledes fra CAD/ADR-en --
+    et akseptert arkitekturvedtak sier hva som er BESLUTTET, ikke hva denne ene
+    endringen skal gjoere. Aa generere dem ville vaert nettopp det gjettet med
+    skrivetilgang som feilmeldingen advarer mot.
+
+    Det den gjoer er aa la kjeden MOTTA et design fra en som kan skrive det --
+    et menneske, eller en chat-tur Morten godkjenner.
+
+    **BETINGELSEN FOR AT DET FORBLIR SANT.** `DesignRecord` baerer ingen
+    forfatter, saa et menneskeskrevet og et modellgenerert design er
+    byte-identiske i butikken. Det er trygt i dag KUN fordi eneste kaller er et
+    haandskrevet flagg. FOERSTE AUTOMATISERTE KALLER MAA LANDE SAMMEN MED
+    `DesignRecord.principal`, stemplet av autoriteten paa `.12:8010` -- ikke tatt
+    imot som et argument fra kalleren, for da er det et felt man skriver for aa
+    aapne en gate. Uten det degraderer "en implementasjon uten design er et
+    gjett med skrivetilgang" stille til et gjett om et gjett. `assert_actionable()`
+    kjoeres foer lagring, saa et ufullstendig design blir avvist HER framfor aa
+    blokkere ett steg senere med en generisk grunn.
+
+    Referansene (`cad_ref`/`adr_ref`) verifiseres mot registeret av G6 naar
+    ticken kjoerer. Denne funksjonen sjekker dem ikke paa nytt -- to kopier av
+    den regelen ville divergert.
+    """
+    from agent.faber_implementer import DesignRecord, DesignStore
+
+    record = DesignRecord(
+        goal_id=str(spec["goal_id"]),
+        design=str(spec.get("design", "")),
+        target_files=tuple(str(x) for x in (spec.get("target_files") or ())),
+        tests=tuple(str(x) for x in (spec.get("tests") or ())),
+        acceptance=str(spec.get("acceptance", "")),
+        cad_ref=str(spec.get("cad_ref", "")),
+        adr_ref=str(spec.get("adr_ref", "")),
+        bl_ref=str(spec.get("bl_ref", "")),
+    )
+    # Avvis her, med den presise grunnen, framfor ett steg senere med en generisk.
+    record.assert_actionable()
+    store = DesignStore(design_root or None)
+    path = store.save(record)
+    return {
+        "status": "OK",
+        "goal_id": record.goal_id,
+        "path": str(path),
+        "target_files": list(record.target_files),
+        "tests": list(record.tests),
+        "note": ("steg 7s utdata er lagt. Steg 8 kan naa bygge fra det — men "
+                 "reviewer-verdikten er fortsatt PENDING og `land` skrives "
+                 "fortsatt aldri."),
+    }
+
 def _cli() -> int:
     parser = argparse.ArgumentParser(description="Run one governed Faber runtime tick.")
     group = parser.add_mutually_exclusive_group(required=True)
@@ -848,6 +984,9 @@ def _cli() -> int:
     group.add_argument("--tick-json", help="JSON object containing goal, evidence and deterministic tick evidence")
     group.add_argument("--memory-measure-query", help="Run one real MemoryManager enforcement measurement")
     group.add_argument("--propose-job-json", help="Create one consent-first Faber cron suggestion")
+    group.add_argument("--author-design",
+                       help="JSON: legg steg 7s design for ett maal (goal_id, design, "
+                            "target_files, tests, acceptance, cad_ref, adr_ref, bl_ref)")
     group.add_argument("--drive-observe",
                        help="Driv kjeden for hvert maal denne observe-pakken sier er klart "
                             "(skygge: bygger i isolert kopi, lander aldri)")
@@ -857,6 +996,18 @@ def _cli() -> int:
     parser.add_argument("--limit", type=int, default=1)
     args = parser.parse_args()
     try:
+        if args.author_design:
+            from agent.faber_implementer import ImplementationBlocked
+            try:
+                report = author_design(json.loads(args.author_design))
+            except ImplementationBlocked as blocked:
+                # Et ufullstendig design er en BLOCK med en presis grunn, ikke en
+                # stack trace. Kalleren skal kunne lese hva som mangler.
+                print(json.dumps({"status": "BLOCK", "gate": "design",
+                                  "reason": str(blocked)}, ensure_ascii=False))
+                return 2
+            print(json.dumps(report, ensure_ascii=False))
+            return 0
         if args.drive_observe:
             report = drive_from_observe(
                 args.drive_observe, args.goals, repo=args.repo,

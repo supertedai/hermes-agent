@@ -179,6 +179,20 @@ def _required_gate(goal: dict[str, Any], ev: dict[str, Any]) -> str:
     return "" if raw in _PLANNING_AUTONOMOUS_GATES else raw
 
 
+#: Kontrollplanet -- DEN SAMME instansen resten av broen bruker.
+#:
+#: Foerste utkast skrev `_CP = _load_control_plane()`, som er et ANDRE kall:
+#: funksjonen `exec_module`-er fila til et nytt modulobjekt hver gang og sjekker
+#: aldri `sys.modules`. Jeg gikk fra N instanser til TO, og skrev i docstringen
+#: at forken var fjernet. Maalt: `_cp is _CP` False, `TaskState` ulik identitet,
+#: og `OWNER_GATE` -- den ene verdikten som ruter til Morten -- ble beregnet som
+#: vanlig `BLOCK` inne i `_next_action`. Usynlig bare fordi begge gir samme
+#: `next_permitted_action`-streng; et sammentreff, ikke en design.
+#:
+#: Fjerde gang samme feil i denne endringen: jeg verifiserte at en binding
+#: FANTES, ikke at den var den jeg NAVNGA.
+_CP = _cp
+
 def control_task_from_goal(goal: dict[str, Any], principal: str) -> ControlTask:
     """Projiser ett Faber-mål inn i kontrollplanets vokabular.
 
@@ -375,6 +389,55 @@ def skill_selection_for(goal: dict) -> dict[str, object]:
     return selection.to_json()
 
 
+
+def _next_action(task: "ControlTask", all_tasks: dict, stopped_at) -> str:
+    """HVA skal gjoeres naa. Utledet av kontrollplanet, ikke gjenfortalt her.
+
+    `dry_run_13_step` merker bare steg 1 BLOCKED, med én fast note. Den noten er
+    en OMSKRIVNING av blokkeringen, ikke en handling -- og en handoff som ikke
+    navngir én handling er den ene tingen BL-4029 sa den aldri skal produsere.
+    """
+    # ÉN modul. Foerste utkast proevde `from mwp_control_plane import readback`
+    # (doed: ModuleNotFoundError i venv-en) og falt til `_load_control_plane()`,
+    # som `exec_module`-er fila til et NYTT modulobjekt hver gang. Kontrollplanet
+    # sammenligner enums med `is`, saa to instanser gir ulike svar paa samme
+    # oppgave -- maalt: samme task gir `GO_READ_ONLY` i én og `BLOCK` med en
+    # selvmotsigende blocker i den andre. Jeg flyttet altsaa forken i stedet for
+    # aa fjerne den.
+    _control_readback = getattr(_CP, "readback", None)
+    if _control_readback is None:  # pragma: no cover - kontrollplanet mangler
+        return (stopped_at["note"] if stopped_at else "") or "ingen blokkering"
+    # Nokkelen er `task_id` -- det er den `readback`/`dependency_status` sl0r opp
+    # paa. `mwp_id` er identisk i dag, og likevel feil felt.
+    action = str(getattr(_control_readback(task, all_tasks or {task.task_id: task}),
+                         "next_permitted_action", "") or "").strip()
+    return action or (stopped_at["note"] if stopped_at else "") or "ingen blokkering"
+
+
+def _blocking_parties(task: "ControlTask") -> str:
+    """HVEM maa handle for at dette skal gaa videre.
+
+    Maalt paa de sju ekte maalene: tre er blokkert, alle med `owner="faber"` og
+    `required_gate="morten"`. Foerste utkast projiserte `owner`, saa aggregatet
+    som skal svare «hvem venter jeg paa» svarte AGENTEN SELV -- ingen som kunne
+    laase dem opp ble navngitt. Det er BL-4029-defekten gjenskapt inne i feltet
+    som ble lagt til for aa lukke den.
+
+    Det som BLOKKERER er `required_gate`. Eieren er hvem som eier arbeidet.
+
+    **INGEN FALLBACK TIL EIER.** Foerste utkast hadde `or task.owner`, og den
+    gjeninnfoerte defekten paa terminal-tilstands-stien: et maal i `BLOCKED` har
+    tomt `required_gate`, saa aggregatet svarte `faber` igjen -- agenten selv.
+    Maalt: fire av de sju levende maalene baerer `gate: reviewer`, som gir tomt
+    `required_gate`, og staar altsaa én tilstandsendring fra dette.
+    Den ekte blokkeringen der er tilstanden, og INGEN part kan handle paa den.
+
+    Tom streng er det aerlige svaret. CLAUDE.md §7 regel 3: et hull i tabellen
+    er ikke en dom om verden.
+    """
+    return (task.required_gate or "").strip()
+
+
 def run_goal(goal: dict[str, Any], all_tasks: dict[str, ControlTask],
              principal: str) -> dict[str, Any]:
     """Kjør de 13 stegene for ett mål.
@@ -422,6 +485,38 @@ def run_goal(goal: dict[str, Any], all_tasks: dict[str, ControlTask],
             default=None),
         "stopped_at_name": stopped_at["name"] if stopped_at else None,
         "stopped_reason": stopped_at["note"] if stopped_at else "",
+        # HELE HANDOFF-KONTRAKTEN, ikke bare stoppunktet.
+        #
+        # Readbacken sa HVOR den stoppet og HVORFOR, men ikke HVEM som eier det,
+        # HVILKEN evidens som er knyttet til, eller HVA neste handling er. En
+        # blokkering uten eier og uten navngitt neste handling er en melding
+        # ingen kan handle paa -- samme mangel BL-4029 lukket for `next_step` i
+        # runneren, som fortsatt staar aapen her i broen (G12).
+        #
+        # Alle tre kommer fra `ControlTask`, som kontrollplanet alt har fylt --
+        # de var bare ikke projisert ut. Ingen ny kilde, ingen gjetting.
+        # Ingen fallback til principal: `control_task_from_goal` sier selv at
+        # felter som ikke finnes settes TOMME, ikke gjettet. Aa substituere
+        # kalleren for en eier maalet aldri erklaerte, er en gjetning.
+        "owner": task.owner,
+        # HVEM som maa handle -- ikke hvem som eier. Se `_blocking_parties`.
+        "blocked_by": _blocking_parties(task) if stopped_at else "",
+        "evidence_refs": list(task.evidence_refs),
+        # `next_permitted_action` bor paa `ControlTask`, ikke paa `DryRunResult`.
+        # Foerste utkast leste `result`, og `getattr`-defaulten slukte det: grenen
+        # var UBETINGET DOED, saa hver blokkert rad fikk `dry_run_13_step`s faste
+        # note -- en omskrivning av blokkeringen, ikke en handling. Kommentaren to
+        # linjer over sa selv at alle tre kommer fra `task`. Verifiser det du
+        # NAVNGA, ikke det du PAASTO.
+        # OG DEN FOERSTE FIKSEN MIN ENDRET INGENTING. `task.next_permitted_action`
+        # er tom -- `control_task_from_goal` setter den aldri -- saa den falt
+        # rett videre til dry-run-noten igjen. Jeg flyttet lesningen til riktig
+        # objekt og trodde det var nok, uten aa maale om feltet BAR noe.
+        #
+        # Kontrollplanet UTLEDER den selv (`readback()`: task-feltet, ellers
+        # "continue read-only discovery" / "resolve blockers before proceeding").
+        # Vi kaller den derfor framfor aa gafle logikken i en andre kopi.
+        "next_action": _next_action(task, all_tasks, stopped_at),
         "steps_planned": sum(1 for s in steps if s["status"] == DryRunStatus.PLANNED.value),
         "steps_not_executed": sum(1 for s in steps if s["status"] == DryRunStatus.NOT_EXECUTED.value),
         "steps": steps,
@@ -491,6 +586,9 @@ def run_all(goals: Sequence[dict[str, Any]], principal: str) -> dict[str, Any]:
         "needs_design_review": sum(
             1 for g in per_goal if g["task_classification"]["design_review_required"]),
         "results": per_goal,
+        # Aggregatet skal kunne svare "hvem venter jeg paa" uten aa lese hver rad.
+        "owners_blocking": sorted({g["blocked_by"] for g in per_goal
+                                   if g["stopped_at_step"] and g["blocked_by"]}),
         "classification_note": (
             "Steg 3 (BL-4056). DOUBT er en egen klasse som eskalerer — den er "
             "IKKE BL med forbehold. Et mål uten erklærte grensesvar og uten "
