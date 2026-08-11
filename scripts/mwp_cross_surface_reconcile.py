@@ -31,8 +31,8 @@ def git_ref_readback() -> dict[str, str]:
         local = "UNKNOWN"
     try:
         remote_line = subprocess.check_output(
-            ["git", "ls-remote", "https://github.com/supertedai/hermes-agent.git", f"refs/heads/{branch}"],
-            cwd=ROOT, text=True, timeout=20,
+            ["git", "ls-remote", "https://github.com/supertedai/AGI.git", f"refs/heads/{branch}"],
+            cwd=ROOT, text=True, timeout=20, stderr=subprocess.DEVNULL,
         ).strip()
         remote = remote_line.split()[0] if remote_line else "UNKNOWN"
     except (OSError, subprocess.SubprocessError):
@@ -52,9 +52,16 @@ def main() -> int:
     obs = preflight.get("obsidian", {})
     obs_receipt = obs.get("write_receipt", {})
     git_readback = git_ref_readback()
+    git_status = (
+        "VERIFIED"
+        if git_readback["match"] == "True"
+        else "REMOTE_READBACK_UNAVAILABLE"
+        if git_readback["remote_head"] == "UNKNOWN"
+        else "DIVERGED"
+    )
     destinations = {
         "git": {
-            "status": "VERIFIED" if git_readback["match"] == "True" else "DIVERGED",
+            "status": git_status,
             "evidence": git_readback,
         },
         "obsidian": {
@@ -78,11 +85,13 @@ def main() -> int:
         "bl": adrb.get("status", "UNKNOWN"),
     }
     blockers = []
-    if destinations["git"]["status"] != "VERIFIED":
-        blockers.append("Git local/remote ref divergence or readback unavailable")
+    if destinations["git"]["status"] == "REMOTE_READBACK_UNAVAILABLE":
+        blockers.append("Git remote readback unavailable from Linux; verify AGI ref via authenticated Mac surface")
+    elif destinations["git"]["status"] == "DIVERGED":
+        blockers.append("Git local/remote ref divergence")
     if any(v != "VERIFIED" for v in (destinations["git"]["status"], destinations["obsidian"]["status"])):
         blockers.append("required Git/Obsidian receipt missing")
-    blockers.extend(["full CAD→ADR→BL→MWP task mapping pending", "continuous freshness/drift monitor not live"])
+    blockers.extend(["full CAD→ADR→BL→MWP task mapping pending", "freshness convergence across all destinations pending"])
     blockers.extend(child.get("required_before_child", {}).get("role_provider", {}).get("required", [])[:1])
     report = {
         "artifact_id": "mwp-cross-surface-reconcile-readback-v1",
