@@ -1,0 +1,27 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://mwp-uosh.local/schemas/experiment-run.schema.json",
+  "title": "MWP ExperimentRun",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["experiment_id", "goal_id", "axis", "status", "metric", "baseline", "provenance"],
+  "properties": {
+    "experiment_id": {"type": "string", "minLength": 1},
+    "goal_id": {"type": "string", "minLength": 1},
+    "bl_ref": {"type": "string"},
+    "axis": {"enum": ["user", "system", "agent"]},
+    "principal_id": {"type": "string"},
+    "agent_id": {"type": "string"},
+    "status": {"enum": ["PROPOSED", "RUNNING", "KEEP", "DISCARD", "BLOCKED", "ESCALATE"]},
+    "metric": {"type": "string", "minLength": 1},
+    "baseline": {},
+    "after": {},
+    "budget": {"type": "object", "additionalProperties": false, "properties": {"seconds": {"type": "number", "minimum": 0}, "parallelism": {"type": "integer", "minimum": 1}}},
+    "change_ref": {"type": "string"},
+    "rollback_ref": {"type": "string"},
+    "reviewer_verdict": {"enum": ["PENDING", "PASS", "BLOCK", "ESCALATE"]},
+    "outcome": {"type": "string"},
+    "learning_event_ref": {"type": "string"},
+    "provenance": {"type": "object", "additionalProperties": false, "required": ["source", "verified"], "properties": {"source": {"type": "string", "minLength": 1}, "source_commit": {"type": "string"}, "traceparent": {"type": "string"}, "verified": {"type": "boolean"}}}
+  }
+}
