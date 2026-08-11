@@ -1,0 +1,151 @@
+{
+  "artifact_id": "mwp-fresh-baseline-v1",
+  "baseline_id": "MWP-UOSH-002-FRESH-BASELINE",
+  "destinations": {
+    "github": {
+      "remote_read_after_write": "NOT_VERIFIED",
+      "status": "NOT_EXECUTED",
+      "workflow_step": "landing"
+    },
+    "graph": {
+      "bounded_prior_canary": "VERIFIED_BOUNDED",
+      "full_projection": "NOT_EXECUTED",
+      "status": "NOT_EXECUTED",
+      "workflow_step": "postcommit_readback"
+    },
+    "obsidian": {
+      "prior_bounded_receipt": "HISTORICAL_BOUNDED",
+      "status": "NOT_EXECUTED",
+      "workflow_step": "postcommit_readback"
+    }
+  },
+  "mode": "13-step-governed-workflow-preflight",
+  "mutation": {
+    "github_write": false,
+    "graph_write": false,
+    "obsidian_write": false,
+    "production_activation": false,
+    "source_write": false
+  },
+  "next_action": "Run the 13-step governed preflight from directive through BL gate; stop before claim/lease if role/provider authority remains unverified; do not claim GitHub/graph/Obsidian execution.",
+  "old_surface": {
+    "artifact": "docs/mwp-final-closeout-readback.json",
+    "reason": "fresh baseline requested; historical receipts preserved",
+    "status": "SUPERSEDED_NOT_DELETED"
+  },
+  "parent_mwp": "MWP-UOSH-001",
+  "raw_payload_included": false,
+  "recorded_at": "2026-08-10T06:25:47.615652+00:00",
+  "scope": {
+    "agent_id": "opus",
+    "installation_id": "mwp-status-quo",
+    "login_surface_id": "current-hermes-chat",
+    "principal": "morten"
+  },
+  "source_inputs": {
+    "cad_adr_bl_mapping": "docs/mwp-cad-adr-bl-owner-scoped-source-mapping-v1.json",
+    "identity": "docs/mwp-live-identity-receipt-v2.json",
+    "prior_closeout": "docs/mwp-final-closeout-readback.json"
+  },
+  "status": "FRESH_BASELINE_WORKFLOW_PREFLIGHT",
+  "workflow": {
+    "blocker": "active role/provider authority is not live-verified; governed executor has not been activated",
+    "contract": "agent.mwp_control_plane.AUTOCODER_13_STEPS",
+    "execution_status": "NOT_STARTED",
+    "executor_allowed": false,
+    "step_count": 13,
+    "steps": [
+      {
+        "executed": false,
+        "name": "directive",
+        "number": 1,
+        "receipt": null,
+        "status": "PLANNED"
+      },
+      {
+        "executed": false,
+        "name": "job_discovery",
+        "number": 2,
+        "receipt": null,
+        "status": "PLANNED"
+      },
+      {
+        "executed": false,
+        "name": "ranking_planning_architecture",
+        "number": 3,
+        "receipt": null,
+        "status": "PLANNED"
+      },
+      {
+        "executed": false,
+        "name": "pre_rails",
+        "number": 4,
+        "receipt": null,
+        "status": "PLANNED"
+      },
+      {
+        "executed": false,
+        "name": "bl_gate",
+        "number": 5,
+        "receipt": null,
+        "status": "PLANNED"
+      },
+      {
+        "executed": false,
+        "name": "claim_and_lease",
+        "number": 6,
+        "receipt": null,
+        "status": "PLANNED"
+      },
+      {
+        "executed": false,
+        "name": "sol_design_review_pass",
+        "number": 7,
+        "receipt": null,
+        "status": "PLANNED"
+      },
+      {
+        "executed": false,
+        "name": "faber_implementation",
+        "number": 8,
+        "receipt": null,
+        "status": "PLANNED"
+      },
+      {
+        "executed": false,
+        "name": "governance",
+        "number": 9,
+        "receipt": null,
+        "status": "PLANNED"
+      },
+      {
+        "executed": false,
+        "name": "canonical_reviewer_gate",
+        "number": 10,
+        "receipt": null,
+        "status": "PLANNED"
+      },
+      {
+        "executed": false,
+        "name": "landing",
+        "number": 11,
+        "receipt": null,
+        "status": "PLANNED"
+      },
+      {
+        "executed": false,
+        "name": "runtime_smoke",
+        "number": 12,
+        "receipt": null,
+        "status": "PLANNED"
+      },
+      {
+        "executed": false,
+        "name": "postcommit_readback",
+        "number": 13,
+        "receipt": null,
+        "status": "PLANNED"
+      }
+    ]
+  }
+}

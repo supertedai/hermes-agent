@@ -1,0 +1,372 @@
+{
+  "artifact_id": "mwp-cad-adr-bl-live-source-readback-v1",
+  "authority": {
+    "source_git_head": "96e8da849966d63d08f2fe0d4a9871a0a8c70306",
+    "source_owner": "canonical AGI .12 source/runtime authority",
+    "source_root": "/home/byopus/AGI"
+  },
+  "blocker": "Active-turn role/provider remains unverified; broad CAD/ADR/BL projection remains blocked.",
+  "counts": {
+    "adr_bl_candidates": 60,
+    "cad": 30
+  },
+  "evidence": {
+    "graph_connection": true,
+    "graph_post_read_sha256": "637f474023e77f6dec7536af24bd675bbc25641d4a53a3e34372513eb8f679ba",
+    "graph_relationship_id": "5:85f7c59f-8de6-4f26-a3de-4ccf9c14d1c8:1161957291163910253",
+    "graph_scope": "exact owner-approved AUTHORED relationship only",
+    "graph_write_read_after_write": true,
+    "runtime_readback": true,
+    "source_files": true,
+    "source_hashes": true
+  },
+  "gate_id": "cad-adr-bl-intent-registry",
+  "graph_rollback_ref": "MATCH (u:User {id:\"morten\"})-[r:AUTHORED]->(t:Theory {name:\"Energy-Flow Cosmology\"}) WHERE elementId(r)=\"5:85f7c59f-8de6-4f26-a3de-4ccf9c14d1c8:1161957291163910253\" DELETE r",
+  "mode": "metadata-only",
+  "mutation": {
+    "graph_write": false,
+    "production_activation": false,
+    "source_write": false
+  },
+  "mwp_id": "MWP-UOSH-001",
+  "next_action": "Use this canonical source and bounded graph receipt to map owner-scoped CAD/ADR/BL records; keep broad projection blocked until active-turn role/provider authority is verified.",
+  "raw_payload_included": false,
+  "runtime": {
+    "health": {
+      "body": {
+        "budget_s": 5.0,
+        "loop_lag_max_60s": 0.194,
+        "loop_lag_s": 0.001,
+        "status": "ok"
+      },
+      "status": 200
+    },
+    "mwp_runtime": {
+      "body": {
+        "active_turn": false,
+        "api_mode": null,
+        "artifact": "mwp-active-turn-runtime-readback-v1",
+        "fallback_health": null,
+        "llm_instance_id": null,
+        "model_id": "cco",
+        "provider_id": "UNVERIFIED",
+        "raw_payload_included": false,
+        "role_id": "UNVERIFIED",
+        "served_model_count": 3,
+        "source": "local-model-router-read-only",
+        "status": "NO_ACTIVE_TURN"
+      },
+      "status": 200
+    },
+    "neo4j_status": {
+      "body": {
+        "neo4j": "connected",
+        "result": 1
+      },
+      "status": 200
+    }
+  },
+  "source_manifest": [
+    {
+      "path": "docs/ADR-060-MWP-MEMORY-CAUSAL-EFFECT-001.md",
+      "sha256": "db80b638d805884598a369cf5bb9768c240afa57e718de083824138925c26a2a",
+      "size": 1676
+    },
+    {
+      "path": "docs/BL-3998-MWP-MEMORY-CAUSAL-EFFECT-001.md",
+      "sha256": "0519b5588f78654b53229e70467d2e84a994f5257bd6c94a42fb418a56cf1c79",
+      "size": 1109
+    },
+    {
+      "path": "docs/design/BL-1211_universal_epistemic_intake_contract.md",
+      "sha256": "7e737f2fe9882a98094f1dd2fde2ae04a3553ec296ba458c34d89270edb5f88d",
+      "size": 13555
+    },
+    {
+      "path": "docs/patches/BL-1620_adapter_save_honesty.md",
+      "sha256": "714d0cf06bb447f8a1c206d2bed26d7b802296707c9bd3ddb9e6687c534cfb3d",
+      "size": 3953
+    },
+    {
+      "path": "planning/ADR_042_D10_LAGENE_BL3349.md",
+      "sha256": "36a148e4cf62849090c6788f853e78c6e39f578e70351e84a6e98b0dfbb23947",
+      "size": 6400
+    },
+    {
+      "path": "planning/ADR_043_PENSJONER_MAC_FLATEN_BL3385.md",
+      "sha256": "03e282d11a171c39d24e20acca7d5082d4564b755e51b2df4724fc38ad2e14dc",
+      "size": 18158
+    },
+    {
+      "path": "planning/ADR_047_ADAPTIV_DOMENEBRO_KILDE_EIERSKAP_BL3439.md",
+      "sha256": "6df6ff8d74f3a890ca67dea58d022274551f22b48718a6a0ed9766a112181c36",
+      "size": 18918
+    },
+    {
+      "path": "planning/ADR_047_FASE5_LIFECONTRACT_MINNEKONTRAKT_BL3624.md",
+      "sha256": "36ceab3ed6d6594143cafdc231416445c0d313c4dce0891ce989632476d04bac",
+      "size": 24487
+    },
+    {
+      "path": "planning/ADR_048_EKSTERN_AGENTFLATE_FORESLAAR_MINNE_BL3455.md",
+      "sha256": "cdccbcb85962293781690fc857e7a400b699f8854b1c14057028ebff48e9a9a1",
+      "size": 9557
+    },
+    {
+      "path": "planning/ADR_049_HERMES_TRE_AKSER_BL3428.md",
+      "sha256": "f3ed38bc4a3bcfc7d4267584bbcb3e980339e40f143655d11cd8aeb277bdb03a",
+      "size": 14192
+    },
+    {
+      "path": "planning/ADR_050_KAPABILITETS_STYRING_BL3432.md",
+      "sha256": "505d88a0e91063307d1a80230a95a833957b60797da34618af7b5d62975020eb",
+      "size": 11844
+    },
+    {
+      "path": "planning/ADR_051_LOKAL_GLOBAL_SOMMEN_BL3663.md",
+      "sha256": "52195786c5a39bdf36c3fa4c10f24380005a004ffb2b96b2cf5b798da58da147",
+      "size": 80976
+    },
+    {
+      "path": "planning/ADR_052_REGIME_AKSEN_I_CAD_BL3782.md",
+      "sha256": "3b2b411712489eef2e3f77b58689b3bed47822a43c0ba1dd5773091360f2a3d0",
+      "size": 15217
+    },
+    {
+      "path": "planning/ADR_053_FABER_KODE_EIERSKAP_BL3824.md",
+      "sha256": "e510f719915bbcff34bc228fb47b115fa69de3e65393ed94a9b02d4102b69eee",
+      "size": 24131
+    },
+    {
+      "path": "planning/ADR_055_DEKNINGSKONTRAKT_BL3859.md",
+      "sha256": "c4db9557f10b9229371d7ef37ae85e1aa23f74d951a27d4804faef13021207c3",
+      "size": 18825
+    },
+    {
+      "path": "planning/ADR_056_CAD_U_Z_ASI_GAP_BL3855.md",
+      "sha256": "cae608a2a4311e1e169fec9f5e62dc193e72abe681f50acce742350d791e7d9e",
+      "size": 34507
+    },
+    {
+      "path": "planning/ADR_057_PROVENIENS_KANT_KONTRAKT_BL3856.md",
+      "sha256": "f2ed4a95e4116d4b8f2103725b41161e07de078e315ae1ebcc8c8d66e7bf3ad3",
+      "size": 15962
+    },
+    {
+      "path": "planning/ADR_058_LOEKKELUKKING_BL3860.md",
+      "sha256": "240ed46baf6058ae42fbfd5327e9806050ed3ea3420b03deea6e56e22f67df24",
+      "size": 57537
+    },
+    {
+      "path": "planning/ADR_059_VAKT_PARSE_FAILCLOSED_BL3903.md",
+      "sha256": "03377e1868d15888c7cf774348cb76a3e36bbaf28df2f524e48413d425d5db36",
+      "size": 8774
+    },
+    {
+      "path": "planning/ADR_FORSLAG_SALIENT_BL3293.md",
+      "sha256": "85618afb0f6618b116f34fad295238431d99d9832cec60334f22d287f892d700",
+      "size": 6725
+    },
+    {
+      "path": "planning/ADR_NUMMERKOLLISJON_BL3449.md",
+      "sha256": "4ba2f3bf8723409da7c011a952b1aa97fe09840aaf3407c3640ec27272da40a8",
+      "size": 9778
+    },
+    {
+      "path": "planning/BACKLOG.md",
+      "sha256": "9ce6d482ae9d387c57ce1f9e67d2326cd3f769ac72c620e140afa50e3174a629",
+      "size": 259170
+    },
+    {
+      "path": "planning/BL1310_hub_replica_runbook.md",
+      "sha256": "0800f83d02cd9d63e7812737a488a9064f02a1ba91258adcedae24d56245f3bc",
+      "size": 16114
+    },
+    {
+      "path": "planning/BL1443_fleet_inventory_2026_07_09.md",
+      "sha256": "eaa8fa4c50d19c3469a425ca314adb6a2e48a9d0eb8efa3d973ff90748e9e2cf",
+      "size": 19549
+    },
+    {
+      "path": "planning/BL3570_FLEET_SERVICE_REGISTER.md",
+      "sha256": "4cde198dbf312e62409d09015cc8392ca0c273e3a83a34b0c6bfb9d30903cfdf",
+      "size": 7611
+    },
+    {
+      "path": "planning/BL3574_OPENWEBUI_KJORER_I_STRID_MED_ADR043.md",
+      "sha256": "ea91fbcf77453c9748b81edf10befe3260ecf4e79b05940b5f554b486c2c449a",
+      "size": 6931
+    },
+    {
+      "path": "planning/BL3832_REGIME_FORANKRING.md",
+      "sha256": "ed81e76efe6bb96998abcf810bbd361610e80f03d34f6c6ad8fbdbb03816037a",
+      "size": 5124
+    },
+    {
+      "path": "planning/BL3844_RSI_STAIRCASE_WIRING_PROPOSAL.md",
+      "sha256": "afd66af51d3a043bf2001950002a911dc387279edca0a2bcf9e3f1d371cfae1b",
+      "size": 10279
+    },
+    {
+      "path": "planning/BL3873_GATE_POSTURE_AND_PORT_8000.md",
+      "sha256": "c56c1d79976a1a4c37ac1791a6cae5ffd0ff01bcfa81893aa80b44c8568f463f",
+      "size": 13017
+    },
+    {
+      "path": "planning/BL3892_SNORT_INERT_AND_INJECTION_TRIAGE.md",
+      "sha256": "362f0c27ba0a4f82b15e63904fd21d0269ab4b7b85e64d06c0ceae53ff7d06ed",
+      "size": 13001
+    },
+    {
+      "path": "planning/cad/CAD-0.md",
+      "sha256": "c7bd5627f0f65eb3194051a2bd82270bb95b27da9bb3667e6edff8563a780b24",
+      "size": 1877
+    },
+    {
+      "path": "planning/cad/CAD-A.md",
+      "sha256": "8b1d51e78c783b5a4c5e160f5dc4b362d63a83d9b3c323b6576e32398d294b94",
+      "size": 944
+    },
+    {
+      "path": "planning/cad/CAD-B.md",
+      "sha256": "90090e7e0f861a37e3de2bc50dce602312d962759348403b3cda03a654df9aaf",
+      "size": 1012
+    },
+    {
+      "path": "planning/cad/CAD-C.md",
+      "sha256": "624725c9a9739f0f433623949abbc756b5344866c0d208fcd160fc8ad7246903",
+      "size": 914
+    },
+    {
+      "path": "planning/cad/CAD-D.md",
+      "sha256": "8a5e243a30bc113000200e703159aa9e37042a6213e3e5bbc663be86ed0c9894",
+      "size": 1008
+    },
+    {
+      "path": "planning/cad/CAD-E.md",
+      "sha256": "9905731e7c5e461d38e7f851a5ad34170ba702fb84241a41494fcf9a7bdafcdc",
+      "size": 1092
+    },
+    {
+      "path": "planning/cad/CAD-F.md",
+      "sha256": "772d40e3c3156fa13da8705f168088938abdc59c3a9b1a16bbfca1c3f3c36af6",
+      "size": 1055
+    },
+    {
+      "path": "planning/cad/CAD-G.md",
+      "sha256": "c1e98a04d45e6bcefd28c088e8060c5bb9c44c71835849ab5626b906652f905a",
+      "size": 978
+    },
+    {
+      "path": "planning/cad/CAD-H.md",
+      "sha256": "e27dee94e567652d098de00b91c6f8b406edaf5b0193f88bc0f03a5f24f74151",
+      "size": 1020
+    },
+    {
+      "path": "planning/cad/CAD-I.md",
+      "sha256": "40d16c40bd2fd858562d209af16330a8ae991c4370f185a4284bbfcc2e344e9f",
+      "size": 1029
+    },
+    {
+      "path": "planning/cad/CAD-J.md",
+      "sha256": "8f4d731ab87e962ba989b996ead18d8e30bf8e21e93569e19a4b89027bbac4dd",
+      "size": 1016
+    },
+    {
+      "path": "planning/cad/CAD-K.md",
+      "sha256": "9c79793d2191d914791e937831da8918534917c944302b9935302aa14735b4eb",
+      "size": 963
+    },
+    {
+      "path": "planning/cad/CAD-L.md",
+      "sha256": "326f105fd48b925976f7761c822f0dc6b922151bc0e1af64e4c2b08e73b6d850",
+      "size": 969
+    },
+    {
+      "path": "planning/cad/CAD-M.md",
+      "sha256": "244a514dcc87b21cb238408dffb2b4554b2b8d8cdd69f50e2273808e92ffbdb4",
+      "size": 1656
+    },
+    {
+      "path": "planning/cad/CAD-N.md",
+      "sha256": "bf3789d7400a8044bff20dc86212eb2a96528e08114af62b4e93430ad896e666",
+      "size": 820
+    },
+    {
+      "path": "planning/cad/CAD-O.md",
+      "sha256": "9725b14ecd33be120e55a9cb463772f719f9d3192dd6d697645b59491bdb7b52",
+      "size": 1035
+    },
+    {
+      "path": "planning/cad/CAD-P.md",
+      "sha256": "b03d7307340a9c2f127b4e33ec30c65e6c438fed5d75e967b67f7ae59f108148",
+      "size": 868
+    },
+    {
+      "path": "planning/cad/CAD-Q.md",
+      "sha256": "a21e11601a11bdc2bc9f48b4b63a753c0af0605ef2dafe6ecda211d95f93faca",
+      "size": 923
+    },
+    {
+      "path": "planning/cad/CAD-R.md",
+      "sha256": "52af2a2f974c298fbe632bea353744592cc919956ed6b1e0800a79a60f8a7d01",
+      "size": 903
+    },
+    {
+      "path": "planning/cad/CAD-S.md",
+      "sha256": "233a814101f257fe156a74678615c98a08bf93edab6a92fcd1ecef16b3809b50",
+      "size": 995
+    },
+    {
+      "path": "planning/cad/CAD-T.md",
+      "sha256": "3edbc215ab2c96abe479e39506d7aae6b8b6dc790be8e39845fdd1a112514f7c",
+      "size": 949
+    },
+    {
+      "path": "planning/cad/CAD-U.md",
+      "sha256": "ebbfbf618d9af3065e2aee9449da8b2715191654bad4caa540bc437736ec9734",
+      "size": 930
+    },
+    {
+      "path": "planning/cad/CAD-V.md",
+      "sha256": "d28da852023f61a606cf4c44aa830dcc07ae2a3b4c20b73fcbd3db83051de41f",
+      "size": 1049
+    },
+    {
+      "path": "planning/cad/CAD-W.md",
+      "sha256": "d01ca2b67457d0a155e74807cfa0003aa60c1ca09cec0b3816e41ebf517d451f",
+      "size": 965
+    },
+    {
+      "path": "planning/cad/CAD-X.md",
+      "sha256": "ee32b6175a42f7dfd6790c28d4e5443fa1cc58173b3c1bf3e498686b1b1fe602",
+      "size": 875
+    },
+    {
+      "path": "planning/cad/CAD-Y.md",
+      "sha256": "f84b7d2da695e5b8817329a30beac3a0c2cff20f4443ffae09fe007866d746c2",
+      "size": 900
+    },
+    {
+      "path": "planning/cad/CAD-Z.md",
+      "sha256": "ec6cfbfc20144eee26a4c05ad77ce82be5abe92c9145e4acb9839f866809a4a8",
+      "size": 918
+    },
+    {
+      "path": "planning/cad/CAD-\u00c5.md",
+      "sha256": "5a593b2b1f78e5aadad2167a3b47c9e90c2ef4a3c02aad6e43266e4419dc8c0e",
+      "size": 8103
+    },
+    {
+      "path": "planning/cad/CAD-\u00c6.md",
+      "sha256": "1e00477c6147c65ebe9ca59467c9e3180cfd6c97317d7ea0c3e0c2a93320bb2e",
+      "size": 951
+    },
+    {
+      "path": "planning/cad/CAD-\u00d8.md",
+      "sha256": "adf16b73540fabd3b8dba7f16d64ca6d0b2a81582bcc644edeb244678af50ed0",
+      "size": 1096
+    }
+  ],
+  "status": "BLOCKED_WITH_BOUNDED_GRAPH_VERIFIED"
+}

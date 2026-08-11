@@ -1,0 +1,13 @@
+{
+  "artifact_id": "mwp-status-quo-supersession-v1",
+  "new_baseline": "MWP-UOSH-002-FRESH-BASELINE",
+  "old_parent": "MWP-UOSH-001",
+  "preserved_artifacts": [
+    "docs/mwp-final-closeout-readback.json",
+    "docs/mwp-autonomous-change-ledger.jsonl"
+  ],
+  "raw_payload_included": false,
+  "reason": "fresh governed baseline requested; no historical evidence deleted",
+  "status": "SUPERSEDED_NOT_DELETED",
+  "superseded_at": "2026-08-10T06:25:47.615652+00:00"
+}

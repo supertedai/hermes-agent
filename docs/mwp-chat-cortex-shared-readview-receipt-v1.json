@@ -1,0 +1,65 @@
+{
+  "artifact_id": "mwp-chat-cortex-shared-readview-receipt-v1",
+  "gate_id": "chat-cortex-shared-readview",
+  "interpretation": "live metadata-only read routes are reachable; this proves route/readability, not canonical writer authority or semantic round-trip correctness",
+  "mode": "metadata-only-live-route-probe",
+  "mutation": {
+    "config_write": false,
+    "graph_write": false,
+    "memory_write": false,
+    "production_activation": false
+  },
+  "mwp_id": "MWP-UOSH-001",
+  "next_action": "Add a correlation-id metadata probe proving the same scoped session/turn is visible in both chat and Cortex without exposing payloads; keep writes blocked.",
+  "raw_payload_included": false,
+  "routes": [
+    {
+      "http_status": 200,
+      "keys": [
+        "context",
+        "efc_detected",
+        "efc_score",
+        "timestamp"
+      ],
+      "method": "GET",
+      "path": "/msty/live-context",
+      "response_sha256": "06078a1f7328becee4f927af0fdc07bcd1e1eaa91f8c492ae85d70f933159892"
+    },
+    {
+      "http_status": 200,
+      "keys": [
+        "context",
+        "full_detail",
+        "prompt_context"
+      ],
+      "method": "POST",
+      "path": "/meta/session-context",
+      "response_sha256": "f62bffbdf7746dbe4f1804d75e91572f0b77ac8683bef741620262a2d4877561"
+    },
+    {
+      "collection_counts": {
+        "context": 0,
+        "facts": 0,
+        "graph": 0
+      },
+      "http_status": 200,
+      "method": "POST",
+      "path": "/memory/crud/read",
+      "response_sha256": "13fa630348abf5f941372c4f2d2deb5e749ee96442ea99d890bdc5af902edb1"
+    }
+  ],
+  "scope": {
+    "host": "box12/.12",
+    "principal": "morten",
+    "raw_payload_included": false,
+    "tenant_scope": "user-scoped"
+  },
+  "status": "CONNECTED_READ_ONLY_METADATA_VERIFIED",
+  "status_dimensions": {
+    "chat_to_cortex_roundtrip": "PARTIAL",
+    "promotion_allowed": false,
+    "read_only_access": "VERIFIED",
+    "route_reachability": "VERIFIED",
+    "writer_authority": "UNVERIFIED"
+  }
+}

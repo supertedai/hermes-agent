@@ -2,6 +2,7 @@
   "mwp_id": "MWP-UOSH-001",
   "gate_id": "cad-adr-bl-intent-registry",
   "artifact_id": "mwp-cad-adr-bl-intent-gate-readback-current",
+  "source_receipt": "docs/mwp-cad-adr-bl-live-source-readback-v1.json",
   "mode": "metadata-only-source-runtime-verification",
   "status": "BLOCKED",
   "scope": {
@@ -25,20 +26,33 @@
     "registry_open_rows": 9,
     "git_head": "96b51c4bcff981e1088be0f52cfb3e13fd79a94c",
     "git_worktree": "dirty",
+    "canonical_source_root": "/home/byopus/AGI",
+    "canonical_source_owner": "canonical AGI .12 source/runtime authority",
+    "canonical_source_git_head": "96e8da849966d63d08f2fe0d4a9871a0a8c70306",
+    "source_manifest_receipt": "docs/mwp-cad-adr-bl-live-source-readback-v1.json",
+    "source_counts": {"cad": 30, "adr_bl_candidates": 60},
     "local_source": "agent/mwp_asi_alignment_registry.py",
-    "local_runtime_observation": "hermes-dashboard.service active; metadata-only health HTTP 200 on 127.0.0.1:9119",
-    "runtime_qualification": "local metadata-only runtime presence; no authoritative CAD-to-ADR-to-BL-to-runtime reconciliation",
+    "local_runtime_observation": ".12 /health HTTP 200; /api/mwp/runtime HTTP 200; /neo4j/status connected",
+    "runtime_qualification": "canonical source and runtime presence verified metadata-only; bounded graph canary relationship verified by fresh read-after-write",
+    "graph_receipt": {
+      "status": "VERIFIED_BOUNDED",
+      "endpoint": "http://127.0.0.1:8010/neo4j/q",
+      "relationship_id": "5:85f7c59f-8de6-4f26-a3de-4ccf9c14d1c8:1161957291163910253",
+      "post_read_sha256": "637f474023e77f6dec7536af24bd675bbc25641d4a53a3e34372513eb8f679ba",
+      "rollback_ref": "MATCH (u:User {id:\"morten\"})-[r:AUTHORED]->(t:Theory {name:\"Energy-Flow Cosmology\"}) WHERE elementId(r)=\"5:85f7c59f-8de6-4f26-a3de-4ccf9c14d1c8:1161957291163910253\" DELETE r",
+      "scope": "exact bounded AUTHORED relationship only"
+    },
     "local_test_result": "7 passed, 0 failed",
     "test_command": "scripts/run_tests.sh tests/test_mwp_asi_alignment_registry.py tests/test_mwp_asi_closeout.py -q"
   },
-  "blocker": "Authoritative live CAD/ADR/BL source reconciliation and graph write/read-after-write authority are unavailable. Local source, runtime inventory, passing tests, and metadata-only destination probes do not establish LIVE_VERIFIED.",
-  "owner": "Morten / authorized CAD, ADR, BL source-of-truth and runtime owners",
+  "blocker": "Active-turn role/provider receipt remains unavailable; broad CAD/ADR/BL projection remains blocked. The bounded graph canary is verified and must not be generalized to unrestricted writer authority.",
+  "owner": "canonical AGI .12 source/runtime authority; graph authority owner still unverified",
   "evidence_required": [
-    "authenticated metadata-only CAD-to-ADR-to-BL-to-runtime reconciliation",
+    "owner-scoped CAD-to-ADR-to-BL-to-runtime reconciliation using the canonical source receipt",
     "owner and canonical version for each mapped record",
-    "authorized graph receipt with write/read-after-write verification"
+    "active-turn role/provider authority receipt and owner-scoped CAD/ADR/BL mapping"
   ],
-  "next_action": "Owner supplies authenticated CAD-to-ADR-to-BL-to-runtime reconciliation and authorized graph write/read-after-write receipt; rerun this gate and retain BLOCKED until verified.",
+  "next_action": "Use the verified bounded graph receipt; next gate is active-turn role/provider authority plus owner-scoped CAD/ADR/BL mapping. Keep broad projection blocked.",
   "promotion_rule": "Do not promote DECLARED, REACHABLE, collection presence, catalog consistency, or local runtime presence to LIVE_VERIFIED.",
   "mutation": {
     "source_write": false,
