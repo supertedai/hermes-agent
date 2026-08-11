@@ -578,6 +578,21 @@ def skills_for_goal(observation: Mapping[str, object], goal: Mapping[str, object
     return select_for_task(text, stage="chain:drive").to_json()
 
 
+
+def _resolve_ref(ref: str) -> str:
+    """Slaa opp en kontrakt-referanse i registeret. Tom streng naar ingen ref.
+
+    ÉN implementasjon, importert -- ikke gjenfortalt. To kopier av denne regelen
+    ville divergert paa foerste endring, som er nettopp det som skjedde da
+    `payload_for` og `evidence_for` fikk hver sin.
+    """
+    if not ref.strip():
+        return ""
+    from agent.faber_observe import resolve_contract_ref
+
+    return resolve_contract_ref(ref)[0]
+
+
 def payload_for(observation: Mapping[str, object], goal: Mapping[str, object], *,
                 repo: str, build_root: str, test_command: Sequence[str]) -> dict:
     """Bygg tick-payloaden for ett maal, fra det som ER MAALT.
@@ -606,8 +621,20 @@ def payload_for(observation: Mapping[str, object], goal: Mapping[str, object], *
         "evidence": {
             "git_clean": True,
             "lease_clear": False,
-            "cad_status": str(ev.get("cad_status", "unknown")),
-            "adr_status": str(ev.get("adr_status", "unknown")),
+            # BL-4095 (reviewer BLOCK 1). DETTE er stien kjeden faktisk gater
+            # paa: dicten blir `PreflightInput` og dommes av `DesignGate` inne i
+            # runneren. `evidence_for` er RAPPORT-stien. Jeg lukket registerhullet
+            # der og lot denne staa -- saa `ADR-DOES-NOT-EXIST-999` klarerte steg
+            # 7 der kjeden KJOERER, mens rapporten meldte BLOCK. Hullet var lukket
+            # i speilet, ikke i gaten.
+            #
+            # Kommentaren under denne linja sa allerede at den FOELGER
+            # `evidence_for`. Jeg fikk dem til aa divergere i samme commit som
+            # skrev kommentaren om hvorfor de ikke maa det.
+            "cad_status": (_resolve_ref(str(goal.get("cad_ref", "") or ""))
+                           or str(ev.get("cad_status", "unknown"))),
+            "adr_status": (_resolve_ref(str(goal.get("adr_ref", "") or ""))
+                           or str(ev.get("adr_status", "unknown"))),
             "bl_status": str(ev.get("bl_status", "unknown")),
             "obsidian_status": str(ev.get("obsidian_status", "unknown")),
             # REVIEWER BLOCK 1. Foerste utkast skrev BARE `git` og `lease` her.

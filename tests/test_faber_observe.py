@@ -386,3 +386,477 @@ def test_dirt_outside_the_scope_does_not_block_but_is_recorded(tmp_path):
     (tmp_path / "min.py").write_text("x = 2\n", encoding="utf-8")
     clean, inside, _ = scope_is_clean(str(tmp_path), "hermes-agent: min.py")
     assert clean is False and inside == ("min.py",)
+
+
+# ---------------------------------------------------------------------------
+# G6 — REGISTERBROEN (BL-4095)
+#
+# Foer dette verifiserte INGEN gate en kontrakt-referanse mot noe register.
+# `DesignGate` sjekket at strengen var ikke-tom, pluss en status PRODUSENTEN
+# paastod. Maalt konsekvens: `ADR-DOES-NOT-EXIST-999` klarerte steg 7 noeyaktig
+# som en ekte referanse. Det er kontrollen-som-ikke-kan-feile, i gaten som
+# avgjoer om designgjennomgang har skjedd.
+# ---------------------------------------------------------------------------
+
+def _register(tmp_path, name, status_line):
+    d = tmp_path / "docs"
+    d.mkdir(exist_ok=True)
+    (d / f"{name}.md").write_text(
+        f"# {name} — test\n\n**Status:** `{status_line}`\n**Parent:** `MWP-UOSH-001`\n",
+        encoding="utf-8")
+    return str(d)
+
+
+def test_a_reference_to_a_document_that_does_not_exist_is_MISSING(tmp_path):
+    """Hullet alt annet hang paa, lukket."""
+    from agent.faber_observe import resolve_contract_ref
+
+    docs = _register(tmp_path, "ADR-HERMES-REAL-001", "ACCEPTED_ARCHITECTURE")
+    status, note = resolve_contract_ref("ADR-DOES-NOT-EXIST-999", docs=docs)
+    assert status == "missing", note
+    assert "ADR-DOES-NOT-EXIST-999" in note
+
+
+def test_a_real_accepted_document_resolves_and_carries_its_own_status_line(tmp_path):
+    from agent.faber_observe import resolve_contract_ref
+
+    docs = _register(tmp_path, "ADR-HERMES-REAL-001", "ACCEPTED_ARCHITECTURE / RUNTIME_GATED")
+    status, note = resolve_contract_ref("ADR-HERMES-REAL-001", docs=docs)
+    assert status == "accepted"
+    # Evidensen er dokumentets EGEN linje, ikke vaar oppsummering av den.
+    assert "ACCEPTED_ARCHITECTURE / RUNTIME_GATED" in note
+
+
+def test_an_unaccepted_document_is_proposed_not_accepted(tmp_path):
+    """Et dokument som FINNES er ikke det samme som en beslutning som er TATT."""
+    from agent.faber_observe import resolve_contract_ref
+
+    docs = _register(tmp_path, "ADR-HERMES-DRAFT-001", "PROPOSED / OWNER-REVIEW")
+    assert resolve_contract_ref("ADR-HERMES-DRAFT-001", docs=docs)[0] == "proposed"
+
+
+def test_a_superseded_document_is_rejected(tmp_path):
+    from agent.faber_observe import resolve_contract_ref
+
+    docs = _register(tmp_path, "ADR-HERMES-OLD-001", "SUPERSEDED BY ADR-HERMES-NEW-002")
+    assert resolve_contract_ref("ADR-HERMES-OLD-001", docs=docs)[0] == "rejected"
+
+
+def test_a_symbiose_number_is_UNVERIFIABLE_not_missing_and_not_accepted(tmp_path):
+    """Den viktigste av de fire utfallene.
+
+    `ADR-062` er et Symbiose-nummer; de registrene bor i `planning/` og vaulten
+    paa `.13`, ikke naabart herfra. `accepted` ville paastaatt en verifisering vi
+    ikke gjorde. `missing` ville anklaget et dokument som trolig finnes.
+    UVERIFISERBAR er det sanne svaret -- og den passerer ikke `DesignGate`.
+    """
+    from agent.faber_observe import resolve_contract_ref
+
+    docs = _register(tmp_path, "ADR-HERMES-REAL-001", "ACCEPTED_ARCHITECTURE")
+    for ref in ("ADR-062", "BL-4087"):
+        status, note = resolve_contract_ref(ref, docs=docs)
+        assert status == "unverifiable", (ref, status, note)
+        assert ".13" in note
+
+
+def test_an_unreadable_register_is_unverifiable_not_empty(tmp_path):
+    """Fravaer av svar er ikke et svar -- samme regel som `_porcelain`."""
+    from agent.faber_observe import resolve_contract_ref
+
+    status, note = resolve_contract_ref("ADR-HERMES-REAL-001",
+                                        docs=str(tmp_path / "finnes-ikke"))
+    assert status == "unverifiable"
+    assert "lesbart" in note
+
+
+def test_none_of_the_failure_states_pass_the_step_7_gate():
+    """Vakten paa vakten: fail-closed maa vaere SANT, ikke bare ment.
+
+    `DesignGate.ADR_OK`/`CAD_OK` er settene som slipper igjennom. Ingen av de
+    fire ikke-aksepterte utfallene skal ligge i dem -- ellers har registerbroen
+    lukket hullet i teorien og latt det staa i praksis.
+    """
+    from agent.code_workflow import DesignGate
+
+    for bad in ("missing", "unverifiable", "proposed", "rejected", "unknown"):
+        assert bad not in DesignGate.ADR_OK, bad
+        assert bad not in DesignGate.CAD_OK, bad
+    assert "accepted" in DesignGate.ADR_OK and "accepted" in DesignGate.CAD_OK
+
+
+def test_the_producer_looks_the_ref_up_instead_of_taking_the_goals_word(monkeypatch):
+    """Steg 7s inngangsdata SLAAS OPP, de tas ikke fra maalet.
+
+    Maalet faar lyve saa mye det vil i `cad_status`/`adr_status`; testen bestaar
+    bare hvis oppslaget vinner.
+    """
+    goal = FaberGoal("g", "G", cad_ref="CAD-HERMES-X-001", adr_ref="ADR-DOES-NOT-EXIST-999",
+                     bl_ref="BL-1",
+                     evidence={"cad_status": "verified", "adr_status": "accepted"})
+    monkeypatch.setattr("agent.faber_observe.resolve_contract_ref",
+                        lambda ref, docs=None: ("missing", f"{ref} finnes ikke"))
+    ev = evidence_for(goal, git_clean=True, git_ref="abc")
+    assert ev.adr_status == "missing", "maalets selvrapport vant over oppslaget"
+    assert ev.cad_status == "missing"
+
+
+def test_a_goal_without_a_ref_keeps_its_own_status(monkeypatch):
+    """Uten referanse er det ingenting aa slaa opp -- da staar maalets felt.
+
+    Ellers ville broen gjort et FRAVAER av referanse til en anklage om at
+    dokumentet mangler, og de to er ulike funn.
+    """
+    goal = FaberGoal("g", "G", cad_ref="", adr_ref="", bl_ref="BL-1",
+                     evidence={"cad_status": "verified", "adr_status": "accepted"})
+    ev = evidence_for(goal, git_clean=True, git_ref="abc")
+    assert ev.adr_status == "accepted"
+    assert ev.cad_status == "verified"
+
+
+# ---------------------------------------------------------------------------
+# G6 runde 2 — reviewerens tre BLOCK, som regresjon
+# ---------------------------------------------------------------------------
+
+def test_BOTH_paths_gate_identically_on_a_fabricated_reference():
+    """BLOCK 1: hullet var lukket i RAPPORTEN, ikke i GATEN.
+
+    `faber_observe.evidence_for` er readback-stien. `faber_runtime.payload_for`
+    er stien kjeden faktisk gater paa -- dicten blir `PreflightInput` og dommes
+    av `DesignGate` inne i runneren. Foerste utkast lukket bare den foerste, saa
+    `ADR-DOES-NOT-EXIST-999` klarerte steg 7 der kjeden KJOERER mens rapporten
+    meldte BLOCK.
+    """
+    from agent import faber_runtime as fr
+    from agent.code_workflow import DesignGate, PreflightInput
+
+    goal = {"goal_id": "g", "title": "t", "cad_ref": "CAD-DOES-NOT-EXIST-999",
+            "adr_ref": "ADR-DOES-NOT-EXIST-999", "bl_ref": "BL-1",
+            "evidence": {"repo_scope": "hermes-agent: a.py", "cad_status": "verified",
+                         "adr_status": "accepted", "bl_status": "open"}}
+    obs = {"goal_id": "g", "git_ref": "abc", "reasons": [], "next_step": ""}
+
+    pay = fr.payload_for(obs, goal, repo=".", build_root="/tmp/x", test_command=("t",))
+    a = DesignGate().evaluate(PreflightInput(**pay["evidence"]))
+    b = DesignGate().evaluate(evidence_for(
+        FaberGoal("g", "t", cad_ref=goal["cad_ref"], adr_ref=goal["adr_ref"],
+                  bl_ref="BL-1", evidence=goal["evidence"]),
+        git_clean=True, git_ref="abc"))
+    assert a.status is b.status, (a.reasons, b.reasons)
+    assert a.status.value == "BLOCK", "den UTFOERENDE stien slapp den oppdiktede referansen"
+    # PRESIST, ikke bare «begge blokkerer». Foerste utkast bestod selv naar
+    # `adr_status` ble koblet av, fordi CAD alene felte gaten — testen maalte at
+    # NOEN gate stengte, ikke at oppslaget skjedde. Proben viste det.
+    assert pay["evidence"]["adr_status"] == "missing", pay["evidence"]
+    assert pay["evidence"]["cad_status"] == "missing", pay["evidence"]
+
+
+def test_a_partial_or_negated_status_is_not_accepted(tmp_path):
+    """BLOCK 2: substring-matching snudde polariteten paa LEVENDE dokumenter.
+
+    Reviewer maalte tre, og den foerste er en CAD -- altsaa paa den gatede
+    stien: `Audit complete; open lanes recorded` ble `accepted`. Likeledes
+    `PARTIAL / CANARY_COMPLETE_...`. Negasjonen bor som prefiks eller
+    kvalifikator, ikke som eget ord, saa `_REJECTED_MARKERS`-sjekken foerst
+    hjalp ikke.
+    """
+    from agent.faber_observe import resolve_contract_ref
+
+    cases = {
+        "Audit complete; open lanes recorded": "proposed",
+        "PARTIAL / CANARY_COMPLETE_PRODUCER_WIRING_OPEN": "proposed",
+        "INCOMPLETE / IN PROGRESS": "proposed",
+        "NOT ACCEPTED": "proposed",
+        "IKKE VEDTATT": "proposed",
+        "PENDING ACCEPTANCE": "proposed",
+        "ACCEPTED_ARCHITECTURE / RUNTIME_GATED": "accepted",
+        "VEDTATT": "accepted",
+        "SUPERSEDED BY ADR-X": "rejected",
+    }
+    for i, (status_line, want) in enumerate(cases.items()):
+        name = f"ADR-HERMES-CASE{i:02d}-001"
+        (tmp_path / f"{name}.md").write_text(
+            f"# {name}\n\n**Status:** `{status_line}`\n", encoding="utf-8")
+        got = resolve_contract_ref(name, docs=str(tmp_path))[0]
+        assert got == want, f"{status_line!r} -> {got}, ventet {want}"
+
+
+def test_the_base_document_owns_the_status_not_the_phase(tmp_path):
+    """BLOCK 3: `hits[0]` lot FASE-fila vinne.
+
+    `-` (0x2D) sorterer foer `.` (0x2E), saa `ADR-047-F5.md` slo `ADR-047.md`
+    deterministisk -- og en fases aksept ble kreditert hele beslutningen.
+    ADR-064/BL-4053: noeyaktig én fil erklaerer `adr_role: base` og eier statusen.
+    """
+    from agent.faber_observe import resolve_contract_ref
+
+    (tmp_path / "ADR-047.md").write_text(
+        "---\nadr_role: base\n---\n**Status:** `PROPOSED / not accepted`\n", encoding="utf-8")
+    (tmp_path / "ADR-047-F5.md").write_text(
+        "**Status:** `ACCEPTED_ARCHITECTURE`\n", encoding="utf-8")
+    status, note = resolve_contract_ref("ADR-047", docs=str(tmp_path))
+    assert status == "proposed", note
+    assert "ADR-047.md" in note and "F5" not in note
+
+    # Motsatt polaritet: en supersedet FASE skal ikke felle en akseptert base.
+    (tmp_path / "ADR-047.md").write_text(
+        "---\nadr_role: base\n---\n**Status:** `ACCEPTED_ARCHITECTURE`\n", encoding="utf-8")
+    (tmp_path / "ADR-047-F5.md").write_text("**Status:** `SUPERSEDED`\n", encoding="utf-8")
+    assert resolve_contract_ref("ADR-047", docs=str(tmp_path))[0] == "accepted"
+
+
+def test_an_ambiguous_number_is_unverifiable_never_a_sort_order_choice(tmp_path):
+    """Ingen base erklaert og flere filer: uavklart, ikke et valg."""
+    from agent.faber_observe import resolve_contract_ref
+
+    (tmp_path / "ADR-050-F1.md").write_text("**Status:** `ACCEPTED_ARCHITECTURE`\n", encoding="utf-8")
+    (tmp_path / "ADR-050-F2.md").write_text("**Status:** `ACCEPTED_ARCHITECTURE`\n", encoding="utf-8")
+    status, note = resolve_contract_ref("ADR-050", docs=str(tmp_path))
+    assert status == "unverifiable"
+    assert "adr_role: base" in note
+
+
+def test_the_reference_lookup_is_case_insensitive(tmp_path):
+    """`_REGISTER_REF` er IGNORECASE; globben maa vaere det ogsaa.
+
+    Ellers gir `adr-hermes-x-001` `missing` for et dokument som FINNES — altsaa
+    en anklage mot et ekte dokument, som er nettopp det `unverifiable` finnes
+    for aa unngaa.
+    """
+    from agent.faber_observe import resolve_contract_ref
+
+    (tmp_path / "ADR-HERMES-X-001.md").write_text(
+        "**Status:** `ACCEPTED_ARCHITECTURE`\n", encoding="utf-8")
+    assert resolve_contract_ref("adr-hermes-x-001", docs=str(tmp_path))[0] == "accepted"
+
+
+def test_the_real_register_resolves_without_a_false_accept():
+    """Mot det EKTE registeret, ikke et syntetisk ett-fils-oppsett.
+
+    Reviewer: hver G6-test bygde sin egen katalog, saa verken ekte statuslinjer
+    eller fler-fil-tilfellet ble kjoert. Denne kjoerer mot registeret slik det
+    faktisk staar, og krever at ingen ikke-akseptert linje leses som akseptert.
+    """
+    import os
+    from pathlib import Path
+
+    from agent.faber_observe import MWP_DOCS, resolve_contract_ref
+
+    root = Path(os.environ.get("MWP_DOCS", MWP_DOCS))
+    if not root.is_dir():
+        pytest.skip("MWP-registeret er ikke naabart fra denne verten")
+    refs = sorted({p.stem for p in root.glob("*.md")
+                   if p.stem.split("-")[0] in {"ADR", "CAD", "BL"}})
+    assert len(refs) > 20, f"registeret ser tomt ut: {len(refs)}"
+    for ref in refs:
+        status, note = resolve_contract_ref(ref)
+        assert status in {"accepted", "proposed", "rejected", "unverifiable"}, (ref, status)
+        if status == "accepted":
+            line = note.split(":", 1)[-1].upper()
+            for bad in ("PARTIAL", "IKKE", "NOT ", "PENDING", "INCOMPLETE", "OPEN"):
+                assert bad not in line, f"{ref}: {status} paa en linje som sier {bad}: {note}"
+
+    # BEGGE RETNINGER. Reviewer: denne asserterte bare «ingen falsk aksept»,
+    # mens D1 var en falsk BLOCK -- saa den kunne per konstruksjon ikke fange
+    # D1. Dette er den ene endringen som ville fanget D1 foer reviewer gjorde.
+    import re as _re
+
+    checked = 0
+
+    for p in root.glob("*.md"):
+        if p.stem.split("-")[0] not in {"ADR", "CAD", "BL"}:
+            continue
+        head = ""
+        for raw in p.read_text(encoding="utf-8", errors="replace").splitlines()[:12]:
+            if raw.strip().lower().startswith("**status:**"):
+                head = raw.split("**", 2)[-1].strip(" *:`").split("/")[0].strip().upper()
+                break
+        if not (head == "ACCEPTED" or head.startswith("ACCEPTED_")):
+            continue
+        # Kanonisk ref: filnavnet uten slug-halen. Et FILNAVN er ikke en referanse.
+        m = _re.match(r"^((?:ADR|CAD|BL)-(?:[A-Z0-9][A-Z0-9.]*-)*?\d+)", p.stem, _re.IGNORECASE)
+        if not m:
+            continue
+        checked += 1
+        got = resolve_contract_ref(m.group(1))[0]
+        assert got == "accepted", (
+            f"{m.group(1)} har hodet {head!r} og skal resolvere accepted, fikk {got} "
+            f"(fil: {p.name}) — dette er en FALSK BLOCK paa en ekte akseptert kontrakt")
+    # Reviewer: `if not m: continue` er stille. Tell det som FAKTISK ble sjekket,
+    # saa vakten ikke kan krympe til null uten aa si fra.
+    # Maalt 2026-08-11: 21. Terskelen staar under det maalte med vilje, saa
+    # ordinaer register-churn ikke gjoer vakten roed for noe annet enn en defekt
+    # -- men den kan ikke krympe til null i stillhet.
+    assert checked >= 15, f"begge-retninger-asserten sjekket bare {checked} dokumenter"
+
+
+def test_a_negated_tail_vetoes_an_accepted_head(tmp_path):
+    """Negasjons-vetoet, isolert.
+
+    Mutasjonsproben viste at hode-regelen ALENE daekker alle statusene i
+    testen over -- vetoet var dermed ubevist. Det som trenger det er en linje
+    hvis HODE er akseptert og hvis HALE nekter. Uten denne testen kunne vetoet
+    slettes uten at noe ble roedt.
+    """
+    from agent.faber_observe import resolve_contract_ref
+
+    (tmp_path / "ADR-HERMES-VETO-001.md").write_text(
+        "**Status:** `ACCEPTED_ARCHITECTURE / IKKE VEDTATT AV EIER`\n", encoding="utf-8")
+    assert resolve_contract_ref("ADR-HERMES-VETO-001", docs=str(tmp_path))[0] == "proposed"
+
+    (tmp_path / "ADR-HERMES-VETO-002.md").write_text(
+        "**Status:** `ACCEPTED_ARCHITECTURE / PARTIAL ROLLOUT`\n", encoding="utf-8")
+    assert resolve_contract_ref("ADR-HERMES-VETO-002", docs=str(tmp_path))[0] == "proposed"
+
+
+def test_the_head_is_a_whole_word_not_a_substring(tmp_path):
+    """Hode-regelen, isolert fra vetoet.
+
+    Proben viste at en substring-mutant overlevde, fordi ingen test hadde en
+    linje der de to reglene er UENIGE. Denne har det: hodet er `PROPOSED`, men
+    et akseptert-ord staar lenger ute i linja uten aa vaere en negasjon.
+    """
+    from agent.faber_observe import resolve_contract_ref
+
+    (tmp_path / "ADR-HERMES-SUB-001.md").write_text(
+        "**Status:** `PROPOSED — supersedes ACCEPTED_ARCHITECTURE from ADR-X`\n",
+        encoding="utf-8")
+    status, note = resolve_contract_ref("ADR-HERMES-SUB-001", docs=str(tmp_path))
+    assert status == "proposed", note
+
+
+def test_the_exact_filename_wins_even_without_an_adr_role_marker(tmp_path):
+    """Base-valget, isolert fra `adr_role`-regelen.
+
+    Proben viste at `exact = []` overlevde, fordi base-fila i den forrige testen
+    OGSAA erklaerte `adr_role: base` -- to verner daekket samme sak, saa aa fjerne
+    det ene endret ingenting. Her er det bare filnavnet som kan redde det, og en
+    fase som er akseptert mens basen ikke er.
+    """
+    from agent.faber_observe import resolve_contract_ref
+
+    (tmp_path / "ADR-060.md").write_text(
+        "**Status:** `PROPOSED / owner review`\n", encoding="utf-8")
+    (tmp_path / "ADR-060-F2.md").write_text(
+        "**Status:** `ACCEPTED_ARCHITECTURE`\n", encoding="utf-8")
+    status, note = resolve_contract_ref("ADR-060", docs=str(tmp_path))
+    assert status == "proposed", note
+    assert "ADR-060.md" in note and "F2" not in note
+
+
+# ---------------------------------------------------------------------------
+# Reviewer runde 3: KODEN var riktig, men tre fikser var holdt av INGENTING --
+# inkludert D1 og D2 selv. Tre mutanter endret verdikten paa LEVENDE
+# registerdata mens 620 tester og 74/74 mutanter meldte suksess.
+#
+# Mekanismen er verdt aa sitere, for den er fjerde forekomst av samme moenster:
+# testen jeg skrev ETTER D1 staver negasjonene `IKKE VEDTATT` og
+# `PARTIAL ROLLOUT` -- med MELLOMROM. D1 handlet om `IMPLEMENTED_NOT_LOADED`,
+# altsaa UNDERSTREK. Vakten oevde paa skilletegnet defekten ikke var om.
+# Testsettet flyttet seg til NABOLAGET av defekten og stoppet der.
+# ---------------------------------------------------------------------------
+
+def test_an_underscore_compound_is_one_token_not_a_negation(tmp_path):
+    """D1s EGEN form, som regresjon.
+
+    `ACCEPTED / IMPLEMENTED_NOT_LOADED / RESTART_GATE` er en LEVENDE akseptert
+    ADR. `NOT` staar inne i et sammensatt token, og tokeniseringen splitter med
+    vilje ikke paa `_`. Fjern `or ch == "_"` -- seks tegn -- og denne ADR-en blir
+    falskt BLOKKERT.
+    """
+    from agent.faber_observe import resolve_contract_ref
+
+    (tmp_path / "ADR-HERMES-UNDERSCORE-001.md").write_text(
+        "**Status:** `ACCEPTED / IMPLEMENTED_NOT_LOADED / RESTART_GATE`\n", encoding="utf-8")
+    assert resolve_contract_ref("ADR-HERMES-UNDERSCORE-001", docs=str(tmp_path))[0] == "accepted"
+
+    (tmp_path / "ADR-HERMES-UNBLOCKED-001.md").write_text(
+        "**Status:** `ACCEPTED_ARCHITECTURE / UNBLOCKED`\n", encoding="utf-8")
+    assert resolve_contract_ref("ADR-HERMES-UNBLOCKED-001", docs=str(tmp_path))[0] == "accepted"
+
+
+def test_a_truncated_reference_never_resolves_a_real_document():
+    """D2, mot det EKTE registeret.
+
+    `ADR-HERMES-CHAIN` og `CAD-MWP-DATA` navngir INTET dokument, men er prefiks
+    til ett som finnes. Uten kravet om en avsluttende identifikator resolverte
+    begge `accepted` -- en avkortet streng som klarerte steg 7.
+    """
+    import os
+    from pathlib import Path
+
+    from agent.faber_observe import MWP_DOCS, resolve_contract_ref
+
+    if not Path(os.environ.get("MWP_DOCS", MWP_DOCS)).is_dir():
+        pytest.skip("MWP-registeret er ikke naabart fra denne verten")
+    for truncated in ("ADR-HERMES-CHAIN", "CAD-MWP-DATA", "ADR-J"):
+        status, note = resolve_contract_ref(truncated)
+        assert status != "accepted", f"{truncated} -> {status}: {note}"
+
+
+def test_a_lone_phase_file_never_answers_for_the_decision(tmp_path):
+    """Fase-sjekken paa ett-treffs-stien, som reviewer viste var uholdt.
+
+    `ADR-047` med BARE `ADR-047-F5.md` i katalogen: snarveien `len(hits) == 1`
+    ville gitt fasens aksept til hele beslutningen (ADR-064/BL-4053).
+    """
+    from agent.faber_observe import resolve_contract_ref
+
+    (tmp_path / "ADR-047-F5.md").write_text(
+        "**Status:** `ACCEPTED_ARCHITECTURE`\n", encoding="utf-8")
+    status, note = resolve_contract_ref("ADR-047", docs=str(tmp_path))
+    assert status == "unverifiable", note
+
+
+def test_a_truncation_is_reported_as_a_truncation_not_as_an_ambiguous_base(tmp_path):
+    """En gate som forklarer seg feil er klassen denne BL-en jakter paa."""
+    from agent.faber_observe import resolve_contract_ref
+
+    (tmp_path / "ADR-HERMES-LONGNAME-001.md").write_text(
+        "**Status:** `ACCEPTED_ARCHITECTURE`\n", encoding="utf-8")
+    status, note = resolve_contract_ref("ADR-HERMES-LONGNAME-0", docs=str(tmp_path))
+    assert status in {"missing", "unverifiable"}
+    assert "adr_role" not in note, note
+
+
+def test_a_delimiter_without_spaces_still_splits_the_head(tmp_path):
+    """Hode-splittingen, som reviewer viste var holdt av INGENTING.
+
+    `head = line.strip(...)` overlevde hele suiten inkludert
+    begge-retninger-asserten, fordi ingen LEVENDE statuslinje bruker en
+    delimiter uten mellomrom rundt. Feilmoden er D1s egen klasse: en framtidig
+    `ACCEPTED_ARCHITECTURE/RUNTIME_GATED` uten mellomrom ville blitt en FALSK
+    BLOCK paa en ekte akseptert kontrakt.
+    """
+    from agent.faber_observe import resolve_contract_ref
+
+    (tmp_path / "ADR-HERMES-TIGHT-001.md").write_text(
+        "**Status:** `ACCEPTED_ARCHITECTURE/RUNTIME_GATED`\n", encoding="utf-8")
+    assert resolve_contract_ref("ADR-HERMES-TIGHT-001", docs=str(tmp_path))[0] == "accepted"
+
+    (tmp_path / "ADR-HERMES-TIGHT-002.md").write_text(
+        "**Status:** `SUPERSEDED;BY ADR-X`\n", encoding="utf-8")
+    assert resolve_contract_ref("ADR-HERMES-TIGHT-002", docs=str(tmp_path))[0] == "rejected"
+
+    # Reviewer runde 5: `_status_word` splitter paa TRE delimitere, og testen
+    # daekket to. Aa fjerne `.split(",")[0]` overlevde hele suiten. Et navn som
+    # paastaar en generell regel mens det maaler to tredeler av den, er samme
+    # klasse som D-B -- paa samme linje.
+    (tmp_path / "ADR-HERMES-TIGHT-003.md").write_text(
+        "**Status:** `SUPERSEDED,BY ADR-X`\n", encoding="utf-8")
+    assert resolve_contract_ref("ADR-HERMES-TIGHT-003", docs=str(tmp_path))[0] == "rejected"
+
+
+def test_the_non_english_accepted_vocabulary_is_held(tmp_path):
+    """`_ACCEPTED_OTHER` var holdt av ETT medlem.
+
+    `VERIFIED` og `FRESH` er levende vokabular i `DesignGate.CAD_OK`, saa et
+    stille tap der er en D1-klasse falsk BLOCK -- selv om ingen dokument bruker
+    dem i dag.
+    """
+    from agent.faber_observe import resolve_contract_ref
+
+    for i, word in enumerate(("VEDTATT", "UTFOERT", "UTFØRT", "VERIFIED", "FRESH")):
+        name = f"ADR-HERMES-VOCAB{i}-001"
+        (tmp_path / f"{name}.md").write_text(
+            f"**Status:** `{word}`\n", encoding="utf-8")
+        assert resolve_contract_ref(name, docs=str(tmp_path))[0] == "accepted", word

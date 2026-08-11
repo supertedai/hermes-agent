@@ -18,6 +18,7 @@ from __future__ import annotations
 import argparse
 import json
 import os
+import re
 import subprocess
 import sys
 from dataclasses import dataclass, field, replace
@@ -352,6 +353,244 @@ def _resolve_lease_clear(ev: Mapping[str, Any]) -> tuple[bool, str]:
                    f"paastand og aeres ikke")
 
 
+
+#: Registeret kontrakt-referanser SLAAS OPP I. Sti, ikke pakke -- MWP-registeret
+#: er dokumenter paa disk, ikke en modul.
+MWP_DOCS = os.environ.get(
+    "MWP_DOCS", "/home/agent/agent-layer/mwp-uosh-automation-01/docs")
+
+#: Statusordene et dokument kan BAERE som betyr «akseptert». Maalt mot registeret
+#: 2026-08-11: `ACCEPTED_ARCHITECTURE / RUNTIME_GATED`,
+#: `ACCEPTED_ARCHITECTURE / IMPLEMENTATION_GATED / LIVE_WRITER_CANARY`,
+#: `OPEN`, `PROPOSED / OWNER-REVIEW / RUNTIME-GATED`.
+#:
+#: MERK at «akseptert arkitektur» IKKE er «implementert». Gaten paa steg 7 spoer
+#: om en DESIGNBESLUTNING finnes og er tatt -- ikke om den er bygget. Det er to
+#: spoersmaal, og aa slaa dem sammen ville gjort steg 7 til en umulig gate igjen
+#: (BL-4029 L4).
+#: HELE FOERSTE SEGMENT maa vaere ett av disse. IKKE substring.
+#:
+#: Reviewer maalte tre LEVENDE dokumenter der substring-matching snudde
+#: polariteten -- og det foerste er en CAD, altsaa paa den gatede stien:
+#:
+#:   CAD-EFC-REPO-001              "Audit complete; open lanes recorded"  -> accepted
+#:   BL-HERMES-INGEST-001          "PARTIAL / CANARY_COMPLETE_..."        -> accepted
+#:   BL-HERMES-MEMORY-FABRIC-001   "PARTIAL / CANARY_COMPLETE_..."        -> accepted
+#:
+#: Og syntetisk: `INCOMPLETE`, `NOT ACCEPTED`, `IKKE VEDTATT` -- alle accepted.
+#: Aa sjekke `_REJECTED_MARKERS` foerst hjelper ikke: negasjonen bor som PREFIKS
+#: eller kvalifikator (`IN-`, `NOT `, `IKKE `, `PARTIAL /`), ikke som eget ord.
+#: `_COMPLETE_` inne i et sammensatt token er husstil i nettopp dette registeret.
+#: UTLEDET fra registeret, ikke listet. Maalt 2026-08-11 over 91 dokumenter:
+#: hodene som betyr akseptert er `ACCEPTED_ARCHITECTURE` (20), `ACCEPTED_SCHEMA`
+#: (1) og `ACCEPTED` (1). Foerste utkast listet to av dem og felte derfor
+#: `ADR-H10-SEMANTIC-BOUNDARY-001` -- en ekte akseptert ADR -- fordi
+#: `ACCEPTED_SCHEMA` ikke sto der. En liste over former er alltid ett dokument
+#: bak registeret; en REGEL er det ikke.
+_ACCEPTED_OTHER = frozenset({"VEDTATT", "UTFOERT", "UTFØRT", "VERIFIED", "FRESH"})
+
+
+def _is_accepted_head(head: str) -> bool:
+    return (head == "ACCEPTED" or head.startswith("ACCEPTED_")
+            or head in _ACCEPTED_OTHER)
+_REJECTED_HEADS = frozenset({
+    "SUPERSEDED", "WITHDRAWN", "REJECTED", "OBSOLETE", "DEPRECATED",
+})
+#: Ord som NEKTER -- som HELE TOKEN, aldri som substring.
+#:
+#: Foerste utkast matchet med `in`, og da flyttet BLOCK 2s defekt seg hit i
+#: stedet for aa forsvinne. Maalt paa to LEVENDE aksepterte ADR-er:
+#:
+#:   ACCEPTED / IMPLEMENTED_NOT_LOADED / RESTART_GATE   `NOT` inni et token
+#:   ACCEPTED_ARCHITECTURE / UNBLOCKED                  `BLOCKED` inni `UNBLOCKED`
+#:
+#: Begge ble falskt BLOKKERT. Min egen test stavet markoeren `"NOT "` med
+#: mellomrom mens implementasjonen stavet den `"NOT"` -- testens vokabular var
+#: mer forsiktig enn kodens.
+#:
+#: Tokeniseringen splitter IKKE paa `_`: `IMPLEMENTED_NOT_LOADED` er ETT ord i
+#: dette registerets husstil, og det er nettopp derfor substring var galt.
+_NEGATIONS = frozenset({"IKKE", "NOT", "NO", "PARTIAL", "PENDING", "INCOMPLETE",
+                        "BLOCKED", "UNVERIFIED"})
+
+
+def _status_tokens(line: str) -> "frozenset[str]":
+    """Statuslinja som HELE ord. Splitter paa mellomrom og skilletegn, ikke `_`."""
+    out, word = [], []
+    for ch in line.upper():
+        if ch.isalnum() or ch == "_":
+            word.append(ch)
+        elif word:
+            out.append("".join(word))
+            word = []
+    if word:
+        out.append("".join(word))
+    return frozenset(out)
+
+
+def _status_word(line: str) -> str:
+    """Statusens FOERSTE segment, som ett ord. `A / B / C` -> `A`.
+
+    Registeret skriver `ACCEPTED_ARCHITECTURE / RUNTIME_GATED`: hodet baerer
+    beslutningen, halen baerer forbeholdene. Vi doemmer paa hodet, og vetoer paa
+    negasjon hvor som helst i linja.
+    """
+    head = line.split("/")[0].split(";")[0].split(",")[0].strip(" *:`")
+    return head.split()[0].upper() if head.split() else ""
+
+#: `F5`, `F12`: fase-halen ADR-064 definerer.
+_PHASE_SHAPED = re.compile(r"^F\d+$", re.IGNORECASE)
+#: En ekte registerreferanse ENDER i en identifikator: `-001`, `-062`, `-F5`.
+#: Uten det kravet holdt `ADR-HERMES-CHAIN` -- som navngir INTET dokument --
+#: til aa slaa opp `ADR-HERMES-CHAIN-DRIVE-001.md` og faa `accepted`. En
+#: avkortet prefiks-streng klarerte altsaa steg 7. Samme hull som
+#: `ADR-DOES-NOT-EXIST-999`, gjennom en tredje doer -- og de to foerste ble
+#: lukket i hver sin runde uten at noen spurte om det fantes flere doerer.
+_REGISTER_REF = re.compile(
+    r"^(ADR|CAD|BL)-(?:[A-Z0-9][A-Z0-9.-]*-)?(?:\d+|F\d+)$", re.IGNORECASE)
+
+
+
+def _choose_document(hits: "list", ref: str):
+    """Hvilken fil EIER statusen for dette nummeret? (BL-4095, reviewer BLOCK 3)
+
+    Foerste utkast tok `hits[0]`. Maalt: med `ADR-047.md` (PROPOSED) og
+    `ADR-047-F5.md` (ACCEPTED) i samme katalog sorterer `-` (0x2D) foer `.`
+    (0x2E), saa FASE-fila vant deterministisk -- og en fases aksept ble kreditert
+    hele beslutningen. Motsatt polaritet ogsaa maalt: base ACCEPTED + fase
+    SUPERSEDED ga falsk BLOCK.
+
+    ADR-064/BL-4053: flere filer per nummer er LOVLIG, og nøyaktig én erklaerer
+    `adr_role: base` og eier statusen. Rekkefoelgen her foelger den regelen:
+
+      1. eksakt `{ref}.md`
+      2. den ene som erklaerer `adr_role: base`
+      3. ellers: INGEN -- kalleren melder `unverifiable`, aldri et sorteringsvalg
+    """
+    if not hits:
+        return None
+    low = ref.lower()
+    # D2: prefikset maa slutte paa en GRENSE. Uten det slo `ADR-J` opp
+    # `ADR-JS-WM-001.md` og fikk `accepted` -- en to-tegns streng som klarerte
+    # steg 7. Samme hull som `ADR-DOES-NOT-EXIST-999`, gjennom en annen doer.
+    # Og `ADR-047` traff `ADR-0470.md`, et ANNET nummers dokument.
+    hits = [p for p in hits
+            if p.stem.lower() == low or p.stem.lower().startswith(low + "-")]
+    if not hits:
+        return None
+    exact = [p for p in hits if p.stem.lower() == low]
+    if exact:
+        return exact[0]
+    if len(hits) == 1:
+        # Slug-formen er lovlig og i bruk: `ADR-TRUTH-001` ->
+        # `ADR-TRUTH-001-cross-surface-canonical-truth.md`. Men en FASE er det
+        # ikke: `ADR-047` med bare `ADR-047-F5.md` skal ikke faa fasens aksept
+        # kreditert beslutningen (ADR-064/BL-4053). Snarveien var utestet, og
+        # den gjenaapnet BLOCK 3 i ett-treffs-tilfellet.
+        rest = hits[0].stem[len(ref):].lstrip("-")
+        if _PHASE_SHAPED.match(rest):
+            return None
+        return hits[0]
+    based = [p for p in hits
+             if "adr_role: base" in p.read_text(encoding="utf-8", errors="replace")[:1200].lower()]
+    return based[0] if len(based) == 1 else None
+
+def resolve_contract_ref(ref: str, *, docs: str | None = None) -> "tuple[str, str]":
+    """SLAA OPP en kontrakt-referanse i registeret. Returnerer ``(status, note)``.
+
+    BL-4095, G6 -- OG DETTE ER HULLET ALT ANNET HANG PAA. Ingen gate i kjeden
+    verifiserte en kontrakt-referanse mot NOE register. `DesignGate` sjekket at
+    ``source_refs["cad"]`` og ``["adr"]`` var IKKE-TOMME STRENGER, pluss en
+    ``cad_status``/``adr_status`` PRODUSENTEN selv paastod. `BlGate` det samme
+    for ``bl``. `parse_contract_ref` i klassifisereren sjekker FORM, og sier det
+    selv.
+
+    Konsekvensen, maalt: `ADR-DOES-NOT-EXIST-999` klarerte steg 7 NOEYAKTIG som
+    en ekte referanse, saa lenge noen hadde skrevet `accepted` i statusfeltet.
+    Det er kontrollen-som-ikke-kan-feile, plassert i den gaten som avgjoer om
+    designgjennomgang har skjedd.
+
+    FIRE UTFALL, med vilje ikke to:
+
+    ``accepted``       dokumentet FINNES og baerer et akseptert-ord
+    ``proposed``       dokumentet finnes, men er ikke akseptert enda
+    ``missing``        referansen har registerform, men INGEN fil svarer til den
+    ``unverifiable``   referansen peker utenfor registeret vi kan lese herfra
+
+    Den siste er den viktige. `ADR-062` er et SYMBIOSE-nummer, og Symbioses
+    ADR-er bor i `planning/` og vaulten paa `.13` -- ikke naabart herfra. Aa
+    melde det som `accepted` ville vaert aa paastaa en verifisering vi ikke
+    gjorde; aa melde det som `missing` ville vaert aa anklage et dokument som
+    trolig finnes. UVERIFISERBAR er det sanne svaret, og den passerer ikke
+    `DesignGate.ADR_OK` -- fail-closed uten aa lyve om aarsaken.
+    """
+    text = (ref or "").strip()
+    if not text:
+        return "unknown", "ingen referanse oppgitt"
+    if not _REGISTER_REF.match(text):
+        # En filsti eller modulreferanse er en gyldig kontraktFORM (se
+        # `task_classifier.parse_contract_ref`), men den bor ikke i dette
+        # registeret. Vi paastaar ingenting om den.
+        return "unverifiable", f"{text}: ikke en registerreferanse — ingen oppslag gjort"
+
+    root = Path(docs or MWP_DOCS)
+    if not root.is_dir():
+        # Uleselig register er IKKE et tomt register. Samme regel som
+        # `_porcelain`: fravaer av svar er ikke et svar.
+        return "unverifiable", f"registeret {root} er ikke lesbart herfra"
+
+    # Case-insensitiv: `_REGISTER_REF` er IGNORECASE, saa globben maa vaere det
+    # ogsaa. Ellers gir `adr-hermes-ingest-001` "missing" for et dokument som
+    # FINNES -- altsaa en anklage mot et ekte dokument, som er nettopp det
+    # `unverifiable` finnes for aa unngaa.
+    low = text.lower()
+    hits = sorted(p for p in root.glob("*.md") if p.name.lower().startswith(low))
+    if not hits:
+        upper = text.upper()
+        if upper.split("-")[0] in {"ADR", "BL"} and upper.split("-")[-1].isdigit()                 and len(upper.split("-")) == 2:
+            # ADR-062 / BL-4087: Symbioses egne numre. De bor paa `.13`.
+            return "unverifiable", (
+                f"{text}: Symbiose-nummer — registeret bor i planning/ og vaulten "
+                f"paa .13, ikke naabart fra denne verten")
+        return "missing", f"{text}: ingen fil i {root} svarer til referansen"
+
+    chosen = _choose_document(hits, text)
+    if chosen is None:
+        # Reviewer: meldingen brukte det YTRE `hits` og fortalte derfor
+        # `ADR-H10-SEMANTIC-BOUNDARY-0` at den hadde et tvetydig-base-problem,
+        # naar den egentlig var en AVKORTING. En gate som forklarer seg selv
+        # feil er klassen denne BL-en har jaktet paa hele veien.
+        low_ = text.lower()
+        on_boundary = [p for p in hits
+                       if p.stem.lower() == low_ or p.stem.lower().startswith(low_ + "-")]
+        if not on_boundary:
+            return "missing", (
+                f"{text}: ingen fil svarer paa referansen — naermeste treff er en "
+                f"annen identifikator ({', '.join(p.stem for p in hits[:2])})")
+        return "unverifiable", (
+            f"{text}: {len(on_boundary)} filer svarer til nummeret og ingen erklaerer "
+            f"`adr_role: base` — hvilken som eier statusen er uavklart "
+            f"(ADR-064/BL-4053)")
+    doc = chosen.read_text(encoding="utf-8", errors="replace")
+    line = ""
+    for raw in doc.splitlines()[:12]:
+        if raw.strip().lower().startswith("**status:**"):
+            line = raw.split("**", 2)[-1].strip(" *:`")
+            break
+    if not line:
+        # D3: var `hits[0]`, altsaa en ANNEN fil enn den som ble lest.
+        return "proposed", f"{chosen.name}: fant dokumentet, men ingen Status-linje"
+    head = _status_word(line)
+    if head in _REJECTED_HEADS:
+        return "rejected", f"{chosen.name}: {line}"
+    if _status_tokens(line) & _NEGATIONS:
+        # Negasjon vetoer, uansett hvor den staar. `PARTIAL / CANARY_COMPLETE_X`
+        # er ikke akseptert bare fordi halen inneholder et positivt ord.
+        return "proposed", f"{chosen.name}: {line}"
+    if _is_accepted_head(head):
+        return "accepted", f"{chosen.name}: {line}"
+    return "proposed", f"{chosen.name}: {line}"
+
 def evidence_for(goal: FaberGoal, *, git_clean: bool, git_ref: str = "") -> PreflightInput:
     """Build the goal's preflight input from what it actually recorded.
 
@@ -382,8 +621,14 @@ def evidence_for(goal: FaberGoal, *, git_clean: bool, git_ref: str = "") -> Pref
         # _resolve_lease_clear for hvorfor fallback til evidensen var et hull
         # produsenten selv kunne aapne.
         lease_clear=_resolve_lease_clear(ev)[0],
-        cad_status=str(ev.get("cad_status", _UNKNOWN)),
-        adr_status=str(ev.get("adr_status", _UNKNOWN)),
+        # BL-4095 G6: statusen SLAAS OPP i registeret, den tas ikke fra maalet.
+        # Samme regel som `git_head`: maalets selvrapport er noedloesning, ikke
+        # foersteprioritet. Uten dette kunne `ADR-DOES-NOT-EXIST-999` klarere
+        # steg 7 like godt som en ekte referanse.
+        cad_status=resolve_contract_ref(goal.cad_ref)[0]
+        if goal.cad_ref else str(ev.get("cad_status", _UNKNOWN)),
+        adr_status=resolve_contract_ref(goal.adr_ref)[0]
+        if goal.adr_ref else str(ev.get("adr_status", _UNKNOWN)),
         bl_status=str(ev.get("bl_status", _UNKNOWN)),
         obsidian_status=str(ev.get("obsidian_status", _UNKNOWN)),
         source_refs=refs,
