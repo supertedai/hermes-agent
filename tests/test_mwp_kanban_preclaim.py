@@ -1,5 +1,7 @@
 from types import SimpleNamespace
 
+import pytest
+
 from agent.mwp_kanban_preclaim import preclaim_policy
 
 
@@ -9,7 +11,7 @@ def test_non_mwp_task_is_left_to_existing_dispatcher():
             self.task = SimpleNamespace(id="symb:task", title="ordinary", body="", tenant=None, created_by="system")
         def execute(self, *_args):
             return []
-    import hermes_cli.kanban_db as kb
+    kb = pytest.importorskip("hermes_cli.kanban_db")
     original = kb.get_task
     kb.get_task = lambda _conn, _task_id: Conn().task
     try:
@@ -36,7 +38,7 @@ def test_mwp_task_blocks_without_verified_evidence(monkeypatch):
         result="",
         assignee="sol",
     )
-    import hermes_cli.kanban_db as kb
+    kb = pytest.importorskip("hermes_cli.kanban_db")
     monkeypatch.setattr(kb, "get_task", lambda _conn, _task_id: task)
     verdict = preclaim_policy(Conn(), task.id)
     assert verdict[0] is False

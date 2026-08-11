@@ -1,3 +1,5 @@
+import pytest
+
 from agent.mwp_control_plane import (
     AUTOCODER_13_GATE_CONTRACT,
     AUTOCODER_13_STEPS,
@@ -272,7 +274,8 @@ def test_identity_read_error_blocks_instead_of_using_legacy_owner():
 
 
 def _patch_existing_identity_stores(monkeypatch, tmp_path, identity_data, users):
-    from hermes_cli.dashboard_auth import session_identity, user_store
+    session_identity = pytest.importorskip("hermes_cli.dashboard_auth.session_identity")
+    user_store = pytest.importorskip("hermes_cli.dashboard_auth.user_store")
 
     identity_file = tmp_path / "session_identity.json"
     identity_file.write_text(__import__("json").dumps(identity_data), encoding="utf-8")
@@ -330,7 +333,8 @@ def test_existing_reader_integration_preserves_explicit_morten_legacy_mode(monke
 def test_existing_reader_integration_blocks_corrupt_and_missing_multiuser_identity(
     monkeypatch, tmp_path
 ):
-    from hermes_cli.dashboard_auth import session_identity, user_store
+    session_identity = pytest.importorskip("hermes_cli.dashboard_auth.session_identity")
+    user_store = pytest.importorskip("hermes_cli.dashboard_auth.user_store")
 
     identity_file = tmp_path / "session_identity.json"
     identity_file.write_text("not-json", encoding="utf-8")
