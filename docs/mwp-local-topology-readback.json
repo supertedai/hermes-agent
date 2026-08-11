@@ -1,7 +1,7 @@
 {
-  "recorded_at": "2026-08-09T17:23:10Z",
-  "inventory_hash": "b51003e06ca1f0fd2bf707e922ba29afbdb249b2377267e1e73b5e882deb91fc",
-  "item_count": 70,
+  "recorded_at": "2026-08-10T15:14:40Z",
+  "inventory_hash": "976bd344b29f8352858c85594219dfdf590c4fd3e38cf8a9c05523339f76e9dc",
+  "item_count": 68,
   "items": [
     {
       "source": "listeners",
@@ -41,13 +41,7 @@
     },
     {
       "source": "listeners",
-      "key": "LISTEN 0      2048       127.0.0.1:41361 0.0.0.0:*",
-      "status": "LIVE",
-      "detail": "present"
-    },
-    {
-      "source": "listeners",
-      "key": "LISTEN 0      2048       127.0.0.1:42895 0.0.0.0:*",
+      "key": "LISTEN 0      2048       127.0.0.1:41863 0.0.0.0:*",
       "status": "LIVE",
       "detail": "present"
     },
@@ -168,12 +162,6 @@
     {
       "source": "process",
       "key": "ibus-daemon",
-      "status": "LIVE",
-      "detail": "matched topology process"
-    },
-    {
-      "source": "process",
-      "key": "node",
       "status": "LIVE",
       "detail": "matched topology process"
     },
@@ -425,10 +413,10 @@
     }
   ],
   "drift": {
-    "added": [
-      "process:node"
+    "added": [],
+    "removed": [
+      "process:python3"
     ],
-    "removed": [],
     "changed": []
   }
 }
