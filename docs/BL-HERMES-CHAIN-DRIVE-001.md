@@ -8,9 +8,9 @@
 | Gate | Requirement | Status |
 |---|---|---|
 | G1 | A caller for the 13 steps exists in the codebase (INVOCATION is G8) | `CLOSED` |
-| G2 | Step 4 opens on a real goal, with measured refs | `PARTIAL` |
-| G3 | Step 6 claims at the authority and releases after | `PARTIAL` |
-| G4 | Skill selection reaches the driven chain | `PARTIAL` |
+| G2 | Step 4 opens on a real goal, with measured refs | `CLOSED` |
+| G3 | Step 6 claims at the authority and releases after | `CLOSED` |
+| G4 | Skill selection reaches the driven chain | `CLOSED` |
 | G5 | Build never writes into the shared worktree | `CLOSED` |
 | G6 | A contract ref is VERIFIED against a register | `OPEN` |
 | G7 | `_drivable` cannot go silently empty on a reword | `OPEN` |
@@ -19,6 +19,8 @@
 | G10 | Landing capability (step 11–13) | `OWNER_GATED` |
 | G11 | Step 8 executes in production, not only in tests | `BLOCKED_BY_G6` |
 | G12 | Missing CAD/ADR is judged by `DesignGate`, not raised as a ledger exception | `OPEN` |
+| G13 | A producer answers the step-3 boundary declarations | `OPEN` |
+| G14 | `parse_adr_ref` rejects `ADR-000` | `OPEN` |
 
 ## What is measured — and the exact provenance of it
 
@@ -98,6 +100,66 @@ cron line passes `--repo` for only three goal ids, and goal 3 is blocked on
 Five of seven are blocked by things a commit cannot fix. Until this change is committed, the
 goals' scopes contain the very files being edited, so the scope-relative gate
 blocks them, correctly.
+
+## 2026-08-11 POST-COMMIT — the chain ran in production, from a scheduled packet
+
+The closing condition for G2/G3/G4 is met. Symbiose `BL-4087` landed as
+`c84d522c8` in `hermes-agent`. The `*/20` producer then emitted the first
+drivable-shaped packet it has ever produced — `13:20:01Z`, observed against the
+NEW head `c84d522c8884`, `scope_dirty: []`, leaving only the two lease reasons.
+
+Driving that packet:
+
+```text
+driven 2 · skipped 5 · errors 0
+
+  governed_code_runner_sol_followups
+    step 4  preflight PASS   reasons []
+    step 6  lease TAKEN at the authority, 4 paths, ttl 3600s -> released
+    cross   skills: governed-faber-hermes-loops, governed-mwp-autocode-execution,
+            autocoder-13-step-workflow  (coverage complete)
+    build   isolated copy of c84d522c8884, discarded after the tick
+    STOP    bl_gate — "BL status is not actionable: reserved"
+    next    "land real work against the BL number, or allocate one"
+```
+
+The second goal behaves identically with its own 2-path lease. The five skipped
+are skipped for the reasons stated above: four are AGI-scoped with no `--repo`
+mapping, one is `codebase absent on this host: agi`.
+
+**Steps 4 and 6 and the cross-cutting skill selection now EXECUTE in production.**
+Step 5 stops both goals, on a reason that is true about the backlog. Steps 7–13
+are unreached. That is four of thirteen executed, not thirteen.
+
+## G13 — step 3 has the same producer gap step 4 had, one step over
+
+`TaskClassifier` discriminates correctly when it is answered. Measured:
+
+```text
+boundary answers UNANSWERED (default)      -> DOUBT
+declares NO to both, contract named        -> BL
+declares YES to trust-boundary change      -> ADR
+declares DECLARED_UNKNOWN                  -> DOUBT
+declares NO to both, no contract ref       -> DOUBT
+declares NO to both, MWP-ADR as contract   -> BL
+```
+
+The honest-yes property holds: declaring truthfully is never more expensive than
+silence. And a correctly-cited MWP contract now buys the cheap class — the
+namespace fix from Symbiose BL-4070.
+
+But **no producer writes the answers.** `declared_trust_boundary_change`,
+`declared_new_register` and `reversibility` are absent from every goal in
+`~/.hermes-gui/faber/goals.json`. So every live goal classifies as DOUBT, and the
+classifier is correct and inert — exactly the shape step 4 was in before BL-4087.
+The gate was built; the producer was not. Third instance of that pattern in this
+chain.
+
+## G14 — `parse_adr_ref("ADR-000")` returns `(0, None)`
+
+The pattern accepts `0\d{2}`, so `ADR-000` parses as ADR number 0. No such ADR
+exists or can. Flagged in the BL-4056 review and not closed. Small, and it is the
+same control-that-cannot-fail family the classifier's own docstring condemns.
 
 ## G6 is the load-bearing gate, and it is the register bridge
 
