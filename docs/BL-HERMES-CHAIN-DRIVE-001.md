@@ -12,15 +12,17 @@
 | G3 | Step 6 claims at the authority and releases after | `CLOSED` |
 | G4 | Skill selection reaches the driven chain | `CLOSED` |
 | G5 | Build never writes into the shared worktree | `CLOSED` |
-| G6 | A contract ref is VERIFIED against a register | `OPEN` |
+| G6 | A contract ref is VERIFIED against a register | `CLOSED_BY_BL-4095` |
 | G7 | `_drivable` cannot go silently empty on a reword | `OPEN` |
 | G8 | The driver runs on a schedule | `OWNER_GATED` |
 | G9 | A reviewer judges the build (step 10) | `OWNER_GATED` |
 | G10 | Landing capability (step 11–13) | `OWNER_GATED` |
-| G11 | Step 8 executes in production, not only in tests | `BLOCKED_BY_G6` |
+| G11 | Step 8 executes in production, not only in tests | `BLOCKED_BY_G15` |
 | G12 | Missing CAD/ADR is judged by `DesignGate`, not raised as a ledger exception | `OPEN` |
 | G13 | A producer answers the step-3 boundary declarations | `OPEN` |
 | G14 | `parse_adr_ref` rejects `ADR-000` | `OPEN` |
+| G15 | Something in the chain PRODUCES the step-7 design step 8 builds from | `OPEN` |
+| G16 | `bl_status` is looked up too (needs its own vocabulary) | `OPEN` |
 
 ## What is measured — and the exact provenance of it
 
@@ -160,6 +162,40 @@ chain.
 The pattern accepts `0\d{2}`, so `ADR-000` parses as ADR number 0. No such ADR
 exists or can. Flagged in the BL-4056 review and not closed. Small, and it is the
 same control-that-cannot-fail family the classifier's own docstring condemns.
+
+## 2026-08-11 — G6 CLOSED, and the chain now reaches step 8
+
+`resolve_contract_ref` looks a reference up in this register and derives the
+status from the document's own Status line. Four outcomes, and only `accepted`
+passes `DesignGate`. Symbiose numbers resolve `unverifiable` — that register
+lives on `.13` and this host cannot read it, which is the true answer rather
+than a guess in either direction.
+
+Measured: `ADR-DOES-NOT-EXIST-999` resolves `missing`; the whole register
+resolves 21 accepted / 24 proposed / 0 unverifiable under canonical refs, with
+no false accept and no false BLOCK. Symbiose `BL-4095`, commit `7261ba58b`.
+Six reviewer rounds, five BLOCKs — the same hole reached through four
+different doors, and three of my fixes moved the defect rather than removing
+it.
+
+A driven run against a real goal now passes steps 4, 6, 5 and 7 and REACHES
+step 8, where it blocks:
+
+```text
+ImplementationBlocked: no step-7 design for faber.code.bl4095:g14…
+  "an implementation without a design is a guess with write access"
+```
+
+Nothing in the chain produces a design record. That is **G15**, and it is the
+FOURTH instance of the same producer gap in this chain: the gate was built,
+the producer was not — step 4's refs, step 3's declarations, step 7's lookup,
+and now step 8's input. G11 is therefore blocked by G15, not by G6.
+
+**G16:** `bl_status` still takes the goal's word. `resolve_contract_ref`
+cannot answer it — none of its four outcomes is in `BlGate.ACTIONABLE`, and
+Symbiose BL numbers correctly resolve `unverifiable` from this host. The BL
+leg needs its own vocabulary; wiring the resolver as-is would turn actionable
+BLs into blocked ones.
 
 ## G6 is the load-bearing gate, and it is the register bridge
 
