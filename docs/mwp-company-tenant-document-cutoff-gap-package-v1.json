@@ -1,0 +1,109 @@
+{
+  "artifact_id": "mwp-company-tenant-document-cutoff-gap-package-v1",
+  "status": "PROPOSED_OPEN",
+  "parent_mwp": "MWP-UOSH-001",
+  "parent_gap": "GAP-TENANT-SURFACE-ARCH-001",
+  "cad_ref": "docs/CAD-MWP-COMPANY-TENANT-DOCUMENT-CUTOFF-001.md",
+  "adr_ref": "docs/ADR-MWP-COMPANY-TENANT-DOCUMENT-CUTOFF-001.md",
+  "parent_bl_refs": [
+    "BL-HERMES-MEMORY-FABRIC-001",
+    "BL-MWP-CANONICAL-EVIDENCE-LEDGER-001"
+  ],
+  "bl_registration": {
+    "status": "REQUIRED",
+    "numeric_child_bl_not_invented": true,
+    "next_action": "register or map child gates through the canonical BL registry before implementation claim"
+  },
+  "provenance": {
+    "source": "current Hermes conversation",
+    "request": "create governed gaps for Energy Rent AS and ByOpus AS document tenants, evidence/proposals and Energy Rent cutoff/export",
+    "live_supporting_readbacks": [
+      "/documents/health",
+      "/documents/upload OpenAPI",
+      "/documents/{doc_id}/ingest OpenAPI",
+      "/life-contract/steward-context",
+      "docs/mwp-uosh-gap-register-v1.json",
+      "docs/mwp-cad-tenant-control-plane-and-surface-architecture-v1.md",
+      "docs/ADR-MWP-CANONICAL-EVIDENCE-LEDGER-001.md"
+    ]
+  },
+  "gaps": [
+    {
+      "id": "GAP-COMPANY-ENERGYRENT-TENANT-001",
+      "scope": "company tenant Energy Rent AS",
+      "status": "OPEN_OWNER_AUTHORITY",
+      "owner": "Morten / canonical company control-plane authority",
+      "missing": ["legal_entity_id readback", "tenant registry record", "company owner/role readback", "energy-rent-steward binding", "company cockpit/context-scope readback"],
+      "acceptance": "tenant and steward read-after-write plus negative cross-tenant access test",
+      "rollback": "remove only the newly created binding after pre-read and owner approval"
+    },
+    {
+      "id": "GAP-COMPANY-BYOPUS-TENANT-001",
+      "scope": "company tenant ByOpus AS",
+      "status": "OPEN_OWNER_AUTHORITY",
+      "owner": "Morten / canonical company control-plane authority",
+      "missing": ["legal_entity_id readback", "tenant registry record", "company owner/role readback", "byopus-steward binding", "company cockpit/context-scope readback"],
+      "acceptance": "tenant and steward read-after-write plus negative cross-tenant access test",
+      "rollback": "remove only the newly created binding after pre-read and owner approval"
+    },
+    {
+      "id": "GAP-COMPANY-DOCUMENT-INGEST-001",
+      "scope": "both company document corpora",
+      "status": "OPEN_LIVE_CANARY",
+      "owner": "document-ingest/world-model authority",
+      "missing": ["folder/batch manifest", "document upload canary", "reference-vs-ingest zone receipt", "ACL/sensitivity receipt", "chunk/embed/Qdrant receipt", "world-model entity/edge readback", "document finding provenance"],
+      "acceptance": "one synthetic non-sensitive document per tenant can be uploaded, ingested, recalled, deleted and read back without cross-tenant leakage",
+      "rollback": "document delete/tombstone plus projection cleanup receipt"
+    },
+    {
+      "id": "GAP-COMPANY-EVIDENCE-PROPOSAL-001",
+      "scope": "document-derived facts, findings and proposals",
+      "status": "OPEN_PROMOTION_GATE",
+      "owner": "MWP evidence/learning authority",
+      "missing": ["DocumentFinding-to-evidence ledger link", "confidence/epistemic classification", "proposal queue receipt", "owner approval receipt", "skill promotion prohibition/explicit gate"],
+      "acceptance": "finding and proposal remain candidate until approved; every promoted item has provenance, freshness and rollback"
+    },
+    {
+      "id": "GAP-COMPANY-CROSS-TENANT-ISOLATION-001",
+      "scope": "Personal, Opus System, Energy Rent AS and ByOpus AS",
+      "status": "BLOCKED_UNTIL_LIVE_NEGATIVE_TEST",
+      "owner": "identity/tenant authority",
+      "missing": ["principal-to-tenant enforcement", "Qdrant namespace isolation", "graph/world-model scope isolation", "Hindsight/memory isolation", "prompt/cache/pending-queue isolation", "portfolio projection allowlist"],
+      "acceptance": "unauthorized tenant queries return no company content and produce metadata-only denial receipt"
+    },
+    {
+      "id": "GAP-COMPANY-ENERGYRENT-CUTOFF-001",
+      "scope": "Energy Rent AS emergency cutoff",
+      "status": "OPEN_CUTOFF_RUNBOOK",
+      "owner": "Morten / Energy Rent owner authority",
+      "missing": ["cutoff trigger", "freeze ingest/connectors", "revoke agent/runtime bindings", "export package", "export hash manifest", "restore drill", "Qdrant/graph/Hindsight/cache purge", "post-cutoff negative retrieval"],
+      "acceptance": "RUNTIME_RELEASED readback plus separately classified DATA_PURGED or LEGAL_RETENTION status",
+      "rollback": "restore only into an explicitly approved isolated destination; never silently reactivate Opus access"
+    },
+    {
+      "id": "GAP-COMPANY-RESTORE-EXPORT-001",
+      "scope": "both company tenants and Energy Rent emergency archive",
+      "status": "OPEN_DR_RESTORE",
+      "owner": "backup/recovery authority",
+      "missing": ["company package format", "originals/text/chunks/provenance manifest", "encryption and key custody", "independent destination", "integrity verification", "structural restore test", "freshness/SLA"],
+      "acceptance": "archive can be restored into an isolated non-production namespace and hashes/counts match"
+    },
+    {
+      "id": "GAP-COMPANY-GRAPH-OBSIDIAN-PROJECTION-001",
+      "scope": "company tenant metadata projection",
+      "status": "BLOCKED_WRITER_AUTHORITY",
+      "owner": "canonical graph/Obsidian projection authority",
+      "missing": ["exact graph target and writer grant", "exact Obsidian vault/note mapping", "pre-read hashes", "destination receipts", "rollback references"],
+      "acceptance": "metadata-only graph and Obsidian projections read back with tenant, source, freshness and rollback"
+    }
+  ],
+  "projection_plan": {
+    "graph": "BLOCKED_WRITER_AUTHORITY",
+    "obsidian": "BLOCKED_WRITER_AUTHORITY",
+    "prepared": true,
+    "raw_document_content": false,
+    "next_action": "resolve exact canonical writer/target and execute one bounded metadata-only projection per destination"
+  },
+  "overall_next_action": "register child BL gates, then perform one isolated synthetic document canary per company before any bulk upload",
+  "raw_payload_included": false
+}

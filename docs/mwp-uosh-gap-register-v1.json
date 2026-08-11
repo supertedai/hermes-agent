@@ -130,7 +130,19 @@
       "evidence": "docs/mwp-cad-tenant-control-plane-and-surface-architecture-v1.md; docs/mwp-cad-tenant-control-plane-and-surface-architecture-readback-v1.json; docs/mwp-uosh-user-domain-agent-lifecycle.md; docs/mwp-uosh-perfect-topology-contract.md",
       "defined": ["Personal tenant with LifeContract domains and per-user stewards", "Opus System tenant with internal domains such as Security/Cyber/Sentinel", "separate Company tenant per legal/operational business", "canonical login with explicit context switching", "Personal/System/Company/Portfolio surfaces", "tenant-aware API/LLM gateway and projection-only cross-tenant sharing", "Morten as life owner, Opus admin and scoped company authority"],
       "missing": ["authenticated per-tenant owner/authority readback", "LifeContract-to-domain-to-steward roundtrip for each personal domain", "company tenant registry and agent binding", "tenant-aware company API adapter with scoped tools and audit", "portfolio projection provenance/freshness/rollback receipt", "GUI context-scope readback per user and tenant", "live graph/Obsidian read-after-write receipt"],
-      "next_action": "run metadata-only reconciliation for one Personal domain, one Opus System domain and one Company tenant; do not promote to SYNCED/LIVE_VERIFIED until authority, runtime and read-after-write evidence are present"
+      "next_action": "run metadata-only reconciliation for one Personal domain, one Opus System domain and one Company tenant; do not promote to SYNCED/LIVE_VERIFIED until authority, runtime and read-after-write evidence are present",
+      "child_gap_package": "docs/mwp-company-tenant-document-cutoff-gap-package-v1.json",
+      "child_gaps": [
+        "GAP-COMPANY-ENERGYRENT-TENANT-001",
+        "GAP-COMPANY-BYOPUS-TENANT-001",
+        "GAP-COMPANY-DOCUMENT-INGEST-001",
+        "GAP-COMPANY-EVIDENCE-PROPOSAL-001",
+        "GAP-COMPANY-CROSS-TENANT-ISOLATION-001",
+        "GAP-COMPANY-ENERGYRENT-CUTOFF-001",
+        "GAP-COMPANY-RESTORE-EXPORT-001",
+        "GAP-COMPANY-GRAPH-OBSIDIAN-PROJECTION-001"
+      ],
+      "child_status": "PROPOSED_OPEN_REQUIRES_BL_REGISTRATION_AND_DESTINATION_GATES"
     },
     {
       "id": "GAP-SERVICE-HOME-PLACEMENT-001",

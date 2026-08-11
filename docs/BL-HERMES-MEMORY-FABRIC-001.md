@@ -47,6 +47,21 @@ status
 
 Receipts are metadata-only and must not contain raw prompts, private memory payloads, credentials or sensitive content.
 
+## Company-tenant document and cutoff child gates (PROPOSED)
+
+The following child gates are attached to `GAP-TENANT-SURFACE-ARCH-001` and are not closed by this proposal:
+
+- `GAP-COMPANY-ENERGYRENT-TENANT-001` — isolated Energy Rent AS tenant and steward binding;
+- `GAP-COMPANY-BYOPUS-TENANT-001` — isolated ByOpus AS tenant and steward binding;
+- `GAP-COMPANY-DOCUMENT-INGEST-001` — encrypted document ingest, per-tenant retrieval and world-model projection;
+- `GAP-COMPANY-EVIDENCE-PROPOSAL-001` — source/evidence/finding/proposal/promotion chain;
+- `GAP-COMPANY-CROSS-TENANT-ISOLATION-001` — negative-path isolation across Personal, Opus System and Company tenants;
+- `GAP-COMPANY-ENERGYRENT-CUTOFF-001` — Energy Rent freeze, export, revoke, purge/tombstone and post-cutoff readback;
+- `GAP-COMPANY-RESTORE-EXPORT-001` — encrypted export manifest and isolated restore drill;
+- `GAP-COMPANY-GRAPH-OBSIDIAN-PROJECTION-001` — destination-specific metadata-only projections.
+
+The child package is `docs/mwp-company-tenant-document-cutoff-gap-package-v1.json`. A numeric child BL is deliberately not invented; canonical BL registration/mapping remains a gate. These child gates require tenant authority, provenance, idempotency, read-after-write and rollback evidence before promotion.
+
 ## Closeout rule
 
 This BL remains `OPEN` until all required gates are `COMPLETE`, or explicitly `BLOCKED` with owner, evidence and next action. Parent MWP closeout is prohibited while any required gate is unresolved.

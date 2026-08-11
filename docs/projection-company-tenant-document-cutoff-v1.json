@@ -1,0 +1,36 @@
+{
+  "artifact_id": "projection-company-tenant-document-cutoff-v1",
+  "status": "READY_FOR_DESTINATION_GATE",
+  "source_artifact": "docs/mwp-company-tenant-document-cutoff-gap-package-v1.json",
+  "target_surfaces": {
+    "graph": {
+      "status": "BLOCKED_WRITER_AUTHORITY",
+      "target": null,
+      "writer": null,
+      "rollback": null
+    },
+    "obsidian": {
+      "status": "BLOCKED_WRITER_AUTHORITY",
+      "target": null,
+      "writer": null,
+      "rollback": null
+    }
+  },
+  "projection_shape": {
+    "type": "metadata_only",
+    "fields": ["artifact_id", "parent_mwp", "parent_gap", "tenant_ids", "gap_ids", "status", "owner", "provenance_ref", "freshness", "rollback_ref"],
+    "raw_content": false
+  },
+  "tenant_ids": ["energy-rent-as", "byopus-as"],
+  "gap_ids": [
+    "GAP-COMPANY-ENERGYRENT-TENANT-001",
+    "GAP-COMPANY-BYOPUS-TENANT-001",
+    "GAP-COMPANY-DOCUMENT-INGEST-001",
+    "GAP-COMPANY-EVIDENCE-PROPOSAL-001",
+    "GAP-COMPANY-CROSS-TENANT-ISOLATION-001",
+    "GAP-COMPANY-ENERGYRENT-CUTOFF-001",
+    "GAP-COMPANY-RESTORE-EXPORT-001",
+    "GAP-COMPANY-GRAPH-OBSIDIAN-PROJECTION-001"
+  ],
+  "next_action": "obtain destination-specific writer/target readback; do not infer graph or Obsidian persistence from this manifest"
+}
