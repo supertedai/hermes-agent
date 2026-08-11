@@ -20,6 +20,7 @@ from agent.code_workflow import (
     FaberGoal,
     GoalState,
     GovernedCodeRunner,
+    HandoffStore,
     LandingEvidence,
     PreflightInput,
     PreflightResult,
@@ -31,6 +32,7 @@ from agent.faber_landing import (
     GitLandingExecutor,
     landing_callable,
 )
+from agent.faber_runtime import FaberRuntime
 
 
 def git(repo: Path, *args: str) -> str:
@@ -652,3 +654,104 @@ def test_the_executor_never_pushes():
     source = _source()
     assert '"push"' not in source and "'push'" not in source
     assert not re.search(r"git\s+push", source)
+
+
+# ----------------- den hoyeste sommen som finnes i repoet: FaberRuntime.tick --
+
+def _tick_evidence(lease: str) -> PreflightInput:
+    """Evidens som faktisk passerer `PreflightGate`, ikke et ferdig PASS-resultat.
+
+    De andre runner-testene sender inn et konstruert `PreflightResult`. Her
+    kjorer porten selv, slik den gjor i en ekte tick — ellers ville testen ikke
+    kunne si noe om kjeden, bare om runneren.
+    """
+    return PreflightInput(
+        git_clean=True, lease_clear=True, cad_status="verified", adr_status="accepted",
+        bl_status="open", obsidian_status="fresh",
+        source_refs={"git": "49c47ff", "lease": lease, "cad": "CAD-M",
+                     "adr": "ADR-062", "bl": "BL-4051", "obsidian": "fresh"},
+    )
+
+
+def _tick(repo: Path, tmp_path: Path, *, lease: str, landing_set: tuple[str, ...],
+          message: str, store: HandoffStore | None = None):
+    prelanding = _prelanding(landing_set)
+    return FaberRuntime(handoff_store=store).tick(
+        FaberGoal("bl4051", "land steg 11", cad_ref="CAD-M", adr_ref="ADR-062", bl_ref="BL-4051"),
+        _tick_evidence(lease),
+        build=lambda: {"tests": "ok", "diff_id": "d1",
+                       "changed_files": len(landing_set), "changed_lines": 10},
+        review=lambda e: ReviewEvidence(verdict=ReviewVerdict.PASS, diff_id="d1",
+                                        reviewer="symbiose-reviewer"),
+        prelanding_evidence=prelanding,
+        landing=landing_callable(message=message, prelanding=prelanding,
+                                 executor=executor(repo, tmp_path)),
+    )
+
+
+def test_the_runtime_tick_lands_through_the_executor(repo, tmp_path):
+    """Beviset paa at KJEDEN kan kalle handen — ikke bare at runneren kan.
+
+    `FaberRuntime.tick(landing=...)` er den hoyeste sommen som finnes i repoet.
+    `--tick-json`-CLI-en med `landing=lambda _: landing`, som denne oppgaven
+    pekte paa, er IKKE landet kode: den ligger i en parallell stroms (BL-4050)
+    ukommitterte arbeid. Det er derfor ingenting aa koble om i den fila. Det som
+    KAN bevises er at en oppringer som gir `landing_callable` faar en ekte
+    landing hele veien gjennom preflight, de tre gatene, review og steg 11.
+    """
+    (repo / "mine.py").write_text("x = 1\n", encoding="utf-8")
+
+    result = _tick(repo, tmp_path, lease="mine.py", landing_set=("mine.py",),
+                   message="BL-4051: gjennom hele ticken")
+
+    assert result.preflight.status is PreflightStatus.PASS, result.preflight.reasons
+    assert result.run.goal.state is GoalState.LANDED, result.run.blocker
+    assert result.run.goal.evidence["commit"] == git(repo, "rev-parse", "HEAD")
+    assert result.run.goal.evidence["commit"] != "deklarert-sha"
+    assert committed_files(repo) == ["mine.py"]
+
+
+def test_the_runtime_tick_blocks_and_persists_a_handoff_when_the_hand_refuses(repo, tmp_path):
+    """Et avslag fra handen maa overleve jobbgrensen, ikke bare returnere.
+
+    Uten dette ville en refusert landing vaert usynlig for neste tick.
+    """
+    store = HandoffStore(tmp_path / "faber-handoff.json")
+
+    result = _tick(repo, tmp_path, lease="finnes_ikke.py", landing_set=("finnes_ikke.py",),
+                   message="BL-4051: skal nektes", store=store)
+
+    assert result.run.goal.state is GoalState.BLOCKED
+    assert "LandingRefused" in result.run.blocker
+    assert store.load() is not None, "handoffen maa vaere skrevet ned"
+    assert committed_files(repo) == ["base.txt"], "ingenting skal ha landet"
+
+
+def test_the_runtime_tick_blocks_at_preflight_before_the_hand_is_reachable(repo, tmp_path):
+    """Beviser at porten DISKRIMINERER, ikke bare at den er koblet inn.
+
+    De to andre tick-testene mater `PreflightGate` evidens som bare KAN gi PASS
+    (`scope_executable` er sann som standard), saa de viser at porten er wiret --
+    ikke at den skiller. En tick som ignorerte preflight-resultatet ville sett
+    like groenn ut i begge. Her mangler `lease`-referansen, som er en av de to
+    `REQUIRED_REFS`, og da skal ingenting nedstroems i det hele tatt kjoere.
+    """
+    (repo / "mine.py").write_text("x = 1\n", encoding="utf-8")
+    prelanding = _prelanding(("mine.py",))
+    result = FaberRuntime().tick(
+        FaberGoal("bl4051", "skal stoppe paa steg 4", cad_ref="CAD-M", adr_ref="ADR-062", bl_ref="BL-4051"),
+        PreflightInput(
+            git_clean=True, lease_clear=True, cad_status="verified", adr_status="accepted",
+            bl_status="open", obsidian_status="fresh",
+            source_refs={"git": "49c47ff"},  # `lease` mangler
+        ),
+        build=lambda: (_ for _ in ()).throw(AssertionError("build maa vaere unaaelig")),
+        review=lambda e: (_ for _ in ()).throw(AssertionError("review maa vaere unaaelig")),
+        prelanding_evidence=prelanding,
+        landing=landing_callable(message="BL-4051: skal aldri kjoere",
+                                 prelanding=prelanding, executor=executor(repo, tmp_path)),
+    )
+
+    assert result.preflight.status is PreflightStatus.BLOCK
+    assert result.run.goal.state is GoalState.BLOCKED
+    assert committed_files(repo) == ["base.txt"], "handen maa ikke ha kjoert"
