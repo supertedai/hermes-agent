@@ -24,7 +24,8 @@ def test_observe_reports_what_each_goal_waits_for(tmp_path):
     obs = result.observations[0]
     assert obs.preflight == "BLOCK"
     assert obs.stopped_by == "preflight"
-    assert any("CAD" in r for r in obs.reasons)
+    # ADR-062 V4: preflight navngir git/lease — aldri CAD (steg 7-artefakt)
+    assert any("missing authoritative source refs" in r for r in obs.reasons)
 
 
 def test_observe_names_the_owner_gate_once_preflight_would_pass(tmp_path):
@@ -81,7 +82,8 @@ def test_a_missing_source_ref_is_named_in_the_block():
     goal = promoted()
     obs = observe_goal(goal, git_clean=True, gate=__import__("agent.code_workflow", fromlist=["PreflightGate"]).PreflightGate())
     assert any("missing authoritative source refs" in r for r in obs.reasons)
-    assert "git" in " ".join(obs.reasons) and "obsidian" in " ".join(obs.reasons)
+    # REQUIRED_REFS er (git, lease) — obsidian flyttet til steg 13 (BL-4029 L2)
+    assert "git" in " ".join(obs.reasons) and "lease" in " ".join(obs.reasons)
 
 
 def test_an_unreachable_or_non_git_target_counts_as_dirty(tmp_path):

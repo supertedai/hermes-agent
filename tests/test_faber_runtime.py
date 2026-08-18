@@ -23,7 +23,7 @@ def evidence(*, clean: bool = True):
         obsidian_status="fresh",
         source_refs={
             "git": "HEAD:agent/faber_runtime.py",
-            "lease": "lease:faber",
+            "lease": "agent/rt-target.py",
             "cad": "CAD-M",
             "adr": "ADR-038",
             "bl": "BL-3254",
@@ -43,6 +43,7 @@ def landing(_evidence=None):
         "log",
         "state",
         "closer",
+        landing_set=("agent/rt-target.py",),
     )
 
 
@@ -77,7 +78,8 @@ def test_runtime_reaches_runner_only_after_preflight_pass():
     def build():
         nonlocal called
         called = True
-        return {"tests": "pass"}
+        return {"tests": "pass", "diff_id": "diff-g2",
+                "changed_files": 1, "changed_lines": 5}
 
     result = FaberRuntime().tick(
         FaberGoal("g2", "passing test", cad_ref="CAD-M", adr_ref="ADR-038", bl_ref="BL-3254"),
@@ -100,8 +102,10 @@ def test_faber_runtime_reaches_landed_with_prevalidated_dod():
     result = FaberRuntime().tick(
         FaberGoal("g3", "runtime landing", cad_ref="CAD-M", adr_ref="ADR-038", bl_ref="BL-3254"),
         evidence_record,
-        build=lambda: {"tests": "pass", "diff_id": "diff-g3"},
-        review=lambda _: ReviewEvidence(ReviewVerdict.PASS, "diff-g3", "sol"),
+        build=lambda: {"tests": "pass", "diff_id": "diff-g3",
+                       "changed_files": 1, "changed_lines": 5},
+        review=lambda _: ReviewEvidence(
+            ReviewVerdict.PASS, "diff-g3", "sol", confidence=0.95),
         prelanding_evidence=landing_record,
         landing=lambda _: landing_record,
     )

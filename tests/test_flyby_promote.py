@@ -100,24 +100,26 @@ def test_promotion_never_fabricates_gate_evidence():
 
 # --- the promoted goal must not arrive pre-cleared -----------------------------
 
-def test_the_promoters_own_unknowns_are_what_block_preflight():
-    """Everything else is supplied as PASS-worthy, so only the promoter's
-    unknown CAD/ADR can be responsible for the BLOCK."""
+def test_the_promoters_own_unknowns_block_at_design_not_preflight():
+    """ADR-062 V4: preflighten slipper unknowns gjennom (den sjekker kollisjon
+    og scope), og DESIGN-gaten paa steg 7 er den som feller promoterens
+    unknown CAD/ADR — der designet faktisk skal finnes."""
+    from agent.code_workflow import DesignGate
     goal = build_goal(packet(), promoted_by="x", promoted_at="t")
-    result = PreflightGate().evaluate(
-        PreflightInput(
-            git_clean=True,
-            lease_clear=True,
-            cad_status=goal.evidence["cad_status"],
-            adr_status=goal.evidence["adr_status"],
-            bl_status="open",
-            obsidian_status="fresh",
-            source_refs={k: k for k in ("git", "lease", "cad", "adr", "bl", "obsidian")},
-        )
+    pf_input = PreflightInput(
+        git_clean=True,
+        lease_clear=True,
+        cad_status=goal.evidence["cad_status"],
+        adr_status=goal.evidence["adr_status"],
+        bl_status="open",
+        obsidian_status="fresh",
+        source_refs={k: k for k in ("git", "lease", "cad", "adr", "bl", "obsidian")},
     )
-    assert result.status is PreflightStatus.BLOCK
-    assert any("CAD" in reason for reason in result.reasons)
-    assert any("ADR" in reason for reason in result.reasons)
+    assert PreflightGate().evaluate(pf_input).status is PreflightStatus.PASS
+    design = DesignGate().evaluate(pf_input)
+    assert design.status is PreflightStatus.BLOCK
+    assert any("CAD" in reason for reason in design.reasons)
+    assert any("ADR" in reason for reason in design.reasons)
 
 
 def test_owner_gated_goal_cannot_advance_even_on_a_passing_preflight():
@@ -127,7 +129,7 @@ def test_owner_gated_goal_cannot_advance_even_on_a_passing_preflight():
         goal,
         preflight=passing_preflight(),
         build=lambda: pytest.fail("build must be unreachable behind an owner gate"),
-        review=lambda evidence: ReviewEvidence(ReviewVerdict.PASS, "d", "sol"),
+        review=lambda evidence: ReviewEvidence(ReviewVerdict.PASS, "d", "sol", confidence=0.95),
         landing=lambda evidence: pytest.fail("landing must be unreachable"),
     )
     assert result.goal.state is GoalState.BLOCKED
@@ -145,10 +147,10 @@ def test_recorded_owner_approval_releases_the_gate():
     result = GovernedCodeRunner().run(
         approved,
         preflight=passing_preflight(),
-        build=lambda: {"tests": "pass", "diff_id": "d"},
-        review=lambda evidence: ReviewEvidence(ReviewVerdict.PASS, "d", "sol"),
-        prelanding_evidence=LandingEvidence("sha", ReviewVerdict.PASS, "t", "r", "s", "rb", "l", "st", "c"),
-        landing=lambda evidence: LandingEvidence("sha", ReviewVerdict.PASS, "t", "r", "s", "rb", "l", "st", "c"),
+        build=lambda: {"tests": "pass", "diff_id": "d", "changed_files": 1, "changed_lines": 5},
+        review=lambda evidence: ReviewEvidence(ReviewVerdict.PASS, "d", "sol", confidence=0.95),
+        prelanding_evidence=LandingEvidence("sha", ReviewVerdict.PASS, "t", "r", "s", "rb", "l", "st", "c", landing_set=("lease",)),
+        landing=lambda evidence: LandingEvidence("sha", ReviewVerdict.PASS, "t", "r", "s", "rb", "l", "st", "c", landing_set=("lease",)),
     )
     assert result.goal.state is GoalState.LANDED
 
@@ -157,10 +159,10 @@ def test_reviewer_gated_goal_is_not_caught_by_the_owner_gate():
     result = GovernedCodeRunner().run(
         build_goal(packet(cad_ref="CAD-M", adr_ref="ADR-038"), promoted_by="x", promoted_at="t"),
         preflight=passing_preflight(),
-        build=lambda: {"tests": "pass", "diff_id": "d"},
-        review=lambda evidence: ReviewEvidence(ReviewVerdict.PASS, "d", "sol"),
-        prelanding_evidence=LandingEvidence("sha", ReviewVerdict.PASS, "t", "r", "s", "rb", "l", "st", "c"),
-        landing=lambda evidence: LandingEvidence("sha", ReviewVerdict.PASS, "t", "r", "s", "rb", "l", "st", "c"),
+        build=lambda: {"tests": "pass", "diff_id": "d", "changed_files": 1, "changed_lines": 5},
+        review=lambda evidence: ReviewEvidence(ReviewVerdict.PASS, "d", "sol", confidence=0.95),
+        prelanding_evidence=LandingEvidence("sha", ReviewVerdict.PASS, "t", "r", "s", "rb", "l", "st", "c", landing_set=("lease",)),
+        landing=lambda evidence: LandingEvidence("sha", ReviewVerdict.PASS, "t", "r", "s", "rb", "l", "st", "c", landing_set=("lease",)),
     )
     assert result.goal.state is GoalState.LANDED
 
@@ -169,10 +171,10 @@ def test_goals_without_a_gate_field_are_unaffected():
     result = GovernedCodeRunner().run(
         FaberGoal("legacy", "pre-existing goal", cad_ref="CAD-M", adr_ref="ADR-038", bl_ref="BL-1"),
         preflight=passing_preflight(),
-        build=lambda: {"tests": "pass", "diff_id": "d"},
-        review=lambda evidence: ReviewEvidence(ReviewVerdict.PASS, "d", "sol"),
-        prelanding_evidence=LandingEvidence("sha", ReviewVerdict.PASS, "t", "r", "s", "rb", "l", "st", "c"),
-        landing=lambda evidence: LandingEvidence("sha", ReviewVerdict.PASS, "t", "r", "s", "rb", "l", "st", "c"),
+        build=lambda: {"tests": "pass", "diff_id": "d", "changed_files": 1, "changed_lines": 5},
+        review=lambda evidence: ReviewEvidence(ReviewVerdict.PASS, "d", "sol", confidence=0.95),
+        prelanding_evidence=LandingEvidence("sha", ReviewVerdict.PASS, "t", "r", "s", "rb", "l", "st", "c", landing_set=("lease",)),
+        landing=lambda evidence: LandingEvidence("sha", ReviewVerdict.PASS, "t", "r", "s", "rb", "l", "st", "c", landing_set=("lease",)),
     )
     assert result.goal.state is GoalState.LANDED
 
@@ -241,7 +243,7 @@ def test_a_promoted_goal_is_dequeued_and_blocks_for_the_right_reason(tmp_path):
         queued,
         preflight=passing_preflight(),
         build=lambda: pytest.fail("build must be unreachable without CAD/ADR"),
-        review=lambda evidence: ReviewEvidence(ReviewVerdict.PASS, "d", "sol"),
+        review=lambda evidence: ReviewEvidence(ReviewVerdict.PASS, "d", "sol", confidence=0.95),
         landing=lambda evidence: pytest.fail("landing must be unreachable"),
     )
     assert "invalid goal transition" not in result.blocker
@@ -300,10 +302,10 @@ def test_an_autonomt_gate_is_not_mistaken_for_an_owner_gate():
     result = GovernedCodeRunner().run(
         build_goal(packet(gate="autonomt", cad_ref="CAD-M", adr_ref="ADR-038"), promoted_by="x", promoted_at="t"),
         preflight=passing_preflight(),
-        build=lambda: {"tests": "pass", "diff_id": "d"},
-        review=lambda evidence: ReviewEvidence(ReviewVerdict.PASS, "d", "sol"),
-        prelanding_evidence=LandingEvidence("sha", ReviewVerdict.PASS, "t", "r", "s", "rb", "l", "st", "c"),
-        landing=lambda evidence: LandingEvidence("sha", ReviewVerdict.PASS, "t", "r", "s", "rb", "l", "st", "c"),
+        build=lambda: {"tests": "pass", "diff_id": "d", "changed_files": 1, "changed_lines": 5},
+        review=lambda evidence: ReviewEvidence(ReviewVerdict.PASS, "d", "sol", confidence=0.95),
+        prelanding_evidence=LandingEvidence("sha", ReviewVerdict.PASS, "t", "r", "s", "rb", "l", "st", "c", landing_set=("lease",)),
+        landing=lambda evidence: LandingEvidence("sha", ReviewVerdict.PASS, "t", "r", "s", "rb", "l", "st", "c", landing_set=("lease",)),
     )
     assert result.goal.state is GoalState.LANDED
 
@@ -313,7 +315,7 @@ def test_an_unrecognised_gate_value_still_fails_closed():
         build_goal(packet(gate="whatever", cad_ref="CAD-M", adr_ref="ADR-038"), promoted_by="x", promoted_at="t"),
         preflight=passing_preflight(),
         build=lambda: pytest.fail("build must be unreachable behind an unknown gate"),
-        review=lambda evidence: ReviewEvidence(ReviewVerdict.PASS, "d", "sol"),
+        review=lambda evidence: ReviewEvidence(ReviewVerdict.PASS, "d", "sol", confidence=0.95),
         landing=lambda evidence: pytest.fail("landing must be unreachable"),
     )
     assert result.goal.state is GoalState.BLOCKED
@@ -368,7 +370,7 @@ def test_every_morten_gated_workstream_is_held_by_the_owner_gate(tmp_path):
             goal,
             preflight=passing_preflight(),
             build=lambda: pytest.fail(f"{goal.goal_id} reached build behind a morten gate"),
-            review=lambda evidence: ReviewEvidence(ReviewVerdict.PASS, "d", "sol"),
+            review=lambda evidence: ReviewEvidence(ReviewVerdict.PASS, "d", "sol", confidence=0.95),
             landing=lambda evidence: pytest.fail("landing reached"),
         )
         assert result.goal.state is GoalState.BLOCKED

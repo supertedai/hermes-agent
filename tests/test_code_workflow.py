@@ -28,7 +28,7 @@ def passing_preflight():
             obsidian_status="fresh",
             source_refs={
                 "git": "HEAD:target",
-                "lease": "lease:faber",
+                "lease": "agent/target.py",
                 "cad": "CAD-M",
                 "adr": "ADR-038",
                 "bl": "BL-3254",
@@ -38,13 +38,17 @@ def passing_preflight():
     )
 
 
-def test_preflight_blocks_reconstructed_cad_and_dirty_git():
+def test_preflight_blocks_dirty_git_and_missing_refs_not_cad():
+    # ADR-062 V4 / BL-4029 L4: preflight er kollisjons- og scope-kontroll.
+    # CAD/ADR sjekkes paa steg 7 (DesignGate) — en preflight som krever
+    # nedstroems-artefakter er sirkulaer (BL-3673).
     result = PreflightGate().evaluate(
         PreflightInput(False, True, "reconstructed", "accepted", "open", "fresh")
     )
     assert result.status is PreflightStatus.BLOCK
     assert any("git target is dirty" in reason for reason in result.reasons)
-    assert any("CAD status" in reason for reason in result.reasons)
+    assert any("missing authoritative source refs" in reason for reason in result.reasons)
+    assert not any("CAD" in reason for reason in result.reasons)
 
 
 def test_goal_cannot_build_without_preflight():
@@ -123,8 +127,11 @@ def test_governed_runner_blocks_at_review_and_returns_handoff():
     result = GovernedCodeRunner().run(
         FaberGoal("g1", "run", cad_ref="CAD-M", adr_ref="ADR-038", bl_ref="BL-3254"),
         preflight=preflight,
-        build=lambda: {"tests": "pass"},
-        review=lambda evidence: ReviewVerdict.BLOCK,
+        # steg 8: umaalt blast-radius blokkerer, saa bygget MAA rapportere tall
+        build=lambda: {"tests": "pass", "diff_id": "diff-g1",
+                       "changed_files": 1, "changed_lines": 10},
+        review=lambda evidence: ReviewEvidence(
+            ReviewVerdict.BLOCK, "diff-g1", "sol", confidence=0.95),
         landing=lambda evidence: (_ for _ in ()).throw(AssertionError("must not land")),
     )
     assert result.goal.state is GoalState.BLOCKED
@@ -137,10 +144,17 @@ def test_governed_runner_reaches_landed_only_with_complete_evidence():
     result = GovernedCodeRunner().run(
         FaberGoal("g1", "run", cad_ref="CAD-M", adr_ref="ADR-038", bl_ref="BL-3254"),
         preflight=preflight,
-        build=lambda: {"tests": "pass", "diff_id": "diff-g1"},
-        review=lambda evidence: ReviewEvidence(ReviewVerdict.PASS, "diff-g1", "sol"),
-        prelanding_evidence=LandingEvidence("sha", ReviewVerdict.PASS, "tests", "readback", "smoke", "rollback", "log", "state", "closer"),
-        landing=lambda evidence: LandingEvidence("sha", ReviewVerdict.PASS, "tests", "readback", "smoke", "rollback", "log", "state", "closer"),
+        build=lambda: {"tests": "pass", "diff_id": "diff-g1",
+                       "changed_files": 1, "changed_lines": 10},
+        # confidence er satt: umaalt konfidens er en second opinion-utloeser
+        review=lambda evidence: ReviewEvidence(
+            ReviewVerdict.PASS, "diff-g1", "sol", confidence=0.95),
+        prelanding_evidence=LandingEvidence(
+            "sha", ReviewVerdict.PASS, "tests", "readback", "smoke", "rollback",
+            "log", "state", "closer", landing_set=("agent/target.py",)),
+        landing=lambda evidence: LandingEvidence(
+            "sha", ReviewVerdict.PASS, "tests", "readback", "smoke", "rollback",
+            "log", "state", "closer", landing_set=("agent/target.py",)),
     )
     assert result.goal.state is GoalState.LANDED
 
@@ -159,12 +173,14 @@ def test_faber_goal_registry_persists_and_selects_operational_goals(tmp_path):
 
 def test_reviewer_must_match_current_diff_before_landing():
     preflight = passing_preflight()
-    base = dict(tests="pass", diff_id="diff-current")
+    base = dict(tests="pass", diff_id="diff-current",
+                changed_files=1, changed_lines=10)
     mismatch = GovernedCodeRunner().run(
         FaberGoal("g-diff-1", "run", cad_ref="CAD-M", adr_ref="ADR-038", bl_ref="BL-3254"),
         preflight=preflight,
         build=lambda: base,
-        review=lambda evidence: ReviewEvidence(ReviewVerdict.PASS, "diff-old", "sol"),
+        review=lambda evidence: ReviewEvidence(
+            ReviewVerdict.PASS, "diff-old", "sol", confidence=0.95),
         landing=lambda evidence: (_ for _ in ()).throw(AssertionError("must not land")),
     )
     assert mismatch.goal.state is GoalState.BLOCKED
@@ -174,8 +190,89 @@ def test_reviewer_must_match_current_diff_before_landing():
         FaberGoal("g-diff-2", "run", cad_ref="CAD-M", adr_ref="ADR-038", bl_ref="BL-3254"),
         preflight=preflight,
         build=lambda: base,
-        review=lambda evidence: ReviewEvidence(ReviewVerdict.PASS, "diff-current", "sol"),
-        prelanding_evidence=LandingEvidence("sha", ReviewVerdict.PASS, "tests", "readback", "smoke", "rollback", "log", "state", "closer"),
-        landing=lambda evidence: LandingEvidence("sha", ReviewVerdict.PASS, "tests", "readback", "smoke", "rollback", "log", "state", "closer"),
+        review=lambda evidence: ReviewEvidence(
+            ReviewVerdict.PASS, "diff-current", "sol", confidence=0.95),
+        prelanding_evidence=LandingEvidence(
+            "sha", ReviewVerdict.PASS, "tests", "readback", "smoke", "rollback",
+            "log", "state", "closer", landing_set=("agent/target.py",)),
+        landing=lambda evidence: LandingEvidence(
+            "sha", ReviewVerdict.PASS, "tests", "readback", "smoke", "rollback",
+            "log", "state", "closer", landing_set=("agent/target.py",)),
     )
     assert matched.goal.state is GoalState.LANDED
+
+
+# ===== BL-4055 steg 10b: second opinion (reimplementert 2026-08-18, Faber) =====
+
+from agent.second_opinion import SecondOpinionOutcome
+
+
+def _run_with_opinion(opinion_callable, *, files=("agent/target.py",),
+                      confidence=0.95, lease="agent/target.py"):
+    preflight = PreflightGate().evaluate(
+        PreflightInput(
+            git_clean=True, lease_clear=True, cad_status="verified",
+            adr_status="accepted", bl_status="open", obsidian_status="fresh",
+            source_refs={"git": "HEAD:t", "lease": lease, "bl": "BL-3254", "cad": "CAD-M", "adr": "ADR-038"},
+        )
+    )
+    landing_ev = LandingEvidence(
+        "sha", ReviewVerdict.PASS, "tests", "readback", "smoke", "rollback",
+        "log", "state", "closer", landing_set=files)
+    return GovernedCodeRunner(second_opinion=opinion_callable).run(
+        FaberGoal("g-so", "run", cad_ref="CAD-M", adr_ref="ADR-038", bl_ref="BL-3254"),
+        preflight=preflight,
+        build=lambda: {"tests": "pass", "diff_id": "d1",
+                       "changed_files": 1, "changed_lines": 10, "diff": "diff"},
+        review=lambda evidence: ReviewEvidence(
+            ReviewVerdict.PASS, "d1", "sol", confidence=confidence),
+        prelanding_evidence=landing_ev,
+        landing=lambda evidence: landing_ev,
+    )
+
+
+def test_governance_surface_triggers_second_opinion_even_at_high_confidence():
+    # «En second opinion som bare paakalles naar man er i tvil, kalles aldri
+    # naar man tar feil med selvtillit» — governance-flaten fyrer paa 0.95.
+    calls = []
+    def agree(change, *, trigger_reasons, diff_text):
+        calls.append(trigger_reasons)
+        return SecondOpinionOutcome.agree("claude-opus-5")
+    result = _run_with_opinion(
+        agree, files=("agent/second_opinion.py",), lease="agent/second_opinion.py")
+    assert result.goal.state is GoalState.LANDED
+    assert calls and any("governance_surface" in r for r in calls[0])
+    # BEGGE stemmer loggfoert — ogsaa ved enighet
+    assert result.goal.evidence.get("second_opinion_status") == "agree"
+
+
+def test_second_opinion_dissent_blocks_with_both_votes():
+    def dissent(change, *, trigger_reasons, diff_text):
+        return SecondOpinionOutcome.dissent(
+            "claude-opus-5", reasons=("rollback path untested",))
+    result = _run_with_opinion(dissent, confidence=None)  # umaalt = utloeser
+    assert result.goal.state is GoalState.BLOCKED
+    assert "dissent" in result.blocker
+    assert result.handoff is not None
+
+
+def test_unavailable_second_opinion_blocks_never_skips(monkeypatch):
+    # None-klient betyr «bruk den ekte» — runneren ruter til den sene importen.
+    # Klienten patches til utilgjengelig saa testen ALDRI gaar paa nett
+    # (foerste versjon gjorde et ekte API-kall her — 21 s og et live-svar).
+    import agent.second_opinion_client as so_client
+    monkeypatch.setattr(
+        so_client, "fetch_second_opinion",
+        lambda change, *, trigger_reasons, diff_text: SecondOpinionOutcome.unavailable(
+            "second opinion client unavailable: test-stub"))
+    result = _run_with_opinion(None, confidence=None)
+    assert result.goal.state is GoalState.BLOCKED
+    assert "unavailable" in result.blocker
+
+
+def test_agree_without_verified_model_degrades_to_unavailable():
+    # En enighet uten API-ekkoet modell-id er en paastand, ikke en enighet.
+    def hollow(change, *, trigger_reasons, diff_text):
+        return SecondOpinionOutcome.agree("")
+    result = _run_with_opinion(hollow, confidence=None)
+    assert result.goal.state is GoalState.BLOCKED
