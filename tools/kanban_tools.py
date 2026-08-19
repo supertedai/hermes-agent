@@ -1702,7 +1702,7 @@ KANBAN_COMPLETE_SCHEMA = {
             },
             "board": _board_schema_prop(),
         },
-        "required": [],
+        "required": ["summary"],
     },
 }
 
