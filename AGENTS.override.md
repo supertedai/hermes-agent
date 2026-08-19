@@ -1,6 +1,4 @@
-# AGENTS.override.md — kontrakt for kanban-workere (forken)
-
-Oppstroems egen AGENTS.md er urort; Hermes laster denne foerst.
+# AGENTS.override.md — kontrakt for kanban-workere (hermes-agent)
 
 Denne fila leses av enhver agent som kjører i et arbeidstre av dette repoet,
 før `CLAUDE.md`. `CLAUDE.md` er lagets kart og kanonens kondensering — den
@@ -65,13 +63,31 @@ already terminal/not running»:** da er kortet ferdig registrert. Ikke prøv
 igjen, og ikke rapporter det som en feil — det betyr bare at du kaller etter at
 tilstanden er satt.
 
-**Er du revieweren** og dommen er godkjent: push grenen og åpne pull request
-før du fullfører kortet.
+**Er du revieweren**, gjør du to ting før du fullfører kortet.
+
+**Steg 10b — second opinion.** Utløses av tre ting, og du skal sjekke alle tre:
+
+- **blast-radius:** endringen rører drift, styring, tilgang eller noe flere
+  brukere deler
+- **governance-flate:** ADR-er, `CLAUDE.md`, `AGENTS.md`, kanon, kontrollplan
+- **umålt konfidens:** du er i tvil, eller dommen din hviler på noe du ikke
+  kunne verifisere
+
+Slår én av dem til: bruk ferdigheten `claude-opus-second-opinion` og legg
+svaret i dommen din. Den går til en **uavhengig kanal** — poenget er at den
+ikke deler dine feil. Slår ingen av dem til, si det: *«10b ikke utløst.»*
+
+Fravær av en second opinion er bare gyldig når den er eksplisitt vurdert.
+
+**Push og PR.** Deretter:
 
 ```bash
 git push -u origin "$(git branch --show-current)"
-gh pr create --base main --title "<hva>" --body "<hvorfor + oppgave-ref + dommen din>"
 ```
+
+PR-en åpnes automatisk av `.github/workflows/auto-pr-wt.yml` når grenen
+lander. Har du `gh` tilgjengelig kan du åpne den selv i stedet — men ikke
+merge. Landing er menneskeord.
 
 Uten dette blir arbeidet liggende i et arbeidstre på serveren, usynlig på
 GitHub. Målt 2026-08-19: sytten `wt/`-grener lokalt, null pushet — alt som var
