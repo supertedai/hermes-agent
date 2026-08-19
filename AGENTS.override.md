@@ -1,8 +1,6 @@
-# AGENTS.override.md — kontrakt for kanban-workere (hermes-agent-forken)
+# AGENTS.override.md — kontrakt for kanban-workere (forken)
 
-Oppstroems egen AGENTS.md er urort. Hermes laster denne fila FOERST
-(prompt_builder.py: AGENTS.override.md, AGENTS.md, agents.md), saa dette er
-vertslagets tillegg — ikke en erstatning.
+Oppstroems egen AGENTS.md er urort; Hermes laster denne foerst.
 
 Denne fila leses av enhver agent som kjører i et arbeidstre av dette repoet,
 før `CLAUDE.md`. `CLAUDE.md` er lagets kart og kanonens kondensering — den
@@ -83,18 +81,38 @@ PR-en er leveransen. Steg 11–13 — pre-landing-kontroll, runtime-smoke og
 tilbakelesing etter merge — er **menneskets**, og det er F5-grensen i ADR-005.
 Den er der med vilje. Ikke merge selv, og ikke be om å få lov.
 
-## 3. Deklarer det du produserte
+## 3. `result` er obligatorisk. Alltid.
 
-Arbeidsområder av typen `scratch` slettes når oppgaven fullføres. Skrev du en
-fil og ikke deklarerte den, er den borte — målt: fjorten kort fullført, null
-vedlegg, tomt `result` på alle.
+**Et kort som fullføres uten `result` har ikke levert noe.**
 
-Ved `kanban_complete`: oppgi artefaktene med absolutte stier inne i
-arbeidsområdet, og skriv et sammendrag i `result`. Sammendraget erstatter ikke
-artefaktene; det er inngangen til dem.
+`kanban_complete` tar en `summary`. Den skal alltid fylles, uansett hvor lite
+kortet gjorde. Dette er ikke en høflighetsformulering — for kort som ikke
+etterlater en diff er `result` det **eneste** sporet som finnes. Uten den ser
+kortet ferdig ut og har produsert null lesbart.
 
-I et `worktree`-arbeidsområde er commiten selv artefaktet — men `result` skal
-likevel si hva som ble gjort.
+Målt 2026-08-19: 43 kort fullført samme dag, **ett** hadde `result`. To
+analysekort — «Definer ledger-modell», «Lag skriveallowlist og preflight-plan»
+— fullførte helt korrekt uten commit, og etterlot seg dermed ingenting i det
+hele tatt.
+
+Hva `result` skal si, i denne rekkefølgen:
+
+1. **Hva du konkluderte** — svaret, ikke prosessen. Én til tre setninger.
+2. **Hva du bygde på** — filer, målinger, kommandoer. Navngi dem.
+3. **Hva du ikke fikk avklart** — og hvorfor. Fravær av data er ikke et
+   positivt funn.
+
+Er kortet rent analyse og konklusjonen er lengre enn noen setninger: skriv den
+til en fil i arbeidsområdet, commit den, og la `result` peke på den. Da faller
+kortet inn under punkt 2 og skal til review.
+
+### Artefakter i scratch-arbeidsområder
+
+`scratch` slettes ved fullføring. Skrev du en fil og ikke deklarerte den, er
+den borte — målt: fjorten kort fullført, null vedlegg. Oppgi derfor artefaktene
+til `kanban_complete` med absolutte stier inne i arbeidsområdet.
+
+I et `worktree` er commiten selv artefaktet. `result` skal likevel fylles.
 
 ## 4. Meld manglende evne som manglende evne
 
