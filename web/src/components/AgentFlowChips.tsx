@@ -74,7 +74,13 @@ export function AgentFlowChips({ flows }: { flows: AgentFlow[] }) {
   return (
     <>
       {flows.map((flow) => {
-        const elapsed = ((flow.endedAt ?? now) - flow.startedAt) / 1000;
+        // Clamped at 0: `now` only advances while something runs, so a flow
+        // starting after an idle stretch is briefly newer than the last clock
+        // reading. That window is under one tick (1s) and 0 is its truthful
+        // floor — priming the clock inside the effect would fix it too, but
+        // by trading this file's impure-render fix for a synchronous
+        // setState-in-effect, which is the same rule from the other side.
+        const elapsed = Math.max(0, (flow.endedAt ?? now) - flow.startedAt) / 1000;
         const done = doneCount(flow);
         const agents = Math.max(flow.taskCount, flow.rows.length);
         return (

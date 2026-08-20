@@ -2185,7 +2185,10 @@ def _update_acp_registry_versions(semver: str) -> None:
     manifest["version"] = semver
     uvx = manifest.get("distribution", {}).get("uvx")
     if isinstance(uvx, dict) and isinstance(uvx.get("package"), str):
-        uvx["package"] = re.sub(r"==.*$", f"=={semver}", uvx["package"])
+        # Only the pinned version, not a marker/extra tail that may follow
+        # (``==0.19.0; python_version>='3.11'``). A package string carrying no
+        # ``==`` is left alone rather than silently half-bumped.
+        uvx["package"] = re.sub(r"==[^,;\s]+", f"=={semver}", uvx["package"])
     manifest_path.write_text(
         json.dumps(manifest, indent=2, ensure_ascii=False) + "\n",
         encoding="utf-8",
