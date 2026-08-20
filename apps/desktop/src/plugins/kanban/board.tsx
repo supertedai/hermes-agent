@@ -332,6 +332,7 @@ function Card({
 // ── column ───────────────────────────────────────────────────────────────────
 
 function Column({
+  capTotal,
   collapsed,
   column,
   columns,
@@ -344,6 +345,9 @@ function Column({
   onToggleSelect,
   selected
 }: {
+  /** Uncapped server-side count for this lane, when it exceeds what is
+   *  shown (the done lane is capped server-side) — renders "shown/total". */
+  capTotal?: number
   collapsed: boolean
   column: { name: string; tasks: KanbanTask[] }
   columns: string[]
@@ -431,7 +435,9 @@ function Column({
           {label}
         </span>
         {column.tasks.length > 0 && (
-          <span className="text-[0.625rem] tabular-nums text-(--ui-text-quaternary)">{column.tasks.length}</span>
+          <span className="text-[0.625rem] tabular-nums text-(--ui-text-quaternary)">
+            {capTotal == null ? column.tasks.length : `${column.tasks.length}/${capTotal}`}
+          </span>
         )}
       </button>
     )
@@ -449,7 +455,9 @@ function Column({
             {label}
           </span>
         </Tip>
-        <span className="text-[0.625rem] tabular-nums text-(--ui-text-quaternary)">{column.tasks.length}</span>
+        <span className="text-[0.625rem] tabular-nums text-(--ui-text-quaternary)">
+          {capTotal == null ? column.tasks.length : `${column.tasks.length}/${capTotal}`}
+        </span>
         <button
           aria-label={k.collapse(label)}
           className="ml-auto grid size-5 place-items-center rounded text-(--ui-text-tertiary) opacity-0 transition-opacity hover:bg-(--chrome-action-hover) hover:text-foreground focus-visible:opacity-100 group-hover/col:opacity-100"
@@ -1376,9 +1384,19 @@ export function KanbanBoardPage() {
         >
           {filtered.columns.map(col => {
             const auto = boardHasWork && col.tasks.length === 0
+            // Done is capped server-side; surface "shown/total" so the lane
+            // count never reads as the whole history. Compare against the
+            // UNfiltered column so a client-side search doesn't trigger it.
+            const unfilteredDone =
+              col.name === 'done' ? (board?.columns.find(c => c.name === 'done')?.tasks.length ?? 0) : 0
+            const capTotal =
+              col.name === 'done' && board?.done_total != null && board.done_total > unfilteredDone
+                ? board.done_total
+                : undefined
 
             return (
               <Column
+                capTotal={capTotal}
                 collapsed={laneOverrides[col.name] ?? auto}
                 column={col}
                 columns={columnNames}
