@@ -154,6 +154,20 @@ BOARD_COLUMNS: list[str] = [
 
 _CARD_SUMMARY_PREVIEW_CHARS = 200
 
+# Card-size cap for ``body`` on the /board list payload. Cards fall back to
+# ``body`` when there is no run summary, and the client-side search matches
+# against it — 500 chars serves both without shipping whole task briefs.
+# Full body stays on /tasks/:id (the drawer's endpoint). Measured 2026-08-20
+# on a long-lived board: full bodies alone were ~400 KB of a ~1 MB payload.
+_CARD_BODY_PREVIEW_CHARS = 500
+
+# Default cap for the done column: the N most recently completed tasks.
+# Done is append-heavy — completed cards accumulate for the life of the
+# board and rode along on every poll (measured 2026-08-20: 463 done cards
+# were 91 % of a ~1 MB payload). ``?done_limit=0`` restores the uncapped
+# view; ``done_total`` in the response keeps the true count visible.
+_DONE_COLUMN_DEFAULT_LIMIT = 100
+
 
 def _task_dict(
     task: kanban_db.Task,
@@ -386,6 +400,11 @@ def get_board(
     current_step_key: Optional[str] = Query(
         None, description="Restrict to tasks at this workflow step key",
     ),
+    done_limit: int = Query(
+        _DONE_COLUMN_DEFAULT_LIMIT,
+        ge=0,
+        description="Cap the done column to the N most recently completed tasks (0 = uncapped)",
+    ),
 ):
     """Return the full board grouped by status column.
 
@@ -395,6 +414,12 @@ def get_board(
     ``board`` selects which board to read from. Omitting it falls
     through to the active board (``HERMES_KANBAN_BOARD`` env → on-disk
     ``current`` pointer → ``default``).
+
+    Payload diet: the done column is sorted most-recently-completed first
+    and capped to ``done_limit`` (``done_total`` carries the uncapped
+    count), and ``body`` is a card-size preview here — the full text lives
+    on ``/tasks/:id``. The archived column (``include_archived``) is not
+    capped by this endpoint yet.
     """
     board = _resolve_board(board)
     conn = _conn(board=board)
@@ -465,6 +490,13 @@ def get_board(
                 full[:_CARD_SUMMARY_PREVIEW_CHARS] if full else None
             )
             d = _task_dict(t, latest_summary=preview)
+            raw_body = d.get("body")
+            if raw_body and len(raw_body) > _CARD_BODY_PREVIEW_CHARS:
+                # List payload carries a card-size preview only (the drawer
+                # reads the full body from /tasks/:id); the flag lets the
+                # client label truncated summary/search text honestly.
+                d["body"] = raw_body[:_CARD_BODY_PREVIEW_CHARS]
+                d["body_truncated"] = True
             d["link_counts"] = link_counts.get(t.id, {"parents": 0, "children": 0})
             d["comment_count"] = comment_counts.get(t.id, 0)
             d["progress"] = progress.get(t.id)  # None when the task has no children
@@ -479,7 +511,21 @@ def get_board(
             columns[col].append(d)
 
         # Stable per-column ordering already applied by list_tasks
-        # (priority DESC, created_at ASC), keep as-is.
+        # (priority DESC, created_at ASC), keep as-is — except done, which
+        # is re-sorted most-recently-completed first so the cap keeps the
+        # cards an operator actually looks back at. Deterministic tiebreak:
+        # completed_at, then created_at, then id.
+        done_total = len(columns["done"])
+        columns["done"].sort(
+            key=lambda card: (
+                card.get("completed_at") or 0,
+                card.get("created_at") or 0,
+                card.get("id") or "",
+            ),
+            reverse=True,
+        )
+        if done_limit:
+            columns["done"] = columns["done"][:done_limit]
 
         # List of known tenants for the UI filter dropdown.
         tenants = [
@@ -503,6 +549,7 @@ def get_board(
             ],
             "tenants": tenants,
             "assignees": assignees,
+            "done_total": done_total,
             "latest_event_id": int(latest_event_id),
             "now": int(time.time()),
         }
