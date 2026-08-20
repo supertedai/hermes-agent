@@ -2188,7 +2188,7 @@ def _update_acp_registry_versions(semver: str) -> None:
         # Only the pinned version, not a marker/extra tail that may follow
         # (``==0.19.0; python_version>='3.11'``). A package string carrying no
         # ``==`` is left alone rather than silently half-bumped.
-        uvx["package"] = re.sub(r"==[^,;\s]+", f"=={semver}", uvx["package"])
+        uvx["package"] = re.sub(r"==[^,;\s]+", f"=={semver}", uvx["package"], count=1)
     manifest_path.write_text(
         json.dumps(manifest, indent=2, ensure_ascii=False) + "\n",
         encoding="utf-8",
