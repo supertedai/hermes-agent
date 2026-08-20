@@ -2609,6 +2609,7 @@ def decompose_task_endpoint(
         outcome = kanban_decompose.decompose_task(
             task_id,
             author=(payload.author or None),
+            board=board,
         )
 
     return {
