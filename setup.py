@@ -25,8 +25,11 @@ use ``build_editable``, which does NOT call ``bdist_wheel`` — it calls
 """
 
 import os
+import tempfile
 
 from setuptools import setup
+from setuptools.command.build import build
+from setuptools.command.egg_info import egg_info
 from setuptools.command.sdist import sdist
 
 _IN_NIX_BUILD = os.environ.get("HERMES_NIX_BUILD") == "1"
@@ -51,7 +54,40 @@ class _GuardedSdist(sdist):
         return super().run(*args, **kwargs)
 
 
-cmdclass = {"sdist": _GuardedSdist}
+def _source_tree_is_writable() -> bool:
+    return os.access(os.path.dirname(os.path.abspath(__file__)) or ".", os.W_OK)
+
+
+class _TemporaryOutputsBuild(build):
+    """Redirect build output when the checkout is read-only.
+
+    The Docker WebUI install surface runs setup from a read-only
+    /opt/hermes tree; writing ``build/`` metadata there crashes the
+    install. Redirect build_base to a temp dir in that case — including
+    when a caller passed a source-relative build_base explicitly.
+    """
+
+    def finalize_options(self):
+        if not _source_tree_is_writable():
+            self.build_base = tempfile.mkdtemp(prefix="hermes-agent-build-")
+        super().finalize_options()
+
+
+class _TemporaryOutputsEggInfo(egg_info):
+    """Same redirection for egg-info metadata (written even by pip's
+    metadata inspection, which otherwise touches the source tree)."""
+
+    def finalize_options(self):
+        if not _source_tree_is_writable():
+            self.egg_base = tempfile.mkdtemp(prefix="hermes-agent-egg-info-")
+        super().finalize_options()
+
+
+cmdclass = {
+    "sdist": _GuardedSdist,
+    "build": _TemporaryOutputsBuild,
+    "egg_info": _TemporaryOutputsEggInfo,
+}
 
 # bdist_wheel is only available when the `wheel` package is installed.
 # setuptools.build_meta.build_wheel() calls it internally, so the guard

@@ -33,6 +33,7 @@ from pathlib import Path
 REPO_ROOT = Path(__file__).resolve().parent.parent
 VERSION_FILE = REPO_ROOT / "hermes_cli" / "__init__.py"
 PYPROJECT_FILE = REPO_ROOT / "pyproject.toml"
+ACP_REGISTRY_MANIFEST = REPO_ROOT / "acp_registry" / "agent.json"
 
 # ──────────────────────────────────────────────────────────────────────
 # Git email → GitHub username mapping
@@ -2168,6 +2169,29 @@ def bump_version(current: str, part: str) -> str:
     return f"{major}.{minor}.{patch}"
 
 
+def _update_acp_registry_versions(semver: str) -> None:
+    """Bump the ACP Registry manifest in lockstep with pyproject.
+
+    tests/acp/test_registry_manifest.py enforces exact equality and the
+    upstream registry CI rejects floating pins, so the release bump is the
+    single writer — hand-editing is what let the manifest drift to 0.19.0
+    while pyproject said 0.19.1. Older release branches predate the
+    manifest asset; no-op when it is absent.
+    """
+    manifest_path = ACP_REGISTRY_MANIFEST
+    if not manifest_path.exists():
+        return
+    manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+    manifest["version"] = semver
+    uvx = manifest.get("distribution", {}).get("uvx")
+    if isinstance(uvx, dict) and isinstance(uvx.get("package"), str):
+        uvx["package"] = re.sub(r"==.*$", f"=={semver}", uvx["package"])
+    manifest_path.write_text(
+        json.dumps(manifest, indent=2, ensure_ascii=False) + "\n",
+        encoding="utf-8",
+    )
+
+
 def update_version_files(semver: str, calver_date: str):
     """Update version strings in source files."""
     # Update __init__.py
@@ -2208,6 +2232,10 @@ def update_version_files(semver: str, calver_date: str):
             count=1,
         )
         desktop_pkg.write_text(pkg_text, encoding="utf-8")
+
+    # ACP Registry manifest tracks pyproject exactly — see
+    # _update_acp_registry_versions for why this lives in the release bump.
+    _update_acp_registry_versions(semver)
 
 
 def resolve_author(name: str, email: str) -> str:
