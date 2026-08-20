@@ -59,10 +59,13 @@ export function AgentFlowChips({ flows }: { flows: AgentFlow[] }) {
   // 1 Hz re-render while any flow is live so the header clock ticks; the
   // interval goes away as soon as the last chip freezes.
   const anyRunning = flows.some((f) => f.state === "running");
-  const [, setTick] = useState(0);
+  // The tick carries the clock reading itself: reading Date.now() during
+  // render is impure (react-hooks lint), so render consumes this state and
+  // the interval refreshes it while anything runs.
+  const [now, setNow] = useState(() => Date.now());
   useEffect(() => {
     if (!anyRunning) return;
-    const t = setInterval(() => setTick((n) => n + 1), 1000);
+    const t = setInterval(() => setNow(Date.now()), 1000);
     return () => clearInterval(t);
   }, [anyRunning]);
 
@@ -71,8 +74,7 @@ export function AgentFlowChips({ flows }: { flows: AgentFlow[] }) {
   return (
     <>
       {flows.map((flow) => {
-        const elapsed =
-          ((flow.endedAt ?? Date.now()) - flow.startedAt) / 1000;
+        const elapsed = ((flow.endedAt ?? now) - flow.startedAt) / 1000;
         const done = doneCount(flow);
         const agents = Math.max(flow.taskCount, flow.rows.length);
         return (

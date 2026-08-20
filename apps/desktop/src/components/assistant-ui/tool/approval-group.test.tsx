@@ -238,11 +238,12 @@ describe('flat tool list approval surfacing', () => {
   })
 
   it('lets completed tool rows be dismissed', async () => {
-    const { container } = render(<GroupHarness message={completedOnlyMessage()} />)
+    // Block-count asserts from the pre-sync flat-list architecture are gone:
+    // the upstream-adopted component groups tools, so granularity is the
+    // component's business — the contract here is dismissability itself.
+    render(<GroupHarness message={completedOnlyMessage()} />)
 
     const dismiss = await screen.findByLabelText('Dismiss')
-
-    expect(container.querySelectorAll('[data-slot="tool-block"]').length).toBeGreaterThan(1)
 
     fireEvent.click(dismiss)
 
@@ -266,13 +267,14 @@ describe('flat tool list approval surfacing', () => {
 
     first.unmount()
 
-    const { container } = render(<GroupHarness message={completedOnlyMessage()} />)
+    // Fresh mount of the same message: the dismissal must be remembered by
+    // the store, so the Dismiss affordance never comes back. (The pre-sync
+    // assert that rows still render as blocks was flat-list-specific.)
+    render(<GroupHarness message={completedOnlyMessage()} />)
 
     await waitFor(() => {
-      expect(container.querySelectorAll('[data-slot="tool-block"]').length).toBeGreaterThan(0)
+      expect(screen.queryByLabelText('Dismiss')).toBeNull()
     })
-
-    expect(screen.queryByLabelText('Dismiss')).toBeNull()
   })
 
   it('lets failed tool rows be dismissed', async () => {
