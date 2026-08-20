@@ -7,11 +7,13 @@ import json
 import os
 import threading
 from pathlib import Path
+from types import SimpleNamespace
 
 import pytest
 
 from hermes_cli import kanban as kc
 from hermes_cli import kanban_db as kb
+from hermes_cli import kanban_decompose as decomp
 
 
 @pytest.fixture
@@ -101,6 +103,44 @@ def test_board_override_is_isolated_per_concurrent_call(kanban_home, monkeypatch
 
     assert alpha_titles == ["alpha-task"]
     assert beta_titles == ["beta-task"]
+
+
+@pytest.mark.parametrize("board", ["joakim", None])
+def test_decompose_cli_passes_board_scope(kanban_home, board, monkeypatch):
+    """The CLI forwards explicit and default board scope to the decomposer."""
+    if board:
+        kb.create_board(board)
+
+    parser = argparse.ArgumentParser(prog="hermes", add_help=False)
+    sub = parser.add_subparsers(dest="command")
+    kc.build_parser(sub)
+    argv = ["kanban"]
+    if board:
+        argv += ["--board", board]
+    argv += ["decompose", "t_test"]
+    args = parser.parse_args(argv)
+
+    calls = []
+    monkeypatch.setattr(kb, "init_db", lambda: None)
+    monkeypatch.setattr(
+        kc,
+        "_is_delegated_child_cli_mutation",
+        lambda _args: False,
+    )
+    monkeypatch.setattr(
+        decomp,
+        "decompose_task",
+        lambda task_id, author, board=None: (
+            calls.append((task_id, author, board))
+            or SimpleNamespace(
+                ok=True, task_id=task_id, reason="", fanout=False,
+                child_ids=[], new_title=None,
+            )
+        ),
+    )
+
+    assert kc.kanban_command(args) == 0
+    assert calls == [("t_test", "default", board)]
 
 
 # ---------------------------------------------------------------------------
