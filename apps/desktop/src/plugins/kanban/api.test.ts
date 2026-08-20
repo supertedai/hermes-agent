@@ -44,7 +44,8 @@ const boardInvalidations = () =>
  *  echoes fallbacks, and the socket factory hands us its onMessage. */
 async function bind() {
   vi.resetModules()
-  const { bindApi } = await import('./api')
+  const mod = await import('./api')
+  const { bindApi } = mod
 
   let onMessage: ((data: unknown) => void) | null = null
   const dispose = bindApi(
@@ -59,7 +60,7 @@ async function bind() {
 
   const frame = (taskId = 't_1') => onMessage?.({ events: [{ task_id: taskId }] })
 
-  return { dispose, frame }
+  return { dispose, frame, switchBoard: (slug: string) => mod.$boardSlug.set(slug) }
 }
 
 describe('board invalidation throttle', () => {
@@ -115,6 +116,23 @@ describe('board invalidation throttle', () => {
 
     expect(detailKeys).toHaveLength(2)
     expect(boardInvalidations()).toBe(1)
+
+    dispose()
+  })
+
+  it('a board switch drops the pending trailing invalidation and reopens the window', async () => {
+    const { dispose, frame, switchBoard } = await bind()
+
+    frame()
+    frame() // schedules the trailing edge for the current board
+    expect(boardInvalidations()).toBe(1)
+
+    switchBoard('other') // reopens the socket → throttle reset
+    vi.advanceTimersByTime(10_000)
+    expect(boardInvalidations()).toBe(1) // stale trailing never fired
+
+    frame()
+    expect(boardInvalidations()).toBe(2) // fresh board invalidates immediately
 
     dispose()
   })

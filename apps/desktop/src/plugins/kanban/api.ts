@@ -72,6 +72,20 @@ function invalidateBoardQueries(): void {
   void queryClient.invalidateQueries({ queryKey: BOARDS_KEY })
 }
 
+/** Drop any pending trailing invalidation and forget the window. Called on
+ *  every socket (re)open — the events stream is pinned to a board, so a
+ *  trailing refetch scheduled under the previous board must not fire against
+ *  the new one, and the fresh board's first frame should invalidate
+ *  immediately (leading edge). Also the dispose path. */
+function resetBoardInvalidateThrottle(): void {
+  if (boardInvalidateTimer != null) {
+    clearTimeout(boardInvalidateTimer)
+    boardInvalidateTimer = null
+  }
+
+  lastBoardInvalidateAt = 0
+}
+
 function invalidateBoardThrottled(): void {
   if (boardInvalidateTimer != null) {
     return // trailing refetch already scheduled for this window
@@ -136,6 +150,9 @@ export function bindApi(r: Rest, storage: PluginStorage, socket: Socket): () => 
 
   const open = (slug: string) => {
     close?.()
+    // The stream is board-pinned: a pending trailing invalidation belongs to
+    // the board we just left, not the one we are dialing.
+    resetBoardInvalidateThrottle()
     close = socket(slug ? `/events?board=${encodeURIComponent(slug)}` : '/events', data => onEventsFrame(slug, data))
   }
 
@@ -147,10 +164,7 @@ export function bindApi(r: Rest, storage: PluginStorage, socket: Socket): () => 
     close?.()
 
     // A pending trailing invalidation must not survive a plugin toggle.
-    if (boardInvalidateTimer != null) {
-      clearTimeout(boardInvalidateTimer)
-      boardInvalidateTimer = null
-    }
+    resetBoardInvalidateThrottle()
 
     rest = null
   }
