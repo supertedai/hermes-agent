@@ -1,0 +1,3 @@
+supertedai
+# hermes-agent worker identity on the Hermes host (kanban chain);
+# commits land via supertedai deploy keys, merges are human.

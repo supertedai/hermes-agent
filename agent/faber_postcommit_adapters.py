@@ -212,7 +212,8 @@ def rollback(sha: str, *, repo: Path | None = None) -> str:
     """Prove the commit is reversible without touching the worktree."""
     repo = repo or REPO_ROOT
     show = subprocess.run(["git", "show", sha], cwd=str(repo),
-                          capture_output=True, text=True, timeout=120)
+                          capture_output=True, text=True, timeout=120,
+                          stdin=subprocess.DEVNULL)
     if show.returncode != 0:
         return ""
     check = subprocess.run(["git", "apply", "--reverse", "--check", "-"],
