@@ -187,15 +187,5 @@ ok(all("totp_secret" not in a and "password_hash" not in a for a in rec["attempt
 ok(us.add_pending(username="gammel.sok", password="ny-passord-123", totp_secret=SEC(), path=P),
    "og navnet er fritt for en ny soknad")
 
-if __name__ == "__main__":
-    print("\n" + ("ALLE PASSERTE" if not FAIL else "FEIL: " + "; ".join(FAIL)))
-    sys.exit(1 if FAIL else 0)
-
-
-def test_alle_sjekker_passerte() -> None:
-    """Sjekkene over kjører ved import — dette er et skript først og en
-    pytest-fil dernest. Uten denne samler pytest null tester og avslutter
-    med kode 5, som testkjøreren teller som en feilende fil selv når hver
-    eneste sjekk passerte. Assertet er ekte: FAIL fylles av ok().
-    """
-    assert not FAIL, "; ".join(FAIL)
+print("\n" + ("ALLE PASSERTE" if not FAIL else "FEIL: " + "; ".join(FAIL)))
+sys.exit(1 if FAIL else 0)

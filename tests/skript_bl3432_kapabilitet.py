@@ -185,15 +185,5 @@ try:
 finally:
     us.resolve_disabled_skills = _orig
 
-if __name__ == "__main__":
-    print("\n" + ("ALLE PASSERTE" if not FAIL else "FEIL: " + "; ".join(FAIL)))
-    sys.exit(1 if FAIL else 0)
-
-
-def test_alle_sjekker_passerte() -> None:
-    """Sjekkene over kjører ved import — dette er et skript først og en
-    pytest-fil dernest. Uten denne samler pytest null tester og avslutter
-    med kode 5, som testkjøreren teller som en feilende fil selv når hver
-    eneste sjekk passerte. Assertet er ekte: FAIL fylles av ok().
-    """
-    assert not FAIL, "; ".join(FAIL)
+print("\n" + ("ALLE PASSERTE" if not FAIL else "FEIL: " + "; ".join(FAIL)))
+sys.exit(1 if FAIL else 0)
