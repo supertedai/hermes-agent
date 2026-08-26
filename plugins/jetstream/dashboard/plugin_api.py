@@ -179,7 +179,8 @@ def keystore():
     """Store-status fra .11 via kanalen: navn+fingeravtrykk+dato — aldri verdier."""
     try:
         r = subprocess.run(_SSH_KEYCHANNEL + ["list"],
-                           capture_output=True, timeout=15)
+                           capture_output=True, timeout=15,
+                           stdin=subprocess.DEVNULL)
     except subprocess.TimeoutExpired:
         raise HTTPException(502, "nøkkelkanalen svarte ikke")
     if r.returncode != 0:

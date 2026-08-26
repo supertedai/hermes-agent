@@ -138,7 +138,7 @@ def _empty_store() -> dict:
 def load_store(path: Optional[Path] = None) -> dict:
     p = path or store_path()
     try:
-        data = json.loads(p.read_text())
+        data = json.loads(p.read_text(encoding="utf-8"))
     except FileNotFoundError:
         return _empty_store()
     except (OSError, ValueError):

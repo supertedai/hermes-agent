@@ -4751,7 +4751,7 @@ def get_symbiose_snapshot(name: str, request: Request):
         return {"available": False,
                 "reason": f"snapshot '{name}' ikke speilet enna — kjor opus_{name}_snapshot.py --emit paa .13"}
     try:
-        data = _json.loads(f.read_text())
+        data = _json.loads(f.read_text(encoding="utf-8"))
         data["available"] = True
         return data
     except Exception as exc:

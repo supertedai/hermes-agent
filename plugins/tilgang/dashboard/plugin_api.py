@@ -54,7 +54,7 @@ def store():
     """Navn + fingeravtrykk fra .11-storen (aldri verdier)."""
     try:
         r = subprocess.run(_SSH_KEYCHANNEL + ["list"], capture_output=True,
-                           text=True, timeout=15)
+                           text=True, timeout=15, stdin=subprocess.DEVNULL)
     except Exception as e:
         raise HTTPException(status_code=502, detail=f"store utilgjengelig: {e}")
     keys = []

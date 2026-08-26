@@ -15,7 +15,8 @@ from hermes_cli.dashboard_auth import user_store
 @pytest.fixture()
 def ident_file(tmp_path, monkeypatch):
     p = tmp_path / "session_identity.json"
-    monkeypatch.setattr(si, "identity_path", lambda: p)
+    # canonical kom til i BL-3432/C1; fixturen omdirigerer uansett verdi.
+    monkeypatch.setattr(si, "identity_path", lambda canonical=True: p)
     return p
 
 
