@@ -48,9 +48,63 @@ const INTRO_KEY = 'introDismissed'
 const LANES_KEY = 'lanesByProfile'
 const COLLAPSED_KEY = 'collapsedLanes'
 
-/** One live `task_events` frame → precise cache invalidation: the board, plus
- *  each touched task's detail. The polls (8s board / 4s drawer) stay as the
- *  fallback — the socket just makes the board feel instant. */
+/** One live `task_events` frame → cache invalidation: the board, plus each
+ *  touched task's detail. The 60s poll stays as the fallback — the socket
+ *  just makes the board feel instant.
+ *
+ *  Board invalidation is throttled (leading + trailing): the server tails
+ *  `task_events` every 300ms, so an active worker produces frames at up to
+ *  ~3/s, and every board refetch is the full payload — measured 2026-08-20
+ *  at ~1 MB and ~3 requests/s during a burst. The trailing edge guarantees
+ *  the frames that arrived inside a window still produce one refetch, so
+ *  nothing is missed — at most delayed by the window. Per-task detail
+ *  invalidation stays per-frame: those queries are small and only active
+ *  while a drawer is open. */
+const BOARD_INVALIDATE_THROTTLE_MS = 3_000
+
+let boardInvalidateTimer: null | ReturnType<typeof setTimeout> = null
+let lastBoardInvalidateAt = 0
+
+function invalidateBoardQueries(): void {
+  lastBoardInvalidateAt = Date.now()
+  void queryClient.invalidateQueries({ queryKey: ['kanban', 'board'] })
+  // Any event can change a board's card count — keep the switcher badge honest.
+  void queryClient.invalidateQueries({ queryKey: BOARDS_KEY })
+}
+
+/** Drop any pending trailing invalidation and forget the window. Called on
+ *  every socket (re)open — the events stream is pinned to a board, so a
+ *  trailing refetch scheduled under the previous board must not fire against
+ *  the new one, and the fresh board's first frame should invalidate
+ *  immediately (leading edge). Also the dispose path. */
+function resetBoardInvalidateThrottle(): void {
+  if (boardInvalidateTimer != null) {
+    clearTimeout(boardInvalidateTimer)
+    boardInvalidateTimer = null
+  }
+
+  lastBoardInvalidateAt = 0
+}
+
+function invalidateBoardThrottled(): void {
+  if (boardInvalidateTimer != null) {
+    return // trailing refetch already scheduled for this window
+  }
+
+  const elapsed = Date.now() - lastBoardInvalidateAt
+
+  if (elapsed >= BOARD_INVALIDATE_THROTTLE_MS) {
+    invalidateBoardQueries()
+
+    return
+  }
+
+  boardInvalidateTimer = setTimeout(() => {
+    boardInvalidateTimer = null
+    invalidateBoardQueries()
+  }, BOARD_INVALIDATE_THROTTLE_MS - elapsed)
+}
+
 function onEventsFrame(slug: string, data: unknown): void {
   const events = (data as { events?: Array<{ task_id?: string }> })?.events
 
@@ -58,9 +112,7 @@ function onEventsFrame(slug: string, data: unknown): void {
     return
   }
 
-  void queryClient.invalidateQueries({ queryKey: ['kanban', 'board'] })
-  // Any event can change a board's card count — keep the switcher badge honest.
-  void queryClient.invalidateQueries({ queryKey: BOARDS_KEY })
+  invalidateBoardThrottled()
 
   for (const taskId of new Set(events.map(event => event.task_id).filter(Boolean))) {
     void queryClient.invalidateQueries({ queryKey: taskKey(slug, taskId!) })
@@ -98,6 +150,9 @@ export function bindApi(r: Rest, storage: PluginStorage, socket: Socket): () => 
 
   const open = (slug: string) => {
     close?.()
+    // The stream is board-pinned: a pending trailing invalidation belongs to
+    // the board we just left, not the one we are dialing.
+    resetBoardInvalidateThrottle()
     close = socket(slug ? `/events?board=${encodeURIComponent(slug)}` : '/events', data => onEventsFrame(slug, data))
   }
 
@@ -107,6 +162,10 @@ export function bindApi(r: Rest, storage: PluginStorage, socket: Socket): () => 
   return () => {
     unsubs.forEach(unsub => unsub())
     close?.()
+
+    // A pending trailing invalidation must not survive a plugin toggle.
+    resetBoardInvalidateThrottle()
+
     rest = null
   }
 }

@@ -7,6 +7,10 @@ export interface KanbanTask {
   id: string
   title: string
   body?: null | string
+  /** True when `body` was cut to a card-size preview by /board — the full
+   *  text lives on /tasks/:id. Absent on short bodies and on the detail
+   *  endpoint. */
+  body_truncated?: boolean
   status: string
   assignee?: null | string
   priority?: number
@@ -34,6 +38,10 @@ export interface KanbanBoard {
   columns: KanbanColumn[]
   tenants: string[]
   assignees: string[]
+  /** Uncapped done count — the done column itself is capped to the N most
+   *  recently completed (server default 100). Optional so an older backend
+   *  without the cap still renders. */
+  done_total?: number
   latest_event_id: number
   now: number
 }

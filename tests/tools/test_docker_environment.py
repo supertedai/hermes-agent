@@ -100,6 +100,90 @@ def test_auto_mount_host_cwd_adds_volume(monkeypatch, tmp_path):
     assert f"{project_dir}:/workspace" in run_args_str
 
 
+def test_normalize_mount_is_order_independent_and_serializable():
+    mount = {
+        "Type": "bind",
+        "Source": "/host/project",
+        "Destination": "/workspace",
+        "Mode": "ro",
+        "RW": False,
+        "Propagation": "rprivate",
+        "Name": None,
+        "Driver": None,
+    }
+
+    result = docker_env._normalize_mount(mount)
+
+    assert result == {
+        "status": "valid",
+        "mount": {
+            "source": "/host/project",
+            "destination": "/workspace",
+            "type": "bind",
+            "name": None,
+            "driver": None,
+            "mode": "ro",
+            "rw": False,
+            "propagation": "rprivate",
+        },
+    }
+    assert docker_env._normalize_mount(dict(reversed(list(mount.items())))) == result
+
+
+def test_normalize_mount_marks_missing_inspect_fields_unknown():
+    result = docker_env._normalize_mount({
+        "Type": "bind",
+        "Source": "/host/project",
+        "Destination": "/workspace",
+        "RW": True,
+    })
+
+    assert result["status"] == "unknown"
+    assert result["mount"]["source"] == "/host/project"
+
+
+@pytest.mark.parametrize("mount", [
+    None,
+    [],
+    {"Type": "volume", "Source": "/var/lib/docker/volumes/x", "Destination": "/workspace", "RW": True},
+    {"Type": "bind", "Source": "/host", "Destination": "/workspace", "RW": "false"},
+    {"Type": "bind", "Source": "/host", "Destination": "/workspace", "RW": True, "Target": "/other"},
+])
+def test_normalize_mount_rejects_invalid_or_unsafe_shapes(mount):
+    assert docker_env._normalize_mount(mount)["status"] == "invalid"
+
+
+def test_normalize_mounts_sorts_records_and_keeps_invalid_mismatch_safe():
+    raw = [
+        {"Type": "bind", "Source": "/b", "Destination": "/z", "RW": True,
+         "Mode": "rw", "Propagation": "rprivate", "Name": None, "Driver": None},
+        {"Type": "bind", "Source": "/a", "Destination": "/a", "RW": True,
+         "Mode": "rw", "Propagation": "rprivate", "Name": None, "Driver": None},
+    ]
+
+    result = docker_env._normalize_mounts(raw)
+
+    assert result["status"] == "valid"
+    assert [item["source"] for item in result["mounts"]] == ["/a", "/b"]
+    assert docker_env._normalize_mounts(raw + [None])["status"] == "invalid"
+
+
+def test_container_mounts_uses_selected_runtime_and_json_inspect(monkeypatch):
+    env = docker_env.DockerEnvironment.__new__(docker_env.DockerEnvironment)
+    env._docker_exe = "/custom/docker"
+    calls = []
+
+    def _run(cmd, **kwargs):
+        calls.append(cmd)
+        return subprocess.CompletedProcess(cmd, 0, stdout='[{"Type":"bind","Source":"/h","Destination":"/c","RW":true,"Mode":"rw","Propagation":"rprivate","Name":null,"Driver":null}]', stderr="")
+
+    monkeypatch.setattr(docker_env.subprocess, "run", _run)
+    result = env._container_mounts("container-id")
+
+    assert result["status"] == "valid"
+    assert calls == [["/custom/docker", "inspect", "--format", "{{json .Mounts}}", "container-id"]]
+
+
 def test_non_persistent_cleanup_removes_container(monkeypatch):
     """When persist_across_processes=false, cleanup() must docker stop AND
     docker rm so containers don't leak across hermes processes.

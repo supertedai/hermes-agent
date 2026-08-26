@@ -38,6 +38,95 @@ _DOCKER_SEARCH_PATHS = [
 _docker_executable: Optional[str] = None  # resolved once, cached
 _ENV_VAR_NAME_RE = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*$")
 _EGRESS_LABEL_KEY = "hermes-egress"
+_MOUNT_MISSING = object()
+
+
+def _mount_result(status: str, mount: dict | None = None, reason: str | None = None) -> dict:
+    """Build the tagged mount result used by normalization and comparisons.
+
+    The status is deliberately separate from the values: an unknown or invalid
+    inspect result must never compare equal to a valid mount with empty fields.
+    """
+    result = {"status": status, "mount": mount}
+    if reason:
+        result["reason"] = reason
+    return result
+
+
+def _normalize_mount(raw_mount) -> dict:
+    """Normalize one Docker inspect mount without guessing missing data.
+
+    ``Source`` and ``Destination`` identify the path mapping; ``Type`` prevents
+    volumes/tmpfs from being mistaken for bind mounts.  ``Mode`` and ``RW``
+    capture effective read-only behavior, while ``Name``/``Driver`` identify
+    volume configuration and ``Propagation`` affects bind propagation.
+    """
+    if not isinstance(raw_mount, dict):
+        return _mount_result("invalid", reason="mount is not an object")
+
+    source = raw_mount.get("Source", _MOUNT_MISSING)
+    destination = raw_mount.get("Destination", _MOUNT_MISSING)
+    target = raw_mount.get("Target", _MOUNT_MISSING)
+    if target is not _MOUNT_MISSING:
+        if not isinstance(target, str) or not target:
+            return _mount_result("invalid", reason="Target is not a non-empty string")
+        if destination is _MOUNT_MISSING:
+            destination = target
+        elif destination != target:
+            return _mount_result("invalid", reason="Destination and Target disagree")
+
+    if not isinstance(source, str) or not source:
+        return _mount_result("invalid", reason="Source is not a non-empty string")
+    if not isinstance(destination, str) or not destination:
+        return _mount_result("invalid", reason="Destination is not a non-empty string")
+
+    mount_type = raw_mount.get("Type", _MOUNT_MISSING)
+    if not isinstance(mount_type, str) or mount_type != "bind":
+        return _mount_result("invalid", reason="mount Type is not bind")
+
+    rw = raw_mount.get("RW", _MOUNT_MISSING)
+    if rw is not _MOUNT_MISSING and not isinstance(rw, bool):
+        return _mount_result("invalid", reason="RW is not boolean")
+
+    normalized = {
+        "source": source,
+        "destination": destination,
+        "type": mount_type,
+        "name": raw_mount.get("Name"),
+        "driver": raw_mount.get("Driver"),
+        "mode": raw_mount.get("Mode"),
+        "rw": None if rw is _MOUNT_MISSING else rw,
+        "propagation": raw_mount.get("Propagation"),
+    }
+    for key in ("name", "driver", "mode", "propagation"):
+        value = normalized[key]
+        if value is not None and not isinstance(value, str):
+            return _mount_result("invalid", reason=f"{key} is not string or null")
+
+    status = "valid"
+    if (
+        "Destination" not in raw_mount
+        or any(name not in raw_mount for name in ("Name", "Driver", "Mode", "RW", "Propagation"))
+    ):
+        status = "unknown"
+    return _mount_result(status, normalized)
+
+
+def _normalize_mounts(raw_mounts) -> dict:
+    """Return a stable, order-independent representation of inspect mounts."""
+    if not isinstance(raw_mounts, list):
+        return {"status": "invalid", "mounts": [], "reason": "Mounts is not a list"}
+
+    results = [_normalize_mount(raw_mount) for raw_mount in raw_mounts]
+    if any(result["status"] == "invalid" for result in results):
+        status = "invalid"
+    elif any(result["status"] == "unknown" for result in results):
+        status = "unknown"
+    else:
+        status = "valid"
+    mounts = [result["mount"] for result in results if result.get("mount") is not None]
+    mounts.sort(key=lambda mount: json.dumps(mount, sort_keys=True, separators=(",", ":")))
+    return {"status": status, "mounts": mounts}
 
 
 def _normalize_forward_env_names(forward_env: list[str] | None) -> list[str]:
@@ -1747,6 +1836,35 @@ class DockerEnvironment(BaseEnvironment):
             return None
         mode = result.stdout.strip()
         return mode or None
+
+    def _container_mounts(self, container_id: str) -> dict:
+        """Inspect and normalize a container's bind mounts.
+
+        Inspection goes through the selected Docker-compatible executable, so
+        rootful/rootless socket selection remains the runtime's concern.  A
+        failed or malformed inspect is tagged ``unknown``/``invalid`` and is
+        therefore safe for mismatch-failing comparisons.
+        """
+        try:
+            result = subprocess.run(
+                [self._docker_exe, "inspect", "--format", "{{json .Mounts}}", container_id],
+                capture_output=True,
+                text=True, encoding="utf-8", errors="replace",
+                timeout=10,
+                check=False,
+                stdin=subprocess.DEVNULL,
+            )
+        except (subprocess.TimeoutExpired, OSError) as e:
+            logger.debug("docker inspect Mounts failed: %s", e)
+            return {"status": "unknown", "mounts": [], "reason": "inspect failed"}
+        if result.returncode != 0:
+            logger.debug("docker inspect Mounts returned %d: %s", result.returncode, result.stderr.strip())
+            return {"status": "unknown", "mounts": [], "reason": "inspect returned non-zero"}
+        try:
+            raw_mounts = json.loads((result.stdout or "").strip())
+        except (TypeError, ValueError):
+            return {"status": "invalid", "mounts": [], "reason": "inspect output is not JSON"}
+        return _normalize_mounts(raw_mounts)
 
     def _find_reusable_container(
         self,

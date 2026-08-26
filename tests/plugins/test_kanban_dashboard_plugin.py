@@ -708,3 +708,109 @@ def test_specify_happy_path(client, monkeypatch):
 # ---------------------------------------------------------------------------
 
 
+
+
+# ---------------------------------------------------------------------------
+# /board payload diet: body preview + done-column cap
+# ---------------------------------------------------------------------------
+
+
+def _mark_done(task_id: str, completed_at: int) -> None:
+    """Force a task into done with a chosen completed_at.
+
+    Direct SQL on purpose: these tests exercise how /board *reads* the done
+    column, not the status-transition machinery (which normalises
+    completed_at to now and would leave every row tied on the same second).
+    """
+    conn = kb.connect()
+    try:
+        conn.execute(
+            "UPDATE tasks SET status = 'done', completed_at = ? WHERE id = ?",
+            (completed_at, task_id),
+        )
+        conn.commit()
+    finally:
+        conn.close()
+
+
+def _board_card(board: dict, task_id: str) -> dict:
+    cards = [
+        card
+        for col in board["columns"]
+        for card in col["tasks"]
+        if card["id"] == task_id
+    ]
+    assert len(cards) == 1, f"expected exactly one card for {task_id}"
+    return cards[0]
+
+
+def test_board_body_is_card_preview_full_on_detail(client):
+    long_body = "x" * 2000
+    task = client.post(
+        "/api/plugins/kanban/tasks", json={"title": "big brief", "body": long_body},
+    ).json()["task"]
+
+    r = client.get("/api/plugins/kanban/board")
+    assert r.status_code == 200
+    card = _board_card(r.json(), task["id"])
+    # 500 == _CARD_BODY_PREVIEW_CHARS in plugin_api.py.
+    assert card["body"] == "x" * 500
+    assert card["body_truncated"] is True
+
+    # The drawer's endpoint keeps the full body.
+    detail = client.get(f"/api/plugins/kanban/tasks/{task['id']}").json()
+    assert detail["task"]["body"] == long_body
+    assert "body_truncated" not in detail["task"]
+
+
+def test_board_short_body_untouched(client):
+    task = client.post(
+        "/api/plugins/kanban/tasks", json={"title": "small", "body": "short brief"},
+    ).json()["task"]
+
+    card = _board_card(client.get("/api/plugins/kanban/board").json(), task["id"])
+    assert card["body"] == "short brief"
+    assert "body_truncated" not in card
+
+
+def test_board_done_column_capped_most_recent_first(client):
+    ids = []
+    for i in range(5):
+        task = client.post(
+            "/api/plugins/kanban/tasks", json={"title": f"d{i}"},
+        ).json()["task"]
+        _mark_done(task["id"], completed_at=1_000 + i)
+        ids.append(task["id"])
+
+    body = client.get("/api/plugins/kanban/board?done_limit=3").json()
+    done = next(col for col in body["columns"] if col["name"] == "done")
+    assert [card["id"] for card in done["tasks"]] == [ids[4], ids[3], ids[2]]
+    assert body["done_total"] == 5
+
+
+def test_board_done_limit_zero_uncaps(client):
+    ids = []
+    for i in range(5):
+        task = client.post(
+            "/api/plugins/kanban/tasks", json={"title": f"d{i}"},
+        ).json()["task"]
+        _mark_done(task["id"], completed_at=1_000 + i)
+        ids.append(task["id"])
+
+    body = client.get("/api/plugins/kanban/board?done_limit=0").json()
+    done = next(col for col in body["columns"] if col["name"] == "done")
+    # Uncapped, still most-recently-completed first.
+    assert [card["id"] for card in done["tasks"]] == list(reversed(ids))
+    assert body["done_total"] == 5
+
+
+def test_board_done_total_reported_under_default_cap(client):
+    task = client.post(
+        "/api/plugins/kanban/tasks", json={"title": "lone done"},
+    ).json()["task"]
+    _mark_done(task["id"], completed_at=1_000)
+
+    body = client.get("/api/plugins/kanban/board").json()
+    done = next(col for col in body["columns"] if col["name"] == "done")
+    assert len(done["tasks"]) == 1
+    assert body["done_total"] == 1
