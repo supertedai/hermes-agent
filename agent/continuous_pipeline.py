@@ -230,6 +230,9 @@ class MemoryScheduler:
 class MemoryHookResult:
     selection: MemorySelection
     context: str = ""
+    # Label carried from the bridge: which scoped consumer this context was
+    # assembled for (e.g. "faber.codex"). Empty for unscoped callers.
+    source_scope: str = ""
 
 
 class MemoryManagerBridge:
@@ -240,9 +243,24 @@ class MemoryManagerBridge:
     authoritative until the canonical layer registry exposes per-layer reads.
     """
 
-    def __init__(self, manager: Any, scheduler: MemoryScheduler):
+    def __init__(
+        self,
+        manager: Any,
+        scheduler: MemoryScheduler,
+        *,
+        strict: bool = False,
+        source_scope: str = "",
+    ) -> None:
         self.manager = manager
         self.scheduler = scheduler
+        # strict: this bridge feeds a scoped consumer (e.g. Faber), and the
+        # merged prefetch_all fallback would smuggle unscoped provider
+        # context across that boundary — deliver nothing instead, labelled
+        # ``strict_no_context`` so a suppressed read is distinguishable from
+        # a fallback that merely came back empty. source_scope rides on every
+        # MemoryHookResult so downstream provenance can name the consumer.
+        self.strict = strict
+        self.source_scope = source_scope
 
     def before_turn(
         self,
@@ -275,16 +293,22 @@ class MemoryManagerBridge:
                 context = trim_memory_to_budget(context, budget_tokens)
                 actual_tokens = estimate_memory_tokens(context)
                 mode = "per_layer_reader"
+            elif self.strict:
+                mode = "strict_no_context"
             else:
                 context = self.manager.prefetch_all(query, session_id=session_id, strict=True)
                 context = trim_memory_to_budget(context or "", budget_tokens)
                 actual_tokens = estimate_memory_tokens(context)
+        elif self.strict:
+            mode = "strict_no_context"
         else:
             context = self.manager.prefetch_all(query, session_id=session_id, strict=True)
             context = trim_memory_to_budget(context or "", budget_tokens)
             actual_tokens = estimate_memory_tokens(context)
         selection = replace(selection, actual_tokens=actual_tokens, enforcement_mode=mode)
-        return MemoryHookResult(selection=selection, context=context)
+        return MemoryHookResult(
+            selection=selection, context=context, source_scope=self.source_scope
+        )
 
     def after_turn(
         self,

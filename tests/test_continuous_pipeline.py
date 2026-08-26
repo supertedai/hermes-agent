@@ -329,6 +329,31 @@ def test_memory_manager_bridge_enforces_actual_aggregate_output_budget():
     assert "truncated" in result.context
 
 
+def test_memory_manager_bridge_strict_suppresses_the_aggregate_fallback():
+    """A scoped bridge delivers nothing rather than unscoped merged context.
+
+    The mode matters as much as the emptiness: without its own label a
+    suppressed read is indistinguishable from an aggregate fallback that
+    happened to come back empty, and provenance downstream reads the wrong
+    story.
+    """
+    class Manager:
+        def prefetch_all(self, query, *, session_id="", strict=False):
+            raise AssertionError("strict bridge must not reach the aggregate fallback")
+
+    bridge = MemoryManagerBridge(
+        Manager(),
+        MemoryScheduler((MemoryLayerSpec("episodisk", "canonical", max_tokens=100),)),
+        strict=True,
+        source_scope="faber.codex",
+    )
+    result = bridge.before_turn("q", budget_tokens=10)
+    assert result.context == ""
+    assert result.selection.actual_tokens == 0
+    assert result.selection.enforcement_mode == "strict_no_context"
+    assert result.source_scope == "faber.codex"
+
+
 def test_memory_manager_bridge_uses_per_layer_reader_when_available():
     class Manager:
         def prefetch_all(self, query, *, session_id="", strict=False):

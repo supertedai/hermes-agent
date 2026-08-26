@@ -238,17 +238,21 @@ describe('flat tool list approval surfacing', () => {
   })
 
   it('lets completed tool rows be dismissed', async () => {
+    // The message carries ONE tool call, so the pre-sync `> 1` block count was
+    // an artefact of the flat-list rendering. `> 0` is the architecture-neutral
+    // form of the same anchor: the row is really there before we dismiss it.
     const { container } = render(<GroupHarness message={completedOnlyMessage()} />)
 
     const dismiss = await screen.findByLabelText('Dismiss')
 
-    expect(container.querySelectorAll('[data-slot="tool-block"]').length).toBeGreaterThan(1)
+    expect(container.querySelectorAll('[data-slot="tool-block"]').length).toBeGreaterThan(0)
 
     fireEvent.click(dismiss)
 
     await waitFor(() => {
       expect(screen.queryByLabelText('Dismiss')).toBeNull()
     })
+    expect(container.querySelectorAll('[data-slot="tool-block"]').length).toBe(0)
   })
 
   it('keeps a dismissed row hidden after a remount (virtualization)', async () => {
@@ -266,13 +270,25 @@ describe('flat tool list approval surfacing', () => {
 
     first.unmount()
 
-    const { container } = render(<GroupHarness message={completedOnlyMessage()} />)
+    // Fresh mount of the same message: the dismissal must be remembered by the
+    // store, so neither the row nor its Dismiss affordance comes back.
+    //
+    // The pre-sync assert here was `tool-block > 0` — that dismissal left a
+    // rendered row behind. Measured against the adopted component, dismissal
+    // removes the row outright (the assistant message renders with empty
+    // content), so that count is 0 now. The message root is asserted instead:
+    // without a positive anchor these assertions would also pass on a
+    // component that rendered nothing at all, including a broken one.
+    const second = render(<GroupHarness message={completedOnlyMessage()} />)
 
     await waitFor(() => {
-      expect(container.querySelectorAll('[data-slot="tool-block"]').length).toBeGreaterThan(0)
+      expect(
+        second.container.querySelector('[data-message-id="assistant-completed-only"]')
+      ).not.toBeNull()
     })
 
     expect(screen.queryByLabelText('Dismiss')).toBeNull()
+    expect(second.container.querySelectorAll('[data-slot="tool-block"]').length).toBe(0)
   })
 
   it('lets failed tool rows be dismissed', async () => {
