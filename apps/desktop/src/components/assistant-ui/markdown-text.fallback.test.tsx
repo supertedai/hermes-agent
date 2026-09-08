@@ -26,7 +26,9 @@ describe('markdown renderer fallback', () => {
       <MarkdownTextContent
         containerProps={{ 'data-slot': 'aui_reasoning-text' } as ComponentProps<'div'>}
         isRunning={false}
-        text={'# Fallback heading\n\nA **formatted** paragraph with [Docs](https://example.com) and $x^2$.\n\n- One\n- Two'}
+        text={
+          '# Fallback heading\n\nA **formatted** paragraph with [Docs](https://example.com) and $x^2$.\n\n- One\n- Two'
+        }
       />
     )
 
