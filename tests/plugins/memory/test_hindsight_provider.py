@@ -10,6 +10,7 @@ import os
 import re
 import stat
 import sys
+import threading
 from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock
@@ -494,6 +495,42 @@ class TestPrefetch:
     def test_prefetch_returns_empty_when_no_result(self, provider):
         assert provider.prefetch("test") == ""
 
+
+    def test_queue_prefetch_drops_request_while_one_is_in_flight(self, provider):
+        release = threading.Event()
+
+        def slow_prefetch():
+            release.wait(timeout=5)
+
+        in_flight = threading.Thread(target=slow_prefetch, daemon=True)
+        in_flight.start()
+        provider._prefetch_thread = in_flight
+
+        provider.queue_prefetch("new query")
+
+        assert provider._prefetch_thread is in_flight
+        release.set()
+        in_flight.join(timeout=4)
+        assert not in_flight.is_alive()
+
+    def test_completed_prefetch_is_dropped_after_next_turn_starts(self, provider, monkeypatch):
+        release = threading.Event()
+
+        def slow_recall(_operation):
+            release.wait(timeout=5)
+            return SimpleNamespace(results=[SimpleNamespace(text="stale context")])
+
+        monkeypatch.setattr(provider, "_run_hindsight_operation", slow_recall)
+        provider.queue_prefetch("previous turn")
+        worker = provider._prefetch_thread
+
+        with provider._prefetch_lock:
+            provider._prefetch_generation += 1
+        release.set()
+        worker.join(timeout=4)
+
+        assert not worker.is_alive()
+        assert provider._prefetch_result == ""
 
     def test_queue_prefetch_skipped_in_tools_mode(self, provider_with_config):
         p = provider_with_config(memory_mode="tools")

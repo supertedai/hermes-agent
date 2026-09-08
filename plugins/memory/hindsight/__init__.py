@@ -716,6 +716,7 @@ class HindsightMemoryProvider(MemoryProvider):
         self._timeout = _DEFAULT_TIMEOUT
         self._idle_timeout = _DEFAULT_IDLE_TIMEOUT
         self._prefetch_result = ""
+        self._prefetch_generation = 0
         self._prefetch_lock = threading.Lock()
         self._prefetch_thread = None
         # Single-writer model for retain. sync_turn() enqueues; the writer
@@ -1520,6 +1521,7 @@ class HindsightMemoryProvider(MemoryProvider):
             logger.debug("Prefetch: waiting for background thread to complete")
             self._prefetch_thread.join(timeout=3.0)
         with self._prefetch_lock:
+            self._prefetch_generation += 1
             result = self._prefetch_result
             self._prefetch_result = ""
         if not result:
@@ -1543,9 +1545,14 @@ class HindsightMemoryProvider(MemoryProvider):
         if self._shutting_down.is_set():
             logger.debug("Prefetch: skipped (shutting down)")
             return
+        if self._prefetch_thread and self._prefetch_thread.is_alive():
+            logger.debug("Prefetch: skipped (previous request still in flight)")
+            return
         # Truncate query to max chars
         if self._recall_max_input_chars and len(query) > self._recall_max_input_chars:
             query = query[:self._recall_max_input_chars]
+        with self._prefetch_lock:
+            generation = self._prefetch_generation
 
         def _run():
             try:
@@ -1571,7 +1578,10 @@ class HindsightMemoryProvider(MemoryProvider):
                     text = "\n".join(f"- {r.text}" for r in resp.results if r.text) if resp.results else ""
                 if text:
                     with self._prefetch_lock:
-                        self._prefetch_result = text
+                        if generation == self._prefetch_generation:
+                            self._prefetch_result = text
+                        else:
+                            logger.debug("Prefetch: discarding result from an older turn")
             except Exception as e:
                 logger.debug("Hindsight prefetch failed: %s", e, exc_info=True)
 
@@ -1937,6 +1947,7 @@ class HindsightMemoryProvider(MemoryProvider):
         if self._prefetch_thread and self._prefetch_thread.is_alive():
             self._prefetch_thread.join(timeout=3.0)
         with self._prefetch_lock:
+            self._prefetch_generation += 1
             self._prefetch_result = ""
 
         # 3. Now rotate to the new session.
