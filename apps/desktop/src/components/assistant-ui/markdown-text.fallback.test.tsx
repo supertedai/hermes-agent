@@ -1,5 +1,6 @@
 import type * as StreamdownModule from '@assistant-ui/react-streamdown'
 import { render, screen, waitFor } from '@testing-library/react'
+import type { ComponentProps } from 'react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 vi.mock('@assistant-ui/react-streamdown', async () => {
@@ -23,11 +24,13 @@ describe('markdown renderer fallback', () => {
   it('keeps Markdown structure when the streaming renderer fails', async () => {
     const { container } = render(
       <MarkdownTextContent
+        containerProps={{ 'data-slot': 'aui_reasoning-text' } as ComponentProps<'div'>}
         isRunning={false}
         text={'# Fallback heading\n\nA **formatted** paragraph with [Docs](https://example.com) and $x^2$.\n\n- One\n- Two'}
       />
     )
 
+    expect(container.querySelector('[data-slot="aui_reasoning-text"].aui-md.prose')).toBeTruthy()
     expect(screen.getByRole('heading', { name: 'Fallback heading' })).toBeTruthy()
     expect(screen.getByText('formatted')).toBeTruthy()
     expect(screen.getByRole('list')).toBeTruthy()
