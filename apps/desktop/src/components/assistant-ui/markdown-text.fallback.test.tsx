@@ -38,4 +38,16 @@ describe('markdown renderer fallback', () => {
     await waitFor(() => expect(container.querySelector('.katex')).not.toBeNull())
     expect(screen.queryByText('**formatted**')).toBeNull()
   })
+
+  it('preserves the container contract for oversized Markdown', () => {
+    const { container } = render(
+      <MarkdownTextContent
+        containerProps={{ 'data-slot': 'aui_reasoning-text' } as ComponentProps<'div'>}
+        isRunning={false}
+        text={'# Large fallback\n\n' + 'x'.repeat(200_001)}
+      />
+    )
+
+    expect(container.querySelector('[data-slot="aui_reasoning-text"].aui-md')).toBeTruthy()
+  })
 })

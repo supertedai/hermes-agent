@@ -648,7 +648,7 @@ function MarkdownTextSurface({
   )
 
   if (text.length > MAX_MARKDOWN_CHARS) {
-    return <HugeTextFallback containerClassName={containerClassName} text={text} />
+    return <HugeTextFallback containerClassName={containerClassName} containerProps={containerProps} text={text} />
   }
 
   return (
