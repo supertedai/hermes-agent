@@ -432,13 +432,24 @@ const MARKDOWN_CONTAINER_CLASS_NAME = cn(
 
 const MAX_MARKDOWN_CHARS = 200_000
 
-function RawTextFallback({ containerClassName, text }: { containerClassName?: string; text: string }) {
+function RawTextFallback({
+  containerClassName,
+  containerProps,
+  text
+}: {
+  containerClassName?: string
+  containerProps?: ComponentProps<'div'>
+  text: string
+}) {
   const chunks = useMemo(() => chunkByLines(text, 200), [text])
+  const { className: containerPropsClassName, ...restContainerProps } = containerProps || {}
 
   return (
     <div
+      {...restContainerProps}
       className={cn(
         'aui-md w-full max-w-none overflow-hidden rounded-[0.625rem] border border-(--ui-stroke-tertiary) font-mono text-[0.7rem] leading-relaxed text-foreground/90',
+        containerPropsClassName,
         containerClassName
       )}
     >
@@ -461,30 +472,34 @@ function RawTextFallback({ containerClassName, text }: { containerClassName?: st
 function HugeTextFallback({
   components,
   containerClassName,
+  containerProps,
   markdown = false,
   plugins,
   text
 }: {
   components?: StreamdownTextComponents
   containerClassName?: string
+  containerProps?: ComponentProps<'div'>
   markdown?: boolean
   plugins?: ComponentProps<typeof Streamdown>['plugins']
   text: string
 }) {
   if (!markdown) {
-    return <RawTextFallback containerClassName={containerClassName} text={text} />
+    return <RawTextFallback containerClassName={containerClassName} containerProps={containerProps} text={text} />
   }
+
+  const { className: containerPropsClassName, ...restContainerProps } = containerProps || {}
 
   return (
     <ErrorBoundary
-      fallback={() => <RawTextFallback containerClassName={containerClassName} text={text} />}
+      fallback={() => (
+        <RawTextFallback containerClassName={containerClassName} containerProps={containerProps} text={text} />
+      )}
       label="markdown-safe-fallback"
     >
       <div
-        className={cn(
-          'aui-md prose w-full max-w-none overflow-hidden text-[length:var(--conversation-text-font-size)] leading-(--dt-line-height) text-foreground',
-          containerClassName
-        )}
+        {...restContainerProps}
+        className={cn(MARKDOWN_CONTAINER_CLASS_NAME, containerPropsClassName, containerClassName)}
       >
         {/* The static Streamdown API has no custom block-parser prop; it still
             shares the production preprocess and component/plugin tables. */}
@@ -633,7 +648,7 @@ function MarkdownTextSurface({
   )
 
   if (text.length > MAX_MARKDOWN_CHARS) {
-    return <HugeTextFallback containerClassName={containerClassName} text={text} />
+    return <HugeTextFallback containerClassName={containerClassName} containerProps={containerProps} text={text} />
   }
 
   return (
@@ -644,6 +659,7 @@ function MarkdownTextSurface({
         <HugeTextFallback
           components={components}
           containerClassName={containerClassName}
+          containerProps={containerProps}
           markdown
           plugins={plugins}
           text={text}
