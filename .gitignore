@@ -181,11 +181,11 @@ apps/desktop/demo/
 # PR body is the archive. See the hermes-agent-dev skill's
 # pr-infographic-workflow reference (storage rule + lapse #8 / #COMMIT-1).
 #
-# Spelling variants are listed because a single `infographic/` pattern was
+# Spelling variants are listed because the exact output-file pattern below was
 # sidestepped by an `infograficos/` directory (#70552). .gitignore is only
 # the first line of defence and cannot stop `git add -f` at all — the
 # infographic-check CI job is what actually enforces this.
-infographic/
+infographic/*/infographic.png
 infographics/
 infograficos/
 infografico/

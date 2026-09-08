@@ -957,6 +957,11 @@
       setAssigneeFilter("");
       setIncludeArchived(false);
       clearSelected();
+      // Close an open drawer: its task id belongs to the PREVIOUS board, and
+      // refetching it against the new board's DB is a guaranteed 404 that
+      // sticks for every later board switch (measured 2026-08-20: the same
+      // task id 404ing against three boards in a row as the user switched).
+      setSelectedTaskId(null);
     }, [board, clearSelected]);
 
     const createNewBoard = useCallback(function (payload) {
