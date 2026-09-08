@@ -9,11 +9,13 @@ import {
 } from '@assistant-ui/react-streamdown'
 import type { code as streamdownCode } from '@streamdown/code'
 import { type ComponentProps, memo, useEffect, useMemo, useState } from 'react'
+import { Streamdown } from 'streamdown'
 
 import { ExpandableBlock } from '@/components/chat/expandable-block'
 import { PreviewAttachment } from '@/components/chat/preview-attachment'
 import { chunkByLines, SyntaxHighlighter } from '@/components/chat/shiki-highlighter'
 import { ZoomableImage } from '@/components/chat/zoomable-image'
+import { ErrorBoundary } from '@/components/error-boundary'
 import { detectArtifact } from '@/lib/artifact-detect'
 import { normalizeExternalUrl, openExternalLink, PrettyLink } from '@/lib/external-link'
 import { createMemoizedMathPlugin } from '@/lib/katex-memo'
@@ -430,7 +432,7 @@ const MARKDOWN_CONTAINER_CLASS_NAME = cn(
 
 const MAX_MARKDOWN_CHARS = 200_000
 
-function HugeTextFallback({ containerClassName, text }: { containerClassName?: string; text: string }) {
+function RawTextFallback({ containerClassName, text }: { containerClassName?: string; text: string }) {
   const chunks = useMemo(() => chunkByLines(text, 200), [text])
 
   return (
@@ -452,6 +454,45 @@ function HugeTextFallback({ containerClassName, text }: { containerClassName?: s
         ))}
       </ExpandableBlock>
     </div>
+  )
+}
+
+
+function HugeTextFallback({
+  components,
+  containerClassName,
+  markdown = false,
+  plugins,
+  text
+}: {
+  components?: StreamdownTextComponents
+  containerClassName?: string
+  markdown?: boolean
+  plugins?: ComponentProps<typeof Streamdown>['plugins']
+  text: string
+}) {
+  if (!markdown) {
+    return <RawTextFallback containerClassName={containerClassName} text={text} />
+  }
+
+  return (
+    <ErrorBoundary
+      fallback={() => <RawTextFallback containerClassName={containerClassName} text={text} />}
+      label="markdown-safe-fallback"
+    >
+      <div
+        className={cn(
+          'aui-md prose w-full max-w-none overflow-hidden text-[length:var(--conversation-text-font-size)] leading-(--dt-line-height) text-foreground',
+          containerClassName
+        )}
+      >
+        {/* The static Streamdown API has no custom block-parser prop; it still
+            shares the production preprocess and component/plugin tables. */}
+        <Streamdown components={components} mode="static" parseIncompleteMarkdown={false} plugins={plugins}>
+          {preprocessWithTailRepair(text)}
+        </Streamdown>
+      </div>
+    </ErrorBoundary>
   )
 }
 
@@ -596,23 +637,33 @@ function MarkdownTextSurface({
   }
 
   return (
-    <StreamdownTextPrimitive
-      components={components}
-      containerClassName={cn(MARKDOWN_CONTAINER_CLASS_NAME, containerClassName)}
-      containerProps={containerProps}
-      defer={defer}
-      lineNumbers={false}
-      mode="streaming"
-      // Incomplete-markdown repair runs in preprocessWithTailRepair on the
-      // full accumulated text; the built-in tail-bounded remend is disabled
-      // because a custom parseMarkdownIntoBlocksFn is supplied, and
-      // parseIncompleteMarkdown stays false to avoid a second full-text
-      // remend pass.
-      parseIncompleteMarkdown={false}
-      parseMarkdownIntoBlocksFn={parseMarkdownIntoBlocksCached}
-      plugins={plugins}
-      preprocess={preprocessWithTailRepair}
-    />
+    // Last line of defence for the whole markdown surface — assistant answers,
+    // reasoning, tool output and user bubbles all render through here.
+    <ErrorBoundary
+      fallback={() => (
+        <HugeTextFallback
+          components={components}
+          containerClassName={containerClassName}
+          markdown
+          plugins={plugins}
+          text={text}
+        />
+      )}
+      label="markdown-render"
+    >
+      <StreamdownTextPrimitive
+        components={components}
+        containerClassName={cn(MARKDOWN_CONTAINER_CLASS_NAME, containerClassName)}
+        containerProps={containerProps}
+        defer={defer}
+        lineNumbers={false}
+        mode="streaming"
+        parseIncompleteMarkdown={false}
+        parseMarkdownIntoBlocksFn={parseMarkdownIntoBlocksCached}
+        plugins={plugins}
+        preprocess={preprocessWithTailRepair}
+      />
+    </ErrorBoundary>
   )
 }
 
