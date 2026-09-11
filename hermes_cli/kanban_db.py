@@ -2831,6 +2831,74 @@ def _canonical_assignee(assignee: Optional[str]) -> Optional[str]:
     return normalize_profile_name(assignee)
 
 
+def enqueue_task(
+    conn: sqlite3.Connection,
+    *,
+    title: str,
+    body: Optional[str] = None,
+    assignee: Optional[str] = None,
+    created_by: Optional[str] = None,
+    workspace_kind: str = "scratch",
+    workspace_path: Optional[str] = None,
+    branch_name: Optional[str] = None,
+    project_id: Optional[str] = None,
+    priority: int = 0,
+    idempotency_key: str,
+) -> tuple[str, bool]:
+    """Create or refresh one automation-owned task.
+
+    Returns ``(task_id, created)``.  Existing active work is updated without
+    disturbing its claim.  Terminal rows are returned to ``ready`` so a
+    periodic producer can enqueue the same maintenance card again.  Claiming,
+    workspace setup, and worker spawning remain dispatcher responsibilities.
+    """
+    if not idempotency_key or not idempotency_key.strip():
+        raise ValueError("idempotency_key is required")
+    if not title or not title.strip():
+        raise ValueError("title is required")
+    assignee = _canonical_assignee(assignee)
+    key = idempotency_key.strip()
+    row = conn.execute(
+        "SELECT id, status FROM tasks WHERE idempotency_key = ? "
+        "AND status != 'archived' ORDER BY created_at DESC LIMIT 1",
+        (key,),
+    ).fetchone()
+    if row is None:
+        task_id = create_task(
+            conn,
+            title=title,
+            body=body,
+            assignee=assignee,
+            created_by=created_by,
+            workspace_kind=workspace_kind,
+            workspace_path=workspace_path,
+            branch_name=branch_name,
+            project_id=project_id,
+            priority=priority,
+            idempotency_key=key,
+            initial_status="running",
+        )
+        return task_id, True
+
+    task_id = str(row["id"])
+    with write_txn(conn):
+        status = str(row["status"])
+        next_status = "ready" if status in {"done", "blocked", "review"} else status
+        conn.execute(
+            "UPDATE tasks SET title = ?, body = ?, assignee = ?, priority = ?, "
+            "status = ?, completed_at = CASE WHEN ? = 'ready' THEN NULL ELSE completed_at END "
+            "WHERE id = ? AND status != 'archived'",
+            (title.strip(), body, assignee, int(priority), next_status, next_status, task_id),
+        )
+        _append_event(
+            conn,
+            task_id,
+            "enqueued",
+            {"idempotency_key": key, "status": next_status, "updated": True},
+        )
+    return task_id, False
+
+
 def create_task(
     conn: sqlite3.Connection,
     *,

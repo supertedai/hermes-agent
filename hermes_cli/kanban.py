@@ -401,6 +401,26 @@ def build_parser(parent_subparsers: argparse._SubParsersAction) -> argparse.Argu
                                "to skip the brief running-to-blocked transition.")
     p_create.add_argument("--json", action="store_true", help="Emit JSON output")
 
+    # --- enqueue ---
+    p_enqueue = sub.add_parser(
+        "enqueue", help="Idempotently create or refresh one automation-owned task"
+    )
+    p_enqueue.add_argument("title", help="Task title")
+    p_enqueue.add_argument("--body", default=None, help="Optional task body")
+    p_enqueue.add_argument("--assignee", default=None, help="Profile name to assign")
+    p_enqueue.add_argument("--workspace", default="scratch",
+                           help="scratch | worktree | worktree:<path> | dir:<path>")
+    p_enqueue.add_argument("--branch", default=None,
+                           help="Branch name for worktree tasks")
+    p_enqueue.add_argument("--project", default=None,
+                           help="Project id/slug for a project-anchored worktree")
+    p_enqueue.add_argument("--priority", type=int, default=0, help="Priority tiebreaker")
+    p_enqueue.add_argument("--idempotency-key", required=True,
+                           help="Stable producer key used to prevent duplicate cards")
+    p_enqueue.add_argument("--created-by", default="cron",
+                           help="Author recorded on the task")
+    p_enqueue.add_argument("--json", action="store_true", help="Emit JSON output")
+
     # --- swarm ---
     p_swarm = sub.add_parser(
         "swarm",
@@ -1044,6 +1064,7 @@ def kanban_command(args: argparse.Namespace) -> int:
         handlers = {
             "init":     _cmd_init,
             "create":   _cmd_create,
+            "enqueue":  _cmd_enqueue,
             "swarm":    _cmd_swarm,
             "list":     _cmd_list,
             "ls":       _cmd_list,
@@ -1537,6 +1558,41 @@ def _cmd_create(args: argparse.Namespace) -> int:
             running, message = _check_dispatcher_presence()
             if not running and message:
                 print(f"\n⚠  {message}", file=sys.stderr)
+    return 0
+
+
+def _cmd_enqueue(args: argparse.Namespace) -> int:
+    """Enqueue without claiming: the embedded dispatcher owns execution."""
+    try:
+        ws_kind, ws_path = _parse_workspace_flag(args.workspace)
+        branch_name = _parse_branch_flag(args.branch)
+    except argparse.ArgumentTypeError as exc:
+        print(f"kanban: {exc}", file=sys.stderr)
+        return 2
+    if branch_name and ws_kind != "worktree":
+        print("kanban: --branch is only valid with --workspace worktree", file=sys.stderr)
+        return 2
+    with kb.connect_closing() as conn:
+        task_id, created = kb.enqueue_task(
+            conn,
+            title=args.title,
+            body=args.body,
+            assignee=args.assignee,
+            created_by=args.created_by or _profile_author(),
+            workspace_kind=ws_kind,
+            workspace_path=ws_path,
+            branch_name=branch_name,
+            project_id=args.project,
+            priority=args.priority,
+            idempotency_key=args.idempotency_key,
+        )
+        task = kb.get_task(conn, task_id)
+    payload = {"task_id": task_id, "created": created, "status": task.status}
+    if getattr(args, "json", False):
+        print(json.dumps(payload, ensure_ascii=False))
+    else:
+        verb = "Enqueued" if created else "Refreshed"
+        print(f"{verb} {task_id} ({task.status})")
     return 0
 
 
