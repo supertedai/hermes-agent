@@ -52,6 +52,28 @@ from hermes_time import now as _hermes_now
 logger = logging.getLogger(__name__)
 
 
+def _resolve_cron_max_iterations(value: Any, *, default: int = 500) -> int:
+    """Resolve and validate the per-turn cron iteration budget.
+
+    YAML/env bridges can leave a numeric setting as a string. Normalize that
+    representation before it reaches ``AIAgent``; reject malformed values so
+    a bad configuration cannot fail later in the conversation loop.
+    """
+    if value is None:
+        return default
+    if isinstance(value, bool):
+        raise ValueError(f"max_turns must be a positive integer, got {value!r}")
+    if isinstance(value, int):
+        resolved = value
+    elif isinstance(value, str) and value.strip().isdigit():
+        resolved = int(value.strip())
+    else:
+        raise ValueError(f"max_turns must be a positive integer, got {value!r}")
+    if resolved <= 0:
+        raise ValueError(f"max_turns must be a positive integer, got {value!r}")
+    return resolved
+
+
 def _set_cron_session_title(session_db, session_id, base_title):
     """Robustly title a finished cron session before it is closed.
 
@@ -3259,8 +3281,14 @@ def run_job(
                     logger.warning("Job '%s': failed to parse prefill messages file '%s': %s", job_id, pfpath, e)
                     prefill_messages = None
 
-        # Max iterations
-        max_iterations = _cfg.get("agent", {}).get("max_turns") or _cfg.get("max_turns") or 500
+        # Max iterations. Resolve at the config/runtime boundary so the agent
+        # loop never compares an API-call count with a YAML string.
+        _configured_max_iterations = (
+            agent_cfg.get("max_turns") if isinstance(agent_cfg, dict) else None
+        )
+        if _configured_max_iterations is None:
+            _configured_max_iterations = _cfg.get("max_turns")
+        max_iterations = _resolve_cron_max_iterations(_configured_max_iterations)
 
         # Provider routing
         pr = _cfg.get("provider_routing") or {}
