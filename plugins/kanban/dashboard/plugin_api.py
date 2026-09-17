@@ -1028,6 +1028,18 @@ def _set_status_direct(
     active run with outcome='reclaimed' so attempt history isn't
     orphaned. ``running -> ready`` via drag-drop is the common case
     (user yanking a stuck worker back to the queue).
+
+    ``completed_at`` is cleared for every destination except done/archived:
+    a task that is queued again is by definition no longer finished, and the
+    stamp is what "finished" means. Leaving it set produced
+    ``status='ready' AND completed_at IS NOT NULL`` — a row that any reader of
+    the field (the queue-age review, ad-hoc queries, an operator asking "was
+    this ever done?") misreads. Measured on the fleet board: the ettersyn's
+    step-14 reopen posts ``status=triage`` through here on a card completed
+    13 days earlier, and the card came back to the queue still bearing its old
+    completion stamp. ``result`` is deliberately NOT cleared — the handoff text
+    is the record of what that finished run achieved, and it is the one thing
+    the reopened card's next reader cannot reconstruct.
     """
     with kanban_db.write_txn(conn):
         # Snapshot current state so we know whether to close a run.
@@ -1061,11 +1073,12 @@ def _set_status_direct(
 
         cur = conn.execute(
             "UPDATE tasks SET status = ?, "
+            "  completed_at = CASE WHEN ? IN ('done', 'archived') THEN completed_at ELSE NULL END, "
             "  claim_lock = CASE WHEN ? = 'running' THEN claim_lock ELSE NULL END, "
             "  claim_expires = CASE WHEN ? = 'running' THEN claim_expires ELSE NULL END, "
             "  worker_pid = CASE WHEN ? = 'running' THEN worker_pid ELSE NULL END "
             "WHERE id = ?",
-            (new_status, new_status, new_status, new_status, task_id),
+            (new_status, new_status, new_status, new_status, new_status, task_id),
         )
         if cur.rowcount != 1:
             return False

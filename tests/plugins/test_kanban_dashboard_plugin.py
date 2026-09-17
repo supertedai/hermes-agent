@@ -261,6 +261,45 @@ def test_reopening_parent_demotes_ready_child(client):
     assert child_after_reopen["status"] == "todo"
 
 
+def test_reopening_a_done_task_clears_the_completion_stamp(client):
+    """A card queued again must stop claiming it is finished.
+
+    ``_set_status_direct`` wrote ``status`` alone, so a reopen left
+    ``status='ready' AND completed_at IS NOT NULL`` — the completion stamp of a
+    run that ended days earlier, still on the row. Measured on the fleet board:
+    the ettersyn's step-14 reopen (kanonens steg 14) put a card completed
+    13 days earlier back in the queue, stamp and all, and every reader of the
+    field saw a finished task sitting in ``ready``.
+    """
+    t = client.post("/api/plugins/kanban/tasks", json={"title": "reopen me"}).json()["task"]
+    assert t["status"] == "ready"  # no parents -> immediately ready
+
+    def _set(status):
+        r = client.patch(f"/api/plugins/kanban/tasks/{t['id']}", json={"status": status})
+        assert r.status_code == 200, r.text
+        return r.json()["task"]
+
+    assert _set("done")["completed_at"] is not None
+
+    # Queued again -> the stamp goes with it. A card in `ready` is not finished.
+    reopened = _set("ready")
+    assert reopened["status"] == "ready"
+    assert reopened["completed_at"] is None
+
+    # ...and the other destination the reopen goes through (the measured one:
+    # done -> triage), then back to the queue.
+    assert _set("done")["completed_at"] is not None
+    triaged = _set("triage")
+    assert triaged["status"] == "triage"
+    assert triaged["completed_at"] is None
+
+    # ...and it keeps working from there: a card re-queued out of triage is
+    # un-stamped on the same terms.
+    requeued = _set("ready")
+    assert requeued["status"] == "ready"
+    assert requeued["completed_at"] is None
+
+
 # ---------------------------------------------------------------------------
 # DELETE /tasks/:id
 # ---------------------------------------------------------------------------
