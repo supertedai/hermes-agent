@@ -188,6 +188,26 @@ def tmp_cron_dir(tmp_path, monkeypatch):
 
 
 class TestJobCRUD:
+    def test_agentjobb_uten_task_id_nektes_med_flagg(self, tmp_cron_dir,
+                                                     monkeypatch):
+        """With HERMES_CRON_KREV_TASK_ID=1 an agent job without a kanban-card
+        reference in the prompt is refused — work must not be able to arise
+        without a card. no_agent script jobs are exempt, and without the flag
+        behavior is unchanged."""
+        import cron.jobs as jobs_mod
+        monkeypatch.setenv("HERMES_CRON_KREV_TASK_ID", "1")
+        with pytest.raises(ValueError, match="task_id"):
+            jobs_mod.create_job(prompt="sjekk serveren", schedule="30m")
+        job = jobs_mod.create_job(prompt="sjekk serveren (t_a1b2c3d4)",
+                                  schedule="30m")
+        assert job["prompt"]
+        job2 = jobs_mod.create_job(prompt="", schedule="30m",
+                                   script="sjekk.sh", no_agent=True)
+        assert job2["no_agent"] is True
+        monkeypatch.delenv("HERMES_CRON_KREV_TASK_ID")
+        job3 = jobs_mod.create_job(prompt="vanlig jobb", schedule="30m")
+        assert job3["prompt"] == "vanlig jobb"
+
     def test_create_and_get(self, tmp_cron_dir):
         job = create_job(prompt="Check server status", schedule="30m")
         assert job["id"]

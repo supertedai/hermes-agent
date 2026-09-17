@@ -240,6 +240,27 @@ def test_stale_claim_reclaim_event_records_diagnostic_payload(
 
 
 
+def test_utloept_claim_kan_ikke_fornyes_av_heartbeat(kanban_home):
+    """An expired lease must not be revivable by a late heartbeat from an old
+    worker: renewal requires claim_expires to still be in the future, so a
+    heartbeat after expiry returns False and the worker learns it lost the
+    lease."""
+    with kb.connect() as conn:
+        t = kb.create_task(conn, title="x", assignee="a")
+        host = kb._claimer_id().split(":", 1)[0]
+        lock = f"{host}:worker"
+        kb.claim_task(conn, t, claimer=lock)
+        conn.execute(
+            "UPDATE tasks SET claim_expires = ? WHERE id = ?",
+            (int(time.time()) - 3600, t),
+        )
+        assert kb.heartbeat_claim(conn, t, claimer=lock) is False
+        row = conn.execute(
+            "SELECT claim_expires FROM tasks WHERE id = ?", (t,),
+        ).fetchone()
+        assert row["claim_expires"] < time.time()
+
+
 # ---------------------------------------------------------------------------
 # Rate-limit requeue: a worker that bails on a provider quota wall must be
 # released back to ``ready`` WITHOUT counting a failure, so a long (e.g.

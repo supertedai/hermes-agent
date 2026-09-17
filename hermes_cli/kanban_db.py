@@ -4340,11 +4340,12 @@ def heartbeat_claim(
     """
     expires = int(time.time()) + _resolve_claim_ttl_seconds(ttl_seconds)
     lock = claimer or _claimer_id()
+    now = int(time.time())
     with write_txn(conn):
         cur = conn.execute(
             "UPDATE tasks SET claim_expires = ? "
-            "WHERE id = ? AND status = 'running' AND claim_lock = ?",
-            (expires, task_id, lock),
+            "WHERE id = ? AND status = 'running' AND claim_lock = ? AND claim_expires > ?",
+            (expires, task_id, lock, now),
         )
         if cur.rowcount == 1:
             run_id = _current_run_id(conn, task_id)
