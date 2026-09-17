@@ -6391,14 +6391,86 @@ def _repo_root_for_worktree_target(path: Path) -> Optional[Path]:
         current = current.parent
 
 
+def _dangling_worktree_admin_dir(target: Path) -> Optional[Path]:
+    """The admin dir a worktree's ``.git`` file names, when that dir is GONE.
+
+    A linked worktree is identified by a ``.git`` FILE holding
+    ``gitdir: <repo>/.git/worktrees/<name>``. When the administrative dir
+    behind that pointer is gone — ``worktree prune`` after a wiped checkout, a
+    restored backup, a half-finished cleanup — the directory survives as a
+    full copy of the tree that git can no longer read: ``git -C <dir>
+    rev-parse`` fails, ``git worktree repair`` refuses it ("``.git`` file does
+    not reference a repository") and ``git worktree add`` refuses the occupied
+    path, even with ``--force``. Returns the missing admin dir, or ``None`` for
+    every shape that must be left alone: a live linked worktree, a submodule
+    checkout, an ordinary repository, a plain directory, an unreadable path.
+    """
+    git_file = target / ".git"
+    if not git_file.is_file():
+        return None
+    try:
+        pointer = git_file.read_text(encoding="utf-8", errors="replace").strip()
+    except OSError:
+        return None
+    if not pointer.startswith("gitdir:"):
+        return None
+    admin = Path(pointer.split(":", 1)[1].strip()).expanduser()
+    if not admin.is_absolute():
+        admin = target / admin
+    return None if admin.exists() else admin.resolve(strict=False)
+
+
+def _quarantine_dead_worktree_dir(target: Path, missing_admin: Path) -> Path:
+    """Move a dead worktree directory aside, and return where it went.
+
+    ``git worktree add`` is not idempotent: it refuses an occupied path with
+    ``fatal: '<path>' already exists`` and offers no ``--force`` for it
+    (measured, git 2.53.0), so a leftover from an earlier run blocks every
+    later dispatch of the same task — deterministically, without ever saying
+    why. The directory is MOVED, never deleted: it can hold uncommitted work
+    from the run that made it, and nothing here can tell that apart from a
+    clean copy of the tree. The warning names the new location, so an operator
+    can find the work instead of finding it gone.
+    """
+    stamp = time.strftime("%Y%m%dT%H%M%SZ", time.gmtime())
+    aside = target.parent / f"{target.name}.forlatt-{stamp}"
+    suffix = 1
+    while aside.exists():
+        suffix += 1
+        aside = target.parent / f"{target.name}.forlatt-{stamp}-{suffix}"
+    target.rename(aside)
+    _log.warning(
+        "kanban: %s was a dead worktree remnant (admin dir %s is gone) — "
+        "moved to %s so the worktree can be recreated",
+        target, missing_admin, aside,
+    )
+    return aside
+
+
 def _ensure_git_worktree(repo_root: Path, target: Path, branch_name: str) -> None:
-    """Materialize ``target`` as a linked git worktree under ``repo_root``."""
+    """Materialize ``target`` as a linked git worktree under ``repo_root``.
+
+    Idempotent in both directions: an existing worktree of ``repo_root`` is
+    reused, and a directory that only LOOKS occupied — a dead remnant whose
+    administrative entry is gone, so git can neither read it nor add over it —
+    is moved aside first. Without the second half a task that once ran here can
+    never be dispatched again.
+    """
     target = target.expanduser()
     repo_common = _git_common_dir(repo_root)
     if target.exists() and repo_common is not None:
-        target_common = _git_common_dir(target)
-        if target_common == repo_common:
+        if _git_common_dir(target) == repo_common:
             return
+        dangling_admin = _dangling_worktree_admin_dir(target)
+        if dangling_admin is not None:
+            try:
+                _quarantine_dead_worktree_dir(target, dangling_admin)
+            except OSError as exc:
+                raise RuntimeError(
+                    f"git worktree add cannot use {target}: a dead worktree "
+                    f"remnant is in the way (its admin dir {dangling_admin} is "
+                    f"gone) and moving it aside failed: {exc}"
+                )
     target.parent.mkdir(parents=True, exist_ok=True)
     if _git_branch_exists(repo_root, branch_name):
         cmd = ["git", "-C", str(repo_root), "worktree", "add", str(target), branch_name]
