@@ -1310,6 +1310,15 @@ def create_job(
         The created job dict
     """
     parsed_schedule = parse_schedule(schedule)
+    # T_E2394C4F (arbeid=kort-port, flaateopt-in): en agentjobb skal peke paa
+    # kanban-kortet den arbeider under — konvensjon: task_id (t_<hex>) nevnes
+    # i prompten. No-agent scriptjobber (bare stdout) er unntatt. Slaas paa
+    # per flaate med HERMES_CRON_KREV_TASK_ID=1.
+    if (not no_agent and os.environ.get("HERMES_CRON_KREV_TASK_ID") == "1"
+            and not re.search(r"\bt_[0-9a-f]{8}\b", prompt or "")):
+        raise ValueError(
+            "agent-cronjobb uten task_id i prompten: opprett kanban-kortet "
+            "foerst og referer det (t_<id>) i prompten. (t_e2394c4f)")
 
     # Normalize repeat: treat 0 or negative values as None (infinite)
     if repeat is not None and repeat <= 0:
