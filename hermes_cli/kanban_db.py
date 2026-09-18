@@ -2847,15 +2847,28 @@ def enqueue_task(
 ) -> tuple[str, bool]:
     """Create or refresh one automation-owned task.
 
-    Returns ``(task_id, created)``.  Existing active work is updated without
-    disturbing its claim.  Terminal rows are returned to ``ready`` so a
-    periodic producer can enqueue the same maintenance card again.  Claiming,
-    workspace setup, and worker spawning remain dispatcher responsibilities.
+    Returns ``(task_id, created)``.
+
+    Mutable on an existing row: ``title``/``body``/``assignee``/``priority``.
+    Immutable after creation: the workspace anchor (``workspace_kind``/
+    ``workspace_path``), ``branch_name``, ``project_id`` and ``created_by`` —
+    those describe where and by whom the card was opened, and changing them
+    under a running worker would point it at another tree.
+
+    Existing active work is updated without disturbing its claim.  Terminal
+    rows (``done``/``blocked``/``review``) are re-armed — to ``ready``, or to
+    ``todo`` when a parent is not done yet — so a periodic producer can
+    enqueue the same maintenance card again.  Re-arming clears the previous
+    claim metadata and the dispatcher's retry budget; ``block_kind``/
+    ``block_recurrences`` are kept so a persistent block still escalates.
+    Claiming, workspace setup, and worker spawning remain dispatcher
+    responsibilities.
 
     Omitted optional flags are LEFT ALONE on an existing row: they do not
     reset what a previous enqueue or a human set.  ``--priority``/``--assignee``
     used to default to ``0``/``None`` and silently disarmed the card (a task
-    without an assignee is never dispatched).  ``None`` now means "keep".
+    without an assignee is never dispatched).  ``None`` now means "keep";
+    ``body`` can still be cleared explicitly by passing an empty string.
     """
     if not idempotency_key or not idempotency_key.strip():
         raise ValueError("idempotency_key is required")
@@ -2871,7 +2884,7 @@ def enqueue_task(
     if row is None:
         task_id = create_task(
             conn,
-            title=title,
+            title=title.strip(),
             body=body,
             assignee=assignee,
             created_by=created_by,
@@ -2883,18 +2896,58 @@ def enqueue_task(
             idempotency_key=key,
             initial_status="running",
         )
+        # The create path gets its own producer-visible event: without it the
+        # first enqueue of a key left no trace of the producer at all.
+        with write_txn(conn):
+            _append_event(
+                conn,
+                task_id,
+                "enqueued",
+                {"idempotency_key": key, "created": True},
+            )
         return task_id, True
 
     task_id = str(row["id"])
+    title = title.strip()
     with write_txn(conn):
         status = str(row["status"])
-        next_status = "ready" if status in {"done", "blocked", "review"} else status
+        rearmed = status in {"done", "blocked", "review"}
+        if rearmed:
+            # Re-arm. Honor the parent gate the dispatcher trusts: a re-armed
+            # task with undone parents must wait in `todo` — writing `ready`
+            # directly is the writer-side bypass the claim_task invariant had
+            # to defend against (RCA: Bug 2). A deliberate re-arm is also a
+            # fresh start for the dispatcher's retry budget, exactly like
+            # `unblock_task`: the consecutive-failure counter and the last
+            # error clear. `block_kind`/`block_recurrences` are deliberately
+            # left alone so a persistent block still escalates.
+            undone = conn.execute(
+                "SELECT 1 FROM task_links l "
+                "JOIN tasks p ON p.id = l.parent_id "
+                "WHERE l.child_id = ? AND p.status NOT IN ('done', 'archived') LIMIT 1",
+                (task_id,),
+            ).fetchone()
+            next_status = "todo" if undone else "ready"
+        else:
+            next_status = status
         sets = [
             "title = ?",
             "status = ?",
             "completed_at = CASE WHEN ? = 'ready' THEN NULL ELSE completed_at END",
+            "consecutive_failures = CASE WHEN ? = 'ready' THEN 0 "
+            "ELSE consecutive_failures END",
+            "last_failure_error = CASE WHEN ? = 'ready' THEN NULL "
+            "ELSE last_failure_error END",
         ]
-        params: list[Any] = [title.strip(), next_status, next_status]
+        params: list[Any] = [
+            title, next_status, next_status, next_status, next_status,
+        ]
+        if rearmed:
+            # A terminal row must not keep claim metadata: the dispatcher only
+            # claims rows with `claim_lock IS NULL`, so a stale lock would make
+            # the re-armed card permanently unclaimable. The leaked-run pointer
+            # itself is closed by `claim_task`'s defensive path, not here.
+            sets += ["claim_lock = NULL", "claim_expires = NULL", "worker_pid = NULL"]
         if body is not None:
             sets.append("body = ?")
             params.append(body)
@@ -2913,7 +2966,12 @@ def enqueue_task(
             conn,
             task_id,
             "enqueued",
-            {"idempotency_key": key, "status": next_status, "updated": True},
+            {
+                "idempotency_key": key,
+                "status": next_status,
+                "from": status,
+                "updated": True,
+            },
         )
     return task_id, False
 

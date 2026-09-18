@@ -135,6 +135,125 @@ def test_enqueue_without_assignee_warns_that_nobody_will_run_it(kanban_home):
     assert "sendes" in out.lower() or "dispatch" in out.lower()
 
 
+def test_enqueue_rearm_waits_in_todo_while_a_parent_is_undone(kanban_home):
+    """Re-arming må ikke skrive `ready` forbi foreldre-porten.
+
+    Dispatcheren stoler på `ready`; en skriver som setter `ready` med uferdige
+    foreldre tvinger claim_task til å demotere kortet igjen. Re-arm skal derfor
+    legge det i `todo` og la promoteringen komme når forelderen er ferdig.
+    """
+    first = json.loads(
+        _json_line(
+            kc.run_slash(
+                "enqueue 'barn' --assignee worker --idempotency-key cron:barn --json"
+            )
+        )
+    )
+    with kb.connect_closing() as conn:
+        parent = kb.create_task(conn, title="forelder", assignee="worker")
+        kb.link_tasks(conn, parent_id=parent, child_id=first["task_id"])
+        conn.execute(
+            "UPDATE tasks SET status = 'done', completed_at = 1 WHERE id = ?",
+            (first["task_id"],),
+        )
+        conn.commit()
+    refreshed = json.loads(
+        _json_line(
+            kc.run_slash(
+                "enqueue 'barn igjen' --assignee worker --idempotency-key cron:barn --json"
+            )
+        )
+    )
+    assert refreshed["status"] == "todo"
+
+
+def test_enqueue_rearm_resets_the_dispatcher_retry_budget(kanban_home):
+    """En bevisst re-arm er en fersk start for dispatcherens retry-budsjett.
+
+    Samme grunn som `unblock_task`: krasj-telleren og siste feil skal ikke stå
+    igjen på et kort produsenten med vilje har satt i omløp igjen.
+    """
+    first = json.loads(
+        _json_line(
+            kc.run_slash(
+                "enqueue 'vedlikehold' --assignee worker --idempotency-key cron:vd --json"
+            )
+        )
+    )
+    with kb.connect_closing() as conn:
+        conn.execute(
+            "UPDATE tasks SET status = 'blocked', consecutive_failures = 3, "
+            "last_failure_error = 'spawn feilet', block_kind = 'capability' "
+            "WHERE id = ?",
+            (first["task_id"],),
+        )
+        conn.commit()
+    kc.run_slash("enqueue 'vedlikehold igjen' --idempotency-key cron:vd")
+    with kb.connect_closing() as conn:
+        row = conn.execute(
+            "SELECT status, consecutive_failures, last_failure_error, block_kind "
+            "FROM tasks WHERE id = ?",
+            (first["task_id"],),
+        ).fetchone()
+    assert row is not None
+    assert row["status"] == "ready"
+    assert row["consecutive_failures"] == 0
+    assert row["last_failure_error"] is None
+    # Blokkeringen skal fortsatt være sporbar, så en vedvarende blokk eskalerer.
+    assert row["block_kind"] == "capability"
+
+
+def test_enqueue_rearm_clears_stale_claim_metadata(kanban_home):
+    """Et re-armet kort må ikke beholde claim-metadata.
+
+    Dispatcheren henter bare `status='ready' AND claim_lock IS NULL`. En stale
+    claim_lock på et terminalt kort ville gjort det re-armede kortet umulig å
+    claime — en stille avvæpning nummer to.
+    """
+    first = json.loads(
+        _json_line(
+            kc.run_slash(
+                "enqueue 'vedlikehold' --assignee worker --idempotency-key cron:claim --json"
+            )
+        )
+    )
+    with kb.connect_closing() as conn:
+        conn.execute(
+            "UPDATE tasks SET status = 'blocked', claim_lock = 'host:9', "
+            "claim_expires = 9999999999, worker_pid = 4242 WHERE id = ?",
+            (first["task_id"],),
+        )
+        conn.commit()
+    kc.run_slash("enqueue 'vedlikehold igjen' --idempotency-key cron:claim")
+    with kb.connect_closing() as conn:
+        row = conn.execute(
+            "SELECT status, claim_lock, claim_expires, worker_pid FROM tasks "
+            "WHERE id = ?",
+            (first["task_id"],),
+        ).fetchone()
+    assert row is not None
+    assert tuple(row) == ("ready", None, None, None)
+
+
+def test_enqueue_records_the_producer_on_the_create_path_too(kanban_home):
+    """Første enqueue av en nøkkel skal etterlate spor av produsenten."""
+    first = json.loads(
+        _json_line(
+            kc.run_slash(
+                "enqueue 'vedlikehold' --assignee worker --idempotency-key cron:spor --json"
+            )
+        )
+    )
+    with kb.connect_closing() as conn:
+        rows = conn.execute(
+            "SELECT payload FROM task_events WHERE task_id = ? AND kind = 'enqueued'",
+            (first["task_id"],),
+        ).fetchall()
+    assert len(rows) == 1
+    payload = json.loads(rows[0]["payload"])
+    assert payload == {"idempotency_key": "cron:spor", "created": True}
+
+
 def test_dispatcher_claims_worktree_task_and_injects_task_environment(
     kanban_home, monkeypatch
 ):
