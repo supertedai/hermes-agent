@@ -414,7 +414,8 @@ def build_parser(parent_subparsers: argparse._SubParsersAction) -> argparse.Argu
                            help="Branch name for worktree tasks")
     p_enqueue.add_argument("--project", default=None,
                            help="Project id/slug for a project-anchored worktree")
-    p_enqueue.add_argument("--priority", type=int, default=0, help="Priority tiebreaker")
+    p_enqueue.add_argument("--priority", type=int, default=None,
+                           help="Priority tiebreaker (omitted = keep the card's current value)")
     p_enqueue.add_argument("--idempotency-key", required=True,
                            help="Stable producer key used to prevent duplicate cards")
     p_enqueue.add_argument("--created-by", default="cron",
@@ -1587,7 +1588,19 @@ def _cmd_enqueue(args: argparse.Namespace) -> int:
             idempotency_key=args.idempotency_key,
         )
         task = kb.get_task(conn, task_id)
-    payload = {"task_id": task_id, "created": created, "status": task.status}
+    payload = {
+        "task_id": task_id,
+        "created": created,
+        "status": task.status if task is not None else "unknown",
+    }
+    if created and (task is None or not task.assignee):
+        # Et kort uten eier sendes aldri ut av dispatcheren. Fraværet skal være
+        # synlig i produsentens eget svar, ikke oppdages som et stille dropp.
+        print(
+            "kanban: advarsel: ingen --assignee — kortet kan ikke sendes ut "
+            "av dispatcheren før det er tildelt",
+            file=sys.stderr,
+        )
     if getattr(args, "json", False):
         print(json.dumps(payload, ensure_ascii=False))
     else:

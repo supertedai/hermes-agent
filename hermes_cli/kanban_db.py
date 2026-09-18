@@ -2842,7 +2842,7 @@ def enqueue_task(
     workspace_path: Optional[str] = None,
     branch_name: Optional[str] = None,
     project_id: Optional[str] = None,
-    priority: int = 0,
+    priority: Optional[int] = None,
     idempotency_key: str,
 ) -> tuple[str, bool]:
     """Create or refresh one automation-owned task.
@@ -2851,6 +2851,11 @@ def enqueue_task(
     disturbing its claim.  Terminal rows are returned to ``ready`` so a
     periodic producer can enqueue the same maintenance card again.  Claiming,
     workspace setup, and worker spawning remain dispatcher responsibilities.
+
+    Omitted optional flags are LEFT ALONE on an existing row: they do not
+    reset what a previous enqueue or a human set.  ``--priority``/``--assignee``
+    used to default to ``0``/``None`` and silently disarmed the card (a task
+    without an assignee is never dispatched).  ``None`` now means "keep".
     """
     if not idempotency_key or not idempotency_key.strip():
         raise ValueError("idempotency_key is required")
@@ -2874,7 +2879,7 @@ def enqueue_task(
             workspace_path=workspace_path,
             branch_name=branch_name,
             project_id=project_id,
-            priority=priority,
+            priority=0 if priority is None else int(priority),
             idempotency_key=key,
             initial_status="running",
         )
@@ -2884,11 +2889,25 @@ def enqueue_task(
     with write_txn(conn):
         status = str(row["status"])
         next_status = "ready" if status in {"done", "blocked", "review"} else status
+        sets = [
+            "title = ?",
+            "status = ?",
+            "completed_at = CASE WHEN ? = 'ready' THEN NULL ELSE completed_at END",
+        ]
+        params: list[Any] = [title.strip(), next_status, next_status]
+        if body is not None:
+            sets.append("body = ?")
+            params.append(body)
+        if assignee is not None:
+            sets.append("assignee = ?")
+            params.append(assignee)
+        if priority is not None:
+            sets.append("priority = ?")
+            params.append(int(priority))
+        params.append(task_id)
         conn.execute(
-            "UPDATE tasks SET title = ?, body = ?, assignee = ?, priority = ?, "
-            "status = ?, completed_at = CASE WHEN ? = 'ready' THEN NULL ELSE completed_at END "
-            "WHERE id = ? AND status != 'archived'",
-            (title.strip(), body, assignee, int(priority), next_status, next_status, task_id),
+            f"UPDATE tasks SET {', '.join(sets)} WHERE id = ? AND status != 'archived'",
+            params,
         )
         _append_event(
             conn,
