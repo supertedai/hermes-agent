@@ -1,0 +1,40 @@
+== 0) init ==
+== 1) forste enqueue ==
+{"task_id": "t_77f5b0a4", "created": true, "status": "ready"}
+== 2) samme key igjen (ny tittel/prioritet) ==
+{"task_id": "t_77f5b0a4", "created": false, "status": "ready"}
+== 3) terminalt kort re-kjoeres ==
+[]
+{"task_id": "t_77f5b0a4", "created": false, "status": "ready"}
+== 4) kjoerende kort med claim roeres ikke ==
+[]
+{"task_id": "t_77f5b0a4", "created": false, "status": "running"}
+   claim etter refresh: [('running', 'host:1', 4242, 'EFC vedlikehold v4')]
+== 5) fotangel: enqueue uten --assignee ==
+kanban: advarsel: ingen --assignee — kortet kan ikke sendes ut av dispatcheren før det er tildelt
+{"task_id": "t_90e78ede", "created": true, "status": "ready"}
+   assignee: [('t_90e78ede', None, 'ready')]
+== 6) ingen claim/spawn fra enqueue ==
+[(1,)]
+   task_events:
+  [2026-09-18 10:17] enqueued {'idempotency_key': 'cron:efc-vedlikehold', 'created': True}
+  [2026-09-18 10:17] enqueued {'idempotency_key': 'cron:efc-vedlikehold', 'status': 'ready', 'from': 'ready', 'updated': True}
+  [2026-09-18 10:17] enqueued {'idempotency_key': 'cron:efc-vedlikehold', 'status': 'ready', 'from': 'done', 'updated': True}
+  [2026-09-18 10:17] enqueued {'idempotency_key': 'cron:efc-vedlikehold', 'status': 'running', 'from': 'running', 'updated': True}
+
+== KONTROLLER ==
+  OK   ett kort per idempotency-key: 1 rad(er)
+  OK   assignee bevart: researcher
+  OK   arbeidsflate bevart: ('worktree', '/opt/agent-work/EFC')
+  OK   branch bevart: wt/efc-vedlikehold
+  OK   tittel oppdatert til siste enqueue: EFC vedlikehold v4
+  OK   prioritet oppdatert: 9
+  OK   kjoerende status ikke endret av enqueue: running
+  OK   claim_lock ikke frigitt: host:1
+  OK   worker_pid ikke nullstilt: 4242
+  OK   ingen 'claimed'-hendelse fra enqueue: ['created', 'enqueued']
+  OK   ingen 'spawned'-hendelse fra enqueue: ['created', 'enqueued']
+  OK   enqueue-hendelse finnes: ['created', 'enqueued']
+  MERK fotangel: kort uten --assignee -> assignee=None, status='ready' (kan aldri sendes ut av dispatcheren)
+
+RESULTAT: ALLE KONTROLLER OK
