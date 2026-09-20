@@ -604,6 +604,134 @@ def test_complete_task_persists_scratch_artifacts_before_cleanup(kanban_home):
     ]
 
 
+# ---------------------------------------------------------------------------
+# Declared-artifact outcome reporting (t_7bdf74a8 D1/D2/D4)
+#
+# Staging stays confined to managed scratch + paths inside the workspace, but
+# the caller is TOLD, per declared artifact, what happened. Silence — not the
+# confinement — was the bug: a worker that declared 7 files and got 6
+# attachments (and a bare {"ok": true}) could not tell the difference.
+# ---------------------------------------------------------------------------
+
+
+def test_complete_task_reports_outside_workspace_artifact_as_not_staged(
+    kanban_home, tmp_path
+):
+    """A declared path outside the workspace is not staged — and is reported."""
+    outside = tmp_path / "outside-report.json"
+    outside.write_text("{}", encoding="utf-8")
+    with kb.connect() as conn:
+        t = kb.create_task(conn, title="outside artifact")
+        task = kb.get_task(conn, t)
+        ws = kb.resolve_workspace(task)
+        kb.set_workspace_path(conn, t, ws)
+        report: list = []
+
+        assert kb.complete_task(
+            conn,
+            t,
+            result="ok",
+            metadata={"artifacts": [str(outside)]},
+            artifact_report=report,
+        )
+
+        attachments = kb.list_attachments(conn, t)
+        run = kb.latest_run(conn, t)
+
+    assert len(report) == 1, report
+    entry = report[0]
+    assert entry["path"] == str(outside)
+    assert entry["staged"] is False
+    assert entry["attachment_path"] is None
+    assert "outside" in entry["reason"]
+    assert str(Path(ws).resolve()) in entry["reason"]
+    # No durable attachment, no hard failure: the notifier's payload path
+    # (channel 2) still carries the raw path.
+    assert attachments == []
+    assert run is not None
+    assert str(outside) in run.metadata["artifacts"]
+
+
+def test_complete_task_reports_worktree_artifacts_as_not_staged(
+    kanban_home, tmp_path
+):
+    """``workspace_kind='worktree'`` stages nothing — not even a path inside."""
+    tree = tmp_path / "wt-tree"
+    tree.mkdir()
+    artifact = tree / "report.md"
+    artifact.write_text("built\n", encoding="utf-8")
+    with kb.connect() as conn:
+        t = kb.create_task(
+            conn,
+            title="worktree artifact",
+            workspace_kind="worktree",
+            workspace_path=str(tree),
+        )
+        report: list = []
+
+        assert kb.complete_task(
+            conn,
+            t,
+            result="ok",
+            metadata={"artifacts": [str(artifact)]},
+            artifact_report=report,
+        )
+
+        attachments = kb.list_attachments(conn, t)
+
+    assert len(report) == 1, report
+    entry = report[0]
+    assert entry["path"] == str(artifact)
+    assert entry["staged"] is False
+    assert entry["attachment_path"] is None
+    assert "worktree" in entry["reason"]
+    assert attachments == []
+    assert artifact.read_text(encoding="utf-8") == "built\n"
+
+
+def test_complete_task_missing_declared_artifact_still_raises(kanban_home):
+    """The preservation error (and its rollback) is unchanged."""
+    with kb.connect() as conn:
+        t = kb.create_task(conn, title="missing artifact")
+        task = kb.get_task(conn, t)
+        ws = kb.resolve_workspace(task)
+        kb.set_workspace_path(conn, t, ws)
+
+        with pytest.raises(kb.ArtifactPreservationError):
+            kb.complete_task(
+                conn,
+                t,
+                result="ok",
+                metadata={"artifacts": [str(ws / "missing.png")]},
+            )
+
+        assert kb.get_task(conn, t).status != "done"
+        assert kb.list_attachments(conn, t) == []
+
+
+def test_complete_task_oversize_declared_artifact_still_raises(
+    kanban_home, monkeypatch
+):
+    """The size cap still refuses, and the task is not completed."""
+    monkeypatch.setattr(kb, "KANBAN_ATTACHMENT_MAX_BYTES", 8)
+    with kb.connect() as conn:
+        t = kb.create_task(conn, title="oversize artifact")
+        task = kb.get_task(conn, t)
+        ws = kb.resolve_workspace(task)
+        kb.set_workspace_path(conn, t, ws)
+        artifact = ws / "big.bin"
+        artifact.write_bytes(b"x" * 64)
+
+        with pytest.raises(kb.ArtifactPreservationError):
+            kb.complete_task(
+                conn,
+                t,
+                result="ok",
+                metadata={"artifacts": [str(artifact)]},
+            )
+
+        assert kb.get_task(conn, t).status != "done"
+        assert kb.list_attachments(conn, t) == []
 
 
 # ---------------------------------------------------------------------------

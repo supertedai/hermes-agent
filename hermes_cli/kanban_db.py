@@ -4748,6 +4748,7 @@ def complete_task(
     metadata: Optional[dict] = None,
     created_cards: Optional[Iterable[str]] = None,
     expected_run_id: Optional[int] = None,
+    artifact_report: Optional[list] = None,
 ) -> bool:
     """Transition ``running|ready -> done`` and record ``result``.
 
@@ -4776,6 +4777,14 @@ def complete_task(
     Any suspected phantom references are recorded as a
     ``suspected_hallucinated_references`` event. This pass is advisory
     and never blocks.
+
+    ``artifact_report`` is an optional caller-owned list. When passed it is
+    extended with one entry per declared artifact — ``{"path", "staged",
+    "attachment_path", "reason"}`` — so the tool layer can answer the worker
+    with what became a durable attachment and what did not, instead of a bare
+    success (t_7bdf74a8 D1). Staging stays confined to managed ``scratch``
+    workspaces and paths inside them; the non-staged cases are reported, never
+    refused (D2).
     """
     now = int(time.time())
 
@@ -4848,7 +4857,9 @@ def complete_task(
         if cur.rowcount != 1:
             return False
         if isinstance(metadata, dict):
-            _persist_scratch_completion_artifacts(conn, task_id, metadata)
+            outcomes = _persist_scratch_completion_artifacts(conn, task_id, metadata)
+            if artifact_report is not None:
+                artifact_report.extend(outcomes)
             for stored_path in metadata.pop("_staged_artifacts", []):
                 path = Path(stored_path)
                 _insert_completion_attachment(
@@ -5001,35 +5012,104 @@ def _merge_completion_prose_artifacts(
     return updated
 
 
+def _artifact_outcome(
+    path: str,
+    *,
+    staged: bool = False,
+    attachment_path: Optional[str] = None,
+    reason: Optional[str] = None,
+) -> dict:
+    """One declared artifact's fate: staged (with the durable copy's path) or not."""
+    return {
+        "path": path,
+        "staged": staged,
+        "attachment_path": attachment_path,
+        "reason": reason,
+    }
+
+
 def _persist_scratch_completion_artifacts(
     conn: sqlite3.Connection,
     task_id: str,
     metadata: dict,
-) -> None:
-    """Copy scratch-workspace completion artifacts before cleanup removes them."""
+) -> list[dict]:
+    """Copy scratch-workspace completion artifacts before cleanup removes them.
+
+    Returns one outcome entry per declared artifact — ``{"path", "staged",
+    "attachment_path", "reason"}`` — so the caller can name every declaration
+    and its fate instead of reporting a bare success (D1 in t_7bdf74a8:
+    silence, not the confinement, was the bug). The confinement itself is
+    unchanged: only managed ``scratch`` workspaces stage, and only paths
+    inside them.
+    """
     raw_artifacts = metadata.get("artifacts")
     if not isinstance(raw_artifacts, (list, tuple)):
-        return
+        return []
+
+    declared = [
+        str(item).strip()
+        for item in raw_artifacts
+        if isinstance(item, str) and str(item).strip()
+    ]
+    if not declared:
+        return []
 
     row = conn.execute(
         "SELECT workspace_kind, workspace_path FROM tasks WHERE id = ?",
         (task_id,),
     ).fetchone()
-    if not row or row["workspace_kind"] != "scratch" or not row["workspace_path"]:
-        return
+    if not row:
+        return [
+            _artifact_outcome(item, reason="task not found when staging artifacts")
+            for item in declared
+        ]
+
+    kind = row["workspace_kind"]
+    if kind != "scratch":
+        reason = (
+            f"task workspace kind is {kind!r}; only 'scratch' workspaces stage "
+            f"declared artifacts into durable attachments"
+        )
+        return [_artifact_outcome(item, reason=reason) for item in declared]
+    if not row["workspace_path"]:
+        return [
+            _artifact_outcome(
+                item,
+                reason=(
+                    "task has no workspace_path, so nothing was staged into "
+                    "durable attachments"
+                ),
+            )
+            for item in declared
+        ]
 
     workspace = Path(row["workspace_path"]).expanduser()
     is_managed, board = _managed_scratch_path_info(workspace)
     if not is_managed:
-        return
+        return [
+            _artifact_outcome(
+                item,
+                reason=(
+                    "task workspace is not managed scratch storage; declared "
+                    "artifacts are not copied into durable attachments"
+                ),
+            )
+            for item in declared
+        ]
 
     try:
         workspace_root = workspace.resolve()
     except OSError:
-        return
+        return [
+            _artifact_outcome(
+                item, reason="task workspace path could not be resolved"
+            )
+            for item in declared
+        ]
 
     attachment_dir = task_attachments_dir(task_id, board=board)
     persisted: list[str] = []
+    outcomes: list[dict] = []
     used_destinations: set[Path] = set()
     changed = False
 
@@ -5044,19 +5124,27 @@ def _persist_scratch_completion_artifacts(
         except OSError:
             pass
 
-    for item in raw_artifacts:
-        artifact = str(item).strip() if isinstance(item, str) else ""
-        if not artifact:
-            continue
+    for artifact in declared:
         src = Path(artifact).expanduser()
         try:
             resolved_src = src.resolve()
         except OSError:
             persisted.append(artifact)
+            outcomes.append(_artifact_outcome(
+                artifact, reason="declared path could not be resolved",
+            ))
             continue
 
         if not resolved_src.is_relative_to(workspace_root):
             persisted.append(artifact)
+            outcomes.append(_artifact_outcome(
+                artifact,
+                reason=(
+                    f"declared path is outside the task workspace "
+                    f"({workspace_root}); only paths inside it are staged as "
+                    f"durable attachments"
+                ),
+            ))
             continue
 
         if not src.is_file():
@@ -5100,7 +5188,11 @@ def _persist_scratch_completion_artifacts(
             ) from exc
 
         used_destinations.add(dest)
-        persisted.append(str(dest.resolve()))
+        staged_path = str(dest.resolve())
+        persisted.append(staged_path)
+        outcomes.append(_artifact_outcome(
+            artifact, staged=True, attachment_path=staged_path,
+        ))
         changed = True
 
     if changed:
@@ -5108,6 +5200,7 @@ def _persist_scratch_completion_artifacts(
         metadata["_staged_artifacts"] = [
             path for path in persisted if path.startswith(str(attachment_dir.resolve()))
         ]
+    return outcomes
 
 
 def _insert_completion_attachment(

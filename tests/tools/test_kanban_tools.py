@@ -215,6 +215,87 @@ def test_complete_goal_mode_rejected_by_judge(monkeypatch, tmp_path):
         conn2.close()
 
 
+# ---------------------------------------------------------------------------
+# Declared-artifact outcome reporting (t_7bdf74a8 D1–D4)
+#
+# Before this, kanban_complete answered a handoff with declared artifacts with
+# a bare {"ok": true, "task_id", "run_id", "status"}: a worker that declared
+# several files could not tell which ones became durable attachments. The
+# confinement stays (managed scratch + paths inside the workspace only); the
+# SILENCE goes, for both the outside-workspace and the never-staged cases.
+# ---------------------------------------------------------------------------
+
+def test_complete_reports_staged_and_unstaged_artifacts(worker_env, tmp_path):
+    """One declared path inside the workspace and one outside: both are named."""
+    from pathlib import Path
+    from hermes_cli import kanban_db as kb
+    from tools import kanban_tools as kt
+
+    conn = kb.connect()
+    try:
+        ws = kb.resolve_workspace(kb.get_task(conn, worker_env))
+        kb.set_workspace_path(conn, worker_env, ws)
+    finally:
+        conn.close()
+    inside = ws / "chart.png"
+    inside.write_bytes(b"png-bytes")
+    outside = tmp_path / "outside.txt"
+    outside.write_text("raw", encoding="utf-8")
+
+    out = json.loads(kt._handle_complete({
+        "summary": "done",
+        "artifacts": [str(inside), str(outside)],
+    }))
+
+    assert out["ok"] is True
+    items = {item["path"]: item for item in out["artifacts"]}
+    assert set(items) == {str(inside), str(outside)}
+    assert items[str(inside)]["staged"] is True
+    assert Path(items[str(inside)]["attachment_path"]).exists()
+    assert items[str(outside)]["staged"] is False
+    assert "outside" in items[str(outside)]["reason"]
+    assert "1 of 2" in out["artifact_warning"]
+
+
+def test_complete_reports_worktree_artifacts_as_not_staged(
+    monkeypatch, worker_env, tmp_path
+):
+    """A worktree task stages nothing — not even a path inside its own tree."""
+    from pathlib import Path
+    from hermes_cli import kanban_db as kb
+    from tools import kanban_tools as kt
+
+    tree = tmp_path / "wt-tree"
+    tree.mkdir()
+    artifact = tree / "report.md"
+    artifact.write_text("built", encoding="utf-8")
+    conn = kb.connect()
+    try:
+        tid = kb.create_task(
+            conn,
+            title="worktree worker",
+            assignee="test-worker",
+            workspace_kind="worktree",
+            workspace_path=str(tree),
+        )
+        kb.claim_task(conn, tid)
+    finally:
+        conn.close()
+    monkeypatch.setenv("HERMES_KANBAN_TASK", tid)
+
+    out = json.loads(kt._handle_complete({
+        "summary": "built it",
+        "artifacts": [str(artifact)],
+    }))
+
+    assert out["ok"] is True
+    assert out["artifacts"][0]["path"] == str(artifact)
+    assert out["artifacts"][0]["staged"] is False
+    assert "worktree" in out["artifacts"][0]["reason"]
+    assert "artifact_warning" in out
+    assert Path(artifact).exists()
+
+
 def test_block_happy_path(worker_env):
     from tools import kanban_tools as kt
     out = kt._handle_block({"reason": "need clarification"})
