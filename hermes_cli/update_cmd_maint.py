@@ -494,7 +494,7 @@ def _print_bundled_skills_sync_report() -> None:
     if result.get("updated"):
         print(f"  ↑ {len(result['updated'])} updated: {', '.join(result['updated'])}")
     if result.get("user_modified"):
-        print(f"  ~ {len(result['user_modified'])} user-modified (kept)")
+        print(f"  ~ {len(result['user_modified'])} not tracking upstream (kept)")
         print("    → see them: hermes skills list-modified  (diff/reset to resume updates)")
         # Name the states: most of what this old line called "user-modified" is not an edit (t_eb487a72).
         if reasons := result.get("user_modified_reasons"):
