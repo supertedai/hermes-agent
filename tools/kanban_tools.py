@@ -403,6 +403,46 @@ def _ok(**fields: Any) -> str:
     return json.dumps({"ok": True, **fields})
 
 
+def _artifact_report_fields(outcomes: list) -> dict:
+    """Turn per-artifact staging outcomes into the success payload's fields.
+
+    Every declared artifact is named with its fate (t_7bdf74a8 D1). Nothing
+    here refuses a handoff: a declared path outside the workspace is legitimate
+    — the gateway notifier can still upload it from the event payload when the
+    task has a subscription — so the non-staged half is a warning, never an
+    error (D2).
+    """
+    if not outcomes:
+        return {}
+
+    items: list[dict] = []
+    for entry in outcomes:
+        if not isinstance(entry, dict):
+            continue
+        item: dict = {"path": entry.get("path"), "staged": bool(entry.get("staged"))}
+        if item["staged"]:
+            item["attachment_path"] = entry.get("attachment_path")
+        else:
+            item["reason"] = entry.get("reason") or "not staged"
+        items.append(item)
+
+    if not items:
+        return {}
+
+    fields: dict = {"artifacts": items}
+    not_staged = [item for item in items if not item["staged"]]
+    if not_staged:
+        fields["artifact_warning"] = (
+            f"{len(not_staged)} of {len(items)} declared artifact(s) were NOT "
+            f"staged as durable attachments: "
+            + "; ".join(f"{item['path']} ({item['reason']})" for item in not_staged)
+            + ". Only a managed 'scratch' workspace stages declared files inside "
+            "it; the gateway notifier may still upload such a path to a "
+            "subscriber from the event payload, but nothing else preserves it."
+        )
+    return fields
+
+
 def _normalize_profile(value: Any) -> Optional[str]:
     """Normalize CLI-compatible assignee sentinels for the tool surface."""
     if value is None:
@@ -746,11 +786,13 @@ def _handle_complete(args: dict, **kw) -> str:
                     )
 
             try:
+                artifact_report: list = []
                 ok = kb.complete_task(
                     conn, tid,
                     result=result, summary=summary, metadata=metadata,
                     created_cards=created_cards,
                     expected_run_id=_worker_run_id(tid),
+                    artifact_report=artifact_report,
                 )
             except kb.ArtifactPreservationError as artifact_err:
                 return tool_error(
@@ -784,7 +826,11 @@ def _handle_complete(args: dict, **kw) -> str:
                     f"could not complete {tid} (unknown id or already terminal)"
                 )
             run = kb.latest_run(conn, tid)
-            return _ok(task_id=tid, run_id=run.id if run else None)
+            return _ok(
+                task_id=tid,
+                run_id=run.id if run else None,
+                **_artifact_report_fields(artifact_report),
+            )
         finally:
             conn.close()
     except ValueError as e:
@@ -1625,10 +1671,12 @@ KANBAN_COMPLETE_SCHEMA = {
         "references are caught before they leak into downstream "
         "automation. If you produced deliverable files (charts, PDFs, "
         "spreadsheets, generated images), list their absolute paths "
-        "in ``artifacts`` — the gateway notifier will upload them as "
-        "native attachments to the human who subscribed to the task, "
-        "so the deliverable lands in their chat alongside the summary "
-        "instead of being a path they have to fetch by hand."
+        "in ``artifacts`` and read the return: it names every declared "
+        "path with its outcome — staged as a durable attachment, or "
+        "not staged, with the reason. A path that is not staged is "
+        "not lost: the gateway notifier uploads payload paths to the "
+        "human who subscribed to the task, which needs a "
+        "subscription."
     ),
     "parameters": {
         "type": "object",
@@ -1687,17 +1735,29 @@ KANBAN_COMPLETE_SCHEMA = {
                     "files you produced during this run — generated "
                     "charts, PDFs, spreadsheets, images, archives. "
                     "Examples: [\"/tmp/q3-revenue.png\", "
-                    "\"/tmp/report.pdf\"]. The gateway notifier "
-                    "uploads each path as a native attachment to the "
-                    "subscribed chat (images embed inline, everything "
-                    "else uploads as a file) so the deliverable "
-                    "lands with the completion notification. Skip "
-                    "intermediate scratch files and references that "
-                    "are not the deliverable. The path must exist "
-                    "on disk at completion. Files inside a managed scratch "
-                    "workspace are copied to durable task attachments before "
-                    "cleanup; a missing declared scratch artifact keeps the "
-                    "task in-flight so you can fix the path and retry."
+                    "\"/tmp/report.pdf\"]. A declared path becomes a "
+                    "durable task attachment only when ALL of these "
+                    "hold: the task's workspace_kind is 'scratch', "
+                    "that workspace is managed by the kanban board, "
+                    "and the path is INSIDE the workspace. Two common "
+                    "cases are therefore not staged: a 'worktree' task "
+                    "(worktree workspaces stage nothing, not even a "
+                    "path inside the tree) and any path outside the "
+                    "workspace (e.g. /tmp or your home directory). "
+                    "Nothing is refused for that — the gateway "
+                    "notifier can still upload such a path to a "
+                    "subscriber from the completion event payload, "
+                    "when the task has a notify subscription and the "
+                    "file still exists. The return names every "
+                    "declared path with its outcome, so you can see "
+                    "which ones became attachments; write "
+                    "deliverables inside your workspace when you need "
+                    "them preserved. The path must exist on disk at "
+                    "completion: a missing or over-cap declared "
+                    "scratch artifact keeps the task in-flight so you "
+                    "can fix the path and retry. Skip intermediate "
+                    "scratch files and references that are not the "
+                    "deliverable."
                 ),
             },
             "board": _board_schema_prop(),

@@ -1,0 +1,721 @@
+diff --git a/hermes_cli/kanban_db.py b/hermes_cli/kanban_db.py
+index d895d12..26dbe32 100644
+--- a/hermes_cli/kanban_db.py
++++ b/hermes_cli/kanban_db.py
+@@ -2698,6 +2698,7 @@ def complete_task(
+     summary: Optional[str] = None, metadata: Optional[dict] = None,
+     created_cards: Optional[Iterable[str]] = None, expected_run_id: Optional[int] = None,
+     fire_lifecycle_hook: bool = True, force: bool = False,
++    artifact_report: Optional[list] = None,
+ ) -> bool:
+     """``running|ready|blocked|review -> done``; records ``result``.
+ 
+@@ -2711,6 +2712,14 @@ def complete_task(
+     ``created_cards`` are verified first — a phantom id raises
+     :class:`HallucinatedCardsError` after an auditable event; afterwards the
+     prose is scanned for unresolvable ``t_<hex>`` refs (advisory event only).
++
++    ``artifact_report`` is an optional caller-owned list. When passed it is
++    extended with one entry per declared artifact — ``{"path", "staged",
++    "attachment_path", "reason"}`` — so the tool layer can answer the worker
++    with what became a durable attachment and what did not, instead of a bare
++    success (t_7bdf74a8 D1). Staging stays confined to managed ``scratch``
++    workspaces and paths inside them; the non-staged cases are reported, never
++    refused (D2).
+     """
+     now = int(time.time())
+     # Cheap pre-check; re-checked inside the txn to close the parent-reopen race.
+@@ -2762,7 +2771,9 @@ def complete_task(
+         if conn.execute(sql, params).rowcount != 1:
+             return False
+         if isinstance(metadata, dict):
+-            _stage_completion_artifacts(conn, task_id, metadata, now)
++            _stage_completion_artifacts(
++                conn, task_id, metadata, now, artifact_report=artifact_report,
++            )
+         run_id = _end_run(
+             conn, task_id, outcome="completed", status="done", summary=handoff_summary,
+             metadata=metadata,
+@@ -2824,11 +2835,22 @@ def _gate_created_cards(
+ def _stage_completion_artifacts(
+     conn: sqlite3.Connection, task_id: str, metadata: dict, now: int, *,
+     uploaded_by: str = "kanban_complete",
++    artifact_report: Optional[list] = None,
+ ) -> list[Path]:
+     """Copy scratch artifacts to the attachments dir and record each as an
+     attachment row; returns the copies so the caller can discard them if its
+-    transaction rolls back."""
+-    _persist_scratch_completion_artifacts(conn, task_id, metadata)
++    transaction rolls back.
++
++    ``artifact_report``, when passed, is extended with one outcome per declared
++    artifact — ``{"path", "staged", "attachment_path", "reason"}`` — so the tool
++    layer can answer with what became a durable attachment and what did not,
++    instead of a bare success (t_7bdf74a8 D1). Staging stays confined to managed
++    ``scratch`` workspaces and paths inside them; the non-staged cases are
++    reported, never refused (D2).
++    """
++    outcomes = _persist_scratch_completion_artifacts(conn, task_id, metadata)
++    if artifact_report is not None:
++        artifact_report.extend(outcomes)
+     staged = [Path(stored_path) for stored_path in metadata.pop("_staged_artifacts", [])]
+     for path in staged:
+         _insert_completion_attachment(
+@@ -2928,47 +2950,126 @@ def _merge_completion_prose_artifacts(
+     return updated
+ 
+ 
++def _artifact_outcome(
++    path: str,
++    *,
++    staged: bool = False,
++    attachment_path: Optional[str] = None,
++    reason: Optional[str] = None,
++) -> dict:
++    """One declared artifact's fate: staged (with the durable copy's path) or not."""
++    return {
++        "path": path,
++        "staged": staged,
++        "attachment_path": attachment_path,
++        "reason": reason,
++    }
++
++
+ def _persist_scratch_completion_artifacts(
+     conn: sqlite3.Connection, task_id: str, metadata: dict,
+-) -> None:
+-    """Copy scratch-workspace completion artifacts before cleanup removes them."""
++) -> list[dict]:
++    """Copy scratch-workspace completion artifacts before cleanup removes them.
++
++    Returns one outcome entry per declared artifact — ``{"path", "staged",
++    "attachment_path", "reason"}`` — so the caller can name every declaration
++    and its fate instead of reporting a bare success (D1 in t_7bdf74a8:
++    silence, not the confinement, was the bug). The confinement itself is
++    unchanged: only managed ``scratch`` workspaces stage, and only paths
++    inside them.
++    """
+     raw_artifacts = metadata.get("artifacts")
+     if not isinstance(raw_artifacts, (list, tuple)):
+-        return
++        return []
++
++    declared = [
++        str(item).strip() for item in raw_artifacts
++        if isinstance(item, str) and str(item).strip()
++    ]
++    if not declared:
++        return []
++
++    row = conn.execute(
++        "SELECT workspace_kind FROM tasks WHERE id = ?", (task_id,),
++    ).fetchone()
++    if row is None:
++        return [
++            _artifact_outcome(item, reason="task not found when staging artifacts")
++            for item in declared
++        ]
++    kind = row["workspace_kind"]
++    if kind != "scratch":
++        reason = (
++            f"task workspace kind is {kind!r}; only 'scratch' workspaces stage "
++            f"declared artifacts into durable attachments"
++        )
++        return [_artifact_outcome(item, reason=reason) for item in declared]
+ 
+     workspace = _scratch_workspace(conn, task_id)
+     if workspace is None:
+-        return
++        return [
++            _artifact_outcome(
++                item,
++                reason=(
++                    "task has no workspace_path, so nothing was staged into "
++                    "durable attachments"
++                ),
++            )
++            for item in declared
++        ]
+     is_managed, board = _managed_scratch_path_info(workspace)
+     if not is_managed:
+-        return
++        return [
++            _artifact_outcome(
++                item,
++                reason=(
++                    "task workspace is not managed scratch storage; declared "
++                    "artifacts are not copied into durable attachments"
++                ),
++            )
++            for item in declared
++        ]
+ 
+     try:
+         workspace_root = workspace.resolve()
+     except OSError:
+-        return
++        return [
++            _artifact_outcome(
++                item, reason="task workspace path could not be resolved"
++            )
++            for item in declared
++        ]
+ 
+     attachment_dir = task_attachments_dir(task_id, board=board)
+     persisted: list[str] = []
++    outcomes: list[dict] = []
+     used_destinations: set[Path] = set()
+     changed = False
+ 
+     def _discard_copies() -> None:
+         _discard_staged_copies(used_destinations, attachment_dir)
+ 
+-    for item in raw_artifacts:
+-        artifact = str(item).strip() if isinstance(item, str) else ""
+-        if not artifact:
+-            continue
++    for artifact in declared:
+         src = Path(artifact).expanduser()
+         try:
+             resolved_src = src.resolve()
+         except OSError:
+             persisted.append(artifact)
++            outcomes.append(_artifact_outcome(
++                artifact, reason="declared path could not be resolved",
++            ))
+             continue
+ 
+         if not resolved_src.is_relative_to(workspace_root):
+             persisted.append(artifact)
++            outcomes.append(_artifact_outcome(
++                artifact,
++                reason=(
++                    f"declared path is outside the task workspace "
++                    f"({workspace_root}); only paths inside it are staged as "
++                    f"durable attachments"
++                ),
++            ))
+             continue
+ 
+         problem = None
+@@ -2999,7 +3100,11 @@ def _persist_scratch_completion_artifacts(
+                 f"could not preserve declared scratch artifact {artifact}: {exc}"
+             ) from exc
+         used_destinations.add(dest)
+-        persisted.append(str(dest.resolve()))
++        staged_path = str(dest.resolve())
++        persisted.append(staged_path)
++        outcomes.append(_artifact_outcome(
++            artifact, staged=True, attachment_path=staged_path,
++        ))
+         changed = True
+ 
+     if changed:
+@@ -3007,6 +3112,7 @@ def _persist_scratch_completion_artifacts(
+         metadata["_staged_artifacts"] = [
+             path for path in persisted if path.startswith(str(attachment_dir.resolve()))
+         ]
++    return outcomes
+ 
+ 
+ def _discard_staged_copies(copies: Iterable[Path], attachment_dir: Path) -> None:
+@@ -3214,6 +3320,7 @@ def request_review(
+     conn: sqlite3.Connection, task_id: str, *, summary: Optional[str] = None,
+     metadata: Optional[dict] = None, reviewer: Optional[str] = None,
+     expected_run_id: Optional[int] = None, force: bool = False, with_reason: bool = False,
++    artifact_report: Optional[list] = None,
+ ):
+     """``running``/``ready`` -> ``review``; never touches block recurrence accounting.
+ 
+@@ -3231,6 +3338,11 @@ def request_review(
+     upload. A declared artifact that cannot be preserved raises
+     :class:`ArtifactPreservationError`, rolling the whole transition back: the
+     task stays ``running`` and retryable, with no attachments and no event.
++
++    ``artifact_report`` is an optional caller-owned list, extended with one
++    entry per declared artifact — ``{"path", "staged", "attachment_path",
++    "reason"}`` — so the tool layer can name what was staged and what was not
++    instead of answering with a bare success (t_7bdf74a8 D1/D2).
+     """
+ 
+     def _ret(ok: bool, reason: Optional[str] = None):
+@@ -3301,6 +3413,7 @@ def request_review(
+             if isinstance(metadata, dict):
+                 staged_copies = _stage_completion_artifacts(
+                     conn, task_id, metadata, now, uploaded_by="kanban_request_review",
++                    artifact_report=artifact_report,
+                 )
+             run_id = _end_or_synthesize_run(
+                 conn, task_id, outcome="review_requested", status="review",
+diff --git a/tests/hermes_cli/test_kanban_db.py b/tests/hermes_cli/test_kanban_db.py
+index 4dd3739..6d828d0 100644
+--- a/tests/hermes_cli/test_kanban_db.py
++++ b/tests/hermes_cli/test_kanban_db.py
+@@ -724,6 +724,170 @@ def test_complete_task_persists_scratch_artifacts_before_cleanup(kanban_home):
+     ]
+ 
+ 
++# ---------------------------------------------------------------------------
++# Declared-artifact outcome reporting (t_7bdf74a8 D1/D2/D4)
++#
++# Staging stays confined to managed scratch + paths inside the workspace, but
++# the caller is TOLD, per declared artifact, what happened. Silence — not the
++# confinement — was the bug: a worker that declared 7 files and got 6
++# attachments (and a bare {"ok": true}) could not tell the difference.
++# ---------------------------------------------------------------------------
++
++
++def test_complete_task_reports_outside_workspace_artifact_as_not_staged(
++    kanban_home, tmp_path
++):
++    """A declared path outside the workspace is not staged — and is reported."""
++    outside = tmp_path / "outside-report.json"
++    outside.write_text("{}", encoding="utf-8")
++    with kbc.connect() as conn:
++        t = kb.create_task(conn, title="outside artifact")
++        task = kb.get_task(conn, t)
++        ws = kbw.resolve_workspace(task)
++        kbw.set_workspace_path(conn, t, ws)
++        report: list = []
++
++        assert kb.complete_task(
++            conn,
++            t,
++            result="ok",
++            metadata={"artifacts": [str(outside)]},
++            artifact_report=report,
++        )
++
++        attachments = kb.list_attachments(conn, t)
++        run = kb.latest_run(conn, t)
++
++    assert len(report) == 1, report
++    entry = report[0]
++    assert entry["path"] == str(outside)
++    assert entry["staged"] is False
++    assert entry["attachment_path"] is None
++    assert "outside" in entry["reason"]
++    assert str(Path(ws).resolve()) in entry["reason"]
++    # No durable attachment, no hard failure: the notifier's payload path
++    # (channel 2) still carries the raw path.
++    assert attachments == []
++    assert run is not None
++    assert str(outside) in run.metadata["artifacts"]
++
++
++def test_complete_task_reports_worktree_artifacts_as_not_staged(
++    kanban_home, tmp_path
++):
++    """``workspace_kind='worktree'`` stages nothing — not even a path inside."""
++    tree = tmp_path / "wt-tree"
++    tree.mkdir()
++    artifact = tree / "report.md"
++    artifact.write_text("built\n", encoding="utf-8")
++    with kbc.connect() as conn:
++        t = kb.create_task(
++            conn,
++            title="worktree artifact",
++            workspace_kind="worktree",
++            workspace_path=str(tree),
++        )
++        report: list = []
++
++        assert kb.complete_task(
++            conn,
++            t,
++            result="ok",
++            metadata={"artifacts": [str(artifact)]},
++            artifact_report=report,
++        )
++
++        attachments = kb.list_attachments(conn, t)
++
++    assert len(report) == 1, report
++    entry = report[0]
++    assert entry["path"] == str(artifact)
++    assert entry["staged"] is False
++    assert entry["attachment_path"] is None
++    assert "worktree" in entry["reason"]
++    assert attachments == []
++    assert artifact.read_text(encoding="utf-8") == "built\n"
++
++
++def test_request_review_reports_outside_workspace_artifact_as_not_staged(
++    kanban_home, tmp_path
++):
++    """The review handoff reports the same way — it is the other staging door."""
++    outside = tmp_path / "outside-evidence.json"
++    outside.write_text("{}", encoding="utf-8")
++    with kbc.connect() as conn:
++        t = kb.create_task(conn, title="outside artifact at review")
++        task = kb.get_task(conn, t)
++        ws = kbw.resolve_workspace(task)
++        kbw.set_workspace_path(conn, t, ws)
++        inside = ws / "evidence.json"
++        inside.write_text("{\"ok\": 1}", encoding="utf-8")
++        report: list = []
++
++        assert kb.request_review(
++            conn,
++            t,
++            summary="ready for review",
++            metadata={"artifacts": [str(inside), str(outside)]},
++            artifact_report=report,
++        )
++
++        attachments = kb.list_attachments(conn, t)
++
++    items = {entry["path"]: entry for entry in report}
++    assert set(items) == {str(inside), str(outside)}, report
++    assert items[str(inside)]["staged"] is True
++    assert Path(items[str(inside)]["attachment_path"]).exists()
++    assert items[str(outside)]["staged"] is False
++    assert "outside" in items[str(outside)]["reason"]
++    assert [a.filename for a in attachments] == ["evidence.json"]
++
++
++def test_complete_task_missing_declared_artifact_still_raises(kanban_home):
++    """The preservation error (and its rollback) is unchanged."""
++    with kbc.connect() as conn:
++        t = kb.create_task(conn, title="missing artifact")
++        task = kb.get_task(conn, t)
++        ws = kbw.resolve_workspace(task)
++        kbw.set_workspace_path(conn, t, ws)
++
++        with pytest.raises(kb.ArtifactPreservationError):
++            kb.complete_task(
++                conn,
++                t,
++                result="ok",
++                metadata={"artifacts": [str(ws / "missing.png")]},
++            )
++
++        assert kb.get_task(conn, t).status != "done"
++        assert kb.list_attachments(conn, t) == []
++
++
++def test_complete_task_oversize_declared_artifact_still_raises(
++    kanban_home, monkeypatch
++):
++    """The size cap still refuses, and the task is not completed."""
++    monkeypatch.setattr(kb, "KANBAN_ATTACHMENT_MAX_BYTES", 8)
++    with kbc.connect() as conn:
++        t = kb.create_task(conn, title="oversize artifact")
++        task = kb.get_task(conn, t)
++        ws = kbw.resolve_workspace(task)
++        kbw.set_workspace_path(conn, t, ws)
++        artifact = ws / "big.bin"
++        artifact.write_bytes(b"x" * 64)
++
++        with pytest.raises(kb.ArtifactPreservationError):
++            kb.complete_task(
++                conn,
++                t,
++                result="ok",
++                metadata={"artifacts": [str(artifact)]},
++            )
++
++        assert kb.get_task(conn, t).status != "done"
++        assert kb.list_attachments(conn, t) == []
++
++
+ def test_review_bound_handoff_preserves_declared_artifacts(kanban_home):
+     """A review-bound card's declared files must outlive the reviewer's
+     completion — that completion is what cleans the scratch workspace up."""
+diff --git a/tests/tools/test_kanban_tools.py b/tests/tools/test_kanban_tools.py
+index babfe61..42188cc 100644
+--- a/tests/tools/test_kanban_tools.py
++++ b/tests/tools/test_kanban_tools.py
+@@ -206,6 +206,93 @@ def test_request_review_accepts_installed_profile(monkeypatch, worker_env, tmp_p
+         assert (task.status, task.assignee) == ("review", "verifier")
+ 
+ 
++# ---------------------------------------------------------------------------
++# Declared-artifact outcome reporting (t_7bdf74a8 D1–D4)
++#
++# Before this, kanban_complete / kanban_request_review answered a handoff with
++# declared artifacts with a bare {"ok": true, "task_id", "run_id", "status"}:
++# a worker that declared several files could not tell which ones became durable
++# attachments (measured: 7 declared → 6 attachments, silence). The confinement
++# stays (managed scratch + paths inside the workspace only); the SILENCE goes,
++# for both the outside-workspace and the never-staged cases.
++# ---------------------------------------------------------------------------
++
++def test_complete_reports_staged_and_unstaged_artifacts(worker_env, tmp_path):
++    """One declared path inside the workspace and one outside: both are named."""
++    from pathlib import Path
++    from hermes_cli import kanban_db as kb
++    from hermes_cli import kanban_db_connect as kbc
++    from hermes_cli import kanban_db_workspace as kbw
++    from tools import kanban_tools as kt
++
++    with kbc.connect() as conn:
++        ws = kbw.resolve_workspace(kb.get_task(conn, worker_env))
++        kbw.set_workspace_path(conn, worker_env, ws)
++    inside = ws / "chart.png"
++    inside.write_bytes(b"png-bytes")
++    outside = tmp_path / "outside.txt"
++    outside.write_text("raw", encoding="utf-8")
++
++    out = json.loads(kt._handle_complete({
++        "summary": "done",
++        "artifacts": [str(inside), str(outside)],
++    }))
++
++    assert out["ok"] is True
++    items = {item["path"]: item for item in out["artifacts"]}
++    assert set(items) == {str(inside), str(outside)}
++    assert items[str(inside)]["staged"] is True
++    assert Path(items[str(inside)]["attachment_path"]).exists()
++    assert items[str(outside)]["staged"] is False
++    assert "outside" in items[str(outside)]["reason"]
++    assert "1 of 2" in out["artifact_warning"]
++
++
++def test_request_review_reports_staged_and_unstaged_artifacts(
++    monkeypatch, worker_env, tmp_path
++):
++    """The review handoff reports the same way (the measured fasit: 6 of 7)."""
++    from pathlib import Path
++    from hermes_cli import kanban_db as kb
++    from hermes_cli import kanban_db_connect as kbc
++    from hermes_cli import kanban_db_workspace as kbw
++    from tools import kanban_tools as kt
++
++    (tmp_path / ".hermes" / "profiles" / "verifier").mkdir(parents=True)
++    (tmp_path / ".hermes" / "profiles" / "verifier" / "config.yaml").write_text("{}\n")
++    with kbc.connect() as conn:
++        ws = kbw.resolve_workspace(kb.get_task(conn, worker_env))
++        kbw.set_workspace_path(conn, worker_env, ws)
++        monkeypatch.setenv(
++            "HERMES_KANBAN_RUN_ID",
++            str(kb.get_task(conn, worker_env).current_run_id),
++        )
++    inside = ws / "evidence.json"
++    inside.write_text("{}", encoding="utf-8")
++    outside = tmp_path / "bevis-utenfor.json"
++    outside.write_text("{}", encoding="utf-8")
++
++    out = json.loads(kt._handle_request_review({
++        "summary": "Ready for review.",
++        "reviewer": "verifier",
++        "artifacts": [str(inside), str(outside)],
++    }))
++
++    assert out["ok"] is True
++    assert out["status"] == "review"
++    items = {item["path"]: item for item in out["artifacts"]}
++    assert set(items) == {str(inside), str(outside)}
++    assert items[str(inside)]["staged"] is True
++    assert Path(items[str(inside)]["attachment_path"]).exists()
++    assert items[str(outside)]["staged"] is False
++    assert "outside" in items[str(outside)]["reason"]
++    assert "1 of 2" in out["artifact_warning"]
++    with kbc.connect() as conn:
++        assert [a.filename for a in kb.list_attachments(conn, worker_env)] == [
++            "evidence.json"
++        ]
++
++
+ def test_complete_goal_mode_rejected_by_judge(monkeypatch, tmp_path):
+     """Goal-mode tasks must pass the auxiliary judge before completion.
+     Regression for #38367: workers bypassing the judge via early kanban_complete."""
+diff --git a/tools/kanban_tools.py b/tools/kanban_tools.py
+index 6390577..dc75d7c 100644
+--- a/tools/kanban_tools.py
++++ b/tools/kanban_tools.py
+@@ -254,6 +254,46 @@ def _ok_landed(kb, conn, tid: str, default_status: str, **extra: Any) -> str:
+                status=landed.status if landed else default_status, **extra)
+ 
+ 
++def _artifact_report_fields(outcomes: list) -> dict:
++    """Turn per-artifact staging outcomes into the success payload's fields.
++
++    Every declared artifact is named with its fate (t_7bdf74a8 D1). Nothing
++    here refuses a handoff: a declared path outside the workspace is legitimate
++    — the gateway notifier can still upload it from the event payload when the
++    task has a subscription — so the non-staged half is a warning, never an
++    error (D2).
++    """
++    if not outcomes:
++        return {}
++
++    items: list[dict] = []
++    for entry in outcomes:
++        if not isinstance(entry, dict):
++            continue
++        item: dict = {"path": entry.get("path"), "staged": bool(entry.get("staged"))}
++        if item["staged"]:
++            item["attachment_path"] = entry.get("attachment_path")
++        else:
++            item["reason"] = entry.get("reason") or "not staged"
++        items.append(item)
++
++    if not items:
++        return {}
++
++    fields: dict = {"artifacts": items}
++    not_staged = [item for item in items if not item["staged"]]
++    if not_staged:
++        fields["artifact_warning"] = (
++            f"{len(not_staged)} of {len(items)} declared artifact(s) were NOT "
++            f"staged as durable attachments: "
++            + "; ".join(f"{item['path']} ({item['reason']})" for item in not_staged)
++            + ". Only a managed 'scratch' workspace stages declared files inside "
++            "it; the gateway notifier may still upload such a path to a "
++            "subscriber from the event payload, but nothing else preserves it."
++        )
++    return fields
++
++
+ def _redact(value: Any) -> str:
+     return redact_sensitive_text(str(value), force=True)
+ 
+@@ -603,9 +643,11 @@ def _handle_complete(args: dict, **kw) -> str:
+         task = kb.get_task(conn, tid)
+         _goal_gate("kanban_complete", task, tid, (summary or result or "").strip())
+         try:
++            artifact_report: list = []
+             ok = kb.complete_task(
+                 conn, tid, result=result, summary=summary, metadata=metadata,
+-                created_cards=created_cards, expected_run_id=_worker_run_id(tid))
++                created_cards=created_cards, expected_run_id=_worker_run_id(tid),
++                artifact_report=artifact_report)
+         except kb.ArtifactPreservationError as artifact_err:
+             # Structured rejection — surface the phantom ids so the worker can retry with a corrected list
+             # or drop the field. Audit event already landed in the DB. The task itself was NOT mutated (the
+@@ -647,7 +689,11 @@ def _handle_complete(args: dict, **kw) -> str:
+             _check(False, (task.last_failure_error if task else None) or
+                    f"could not complete {tid} (unknown id, stale run, or already terminal)")
+         run = kb.latest_run(conn, tid)
+-        return _ok(task_id=tid, run_id=run.id if run else None)
++        return _ok(
++            task_id=tid,
++            run_id=run.id if run else None,
++            **_artifact_report_fields(artifact_report),
++        )
+ 
+ 
+ @_kanban_handler("kanban_block")
+@@ -720,9 +766,11 @@ def _handle_request_review(args: dict, **kw) -> str:
+     with _board(args.get("board")) as (kb, conn):
+         _goal_gate("kanban_request_review", kb.get_task(conn, tid), tid, summary)
+         try:
++            artifact_report: list = []
+             ok, fail_reason = kb.request_review(
+                 conn, tid, summary=summary, metadata=metadata, reviewer=reviewer,
+-                expected_run_id=_worker_run_id(tid), with_reason=True)
++                expected_run_id=_worker_run_id(tid), with_reason=True,
++                artifact_report=artifact_report)
+         except kb.ArtifactPreservationError as artifact_err:
+             # Same contract as kanban_complete (#22923): the transition rolled
+             # back, the task is untouched and retryable — say so explicitly or
+@@ -734,7 +782,9 @@ def _handle_request_review(args: dict, **kw) -> str:
+                 f"kanban_request_review with the same handoff.")
+         _check(ok, f"could not request review for {tid}: "
+                    f"{fail_reason or 'unknown id or not in running/ready'}")
+-        return _ok_landed(kb, conn, tid, "review")
++        return _ok_landed(
++            kb, conn, tid, "review", **_artifact_report_fields(artifact_report),
++        )
+ 
+ 
+ @_kanban_handler("kanban_request_changes")
+diff --git a/tools/kanban_tools_schemas.py b/tools/kanban_tools_schemas.py
+index 7642b6d..c4f9acb 100644
+--- a/tools/kanban_tools_schemas.py
++++ b/tools/kanban_tools_schemas.py
+@@ -99,10 +99,12 @@ KANBAN_COMPLETE_SCHEMA = _schema(
+         "references are caught before they leak into downstream "
+         "automation. If you produced deliverable files (charts, PDFs, "
+         "spreadsheets, generated images), list their absolute paths "
+-        "in ``artifacts`` — the gateway notifier will upload them as "
+-        "native attachments to the human who subscribed to the task, "
+-        "so the deliverable lands in their chat alongside the summary "
+-        "instead of being a path they have to fetch by hand."
++        "in ``artifacts`` and read the return: it names every declared "
++        "path with its outcome — staged as a durable attachment, or "
++        "not staged, with the reason. A path that is not staged is "
++        "not lost: the gateway notifier uploads payload paths to the "
++        "human who subscribed to the task, which needs a "
++        "subscription."
+     ),
+     {
+         "task_id": _prop("string", _DESC_TASK_ID_DEFAULT),
+@@ -147,17 +149,29 @@ KANBAN_COMPLETE_SCHEMA = _schema(
+                 "files you produced during this run — generated "
+                 "charts, PDFs, spreadsheets, images, archives. "
+                 "Examples: [\"/tmp/q3-revenue.png\", "
+-                "\"/tmp/report.pdf\"]. The gateway notifier "
+-                "uploads each path as a native attachment to the "
+-                "subscribed chat (images embed inline, everything "
+-                "else uploads as a file) so the deliverable "
+-                "lands with the completion notification. Skip "
+-                "intermediate scratch files and references that "
+-                "are not the deliverable. The path must exist "
+-                "on disk at completion. Files inside a managed scratch "
+-                "workspace are copied to durable task attachments before "
+-                "cleanup; a missing declared scratch artifact keeps the "
+-                "task in-flight so you can fix the path and retry."
++                "\"/tmp/report.pdf\"]. A declared path becomes a "
++                "durable task attachment only when ALL of these "
++                "hold: the task's workspace_kind is 'scratch', "
++                "that workspace is managed by the kanban board, "
++                "and the path is INSIDE the workspace. Two common "
++                "cases are therefore not staged: a 'worktree' task "
++                "(worktree workspaces stage nothing, not even a "
++                "path inside the tree) and any path outside the "
++                "workspace (e.g. /tmp or your home directory). "
++                "Nothing is refused for that — the gateway "
++                "notifier can still upload such a path to a "
++                "subscriber from the completion event payload, "
++                "when the task has a notify subscription and the "
++                "file still exists. The return names every "
++                "declared path with its outcome, so you can see "
++                "which ones became attachments; write "
++                "deliverables inside your workspace when you need "
++                "them preserved. The path must exist on disk at "
++                "completion: a missing or over-cap declared "
++                "scratch artifact keeps the task in-flight so you "
++                "can fix the path and retry. Skip intermediate "
++                "scratch files and references that are not the "
++                "deliverable."
+             ),
+         },
+     },
+@@ -238,14 +252,27 @@ KANBAN_REQUEST_REVIEW_SCHEMA = _schema(
+                 "files this handoff names — generated charts, "
+                 "PDFs, spreadsheets, images, archives. Examples: "
+                 "['/tmp/q3-revenue.png', '/tmp/report.pdf']. "
+-                "A review handoff is the last implementer "
+-                "transition, so the kernel copies these into the "
+-                "task's durable attachments before the reviewer's "
+-                "completion cleans the scratch workspace up, and "
+-                "the gateway notifier uploads them as native "
+-                "attachments to the subscribed chat. A missing "
+-                "declared scratch artifact keeps the task in place "
+-                "so you can fix the path and retry."
++                "A declared path becomes a durable task attachment "
++                "only when ALL of these hold: the task's "
++                "workspace_kind is 'scratch', that workspace is "
++                "managed by the kanban board, and the path is "
++                "INSIDE the workspace. A review handoff is the last "
++                "implementer transition, so a staged file is copied "
++                "into the task's durable attachments before the "
++                "reviewer's completion cleans the scratch workspace "
++                "up. Two common cases are therefore not staged: a "
++                "'worktree' task (worktree workspaces stage "
++                "nothing, not even a path inside the tree) and any "
++                "path outside the workspace (e.g. /tmp or your home "
++                "directory). Nothing is refused for that — the "
++                "gateway notifier can still upload such a path to a "
++                "subscriber from the review_requested event payload, "
++                "when the task has a notify subscription and the file "
++                "still exists. The return names every declared path "
++                "with its outcome, so you can see which ones became "
++                "attachments. A missing or over-cap declared scratch "
++                "artifact keeps the task in place so you can fix the "
++                "path and retry."
+             ),
+         },
+     },

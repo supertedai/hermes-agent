@@ -1,0 +1,133 @@
+s...................F................................................... [ 62%]
+...........................................                              [100%]
+=================================== FAILURES ===================================
+_ TestSharedBoardPaths.test_dispatcher_spawn_injects_kanban_paths_without_stale_session _
+
+self = <tests.hermes_cli.test_kanban_db.TestSharedBoardPaths object at 0x75a354079ba0>
+tmp_path = PosixPath('/var/tmp/pytest-of-morten/pytest-824/test_dispatcher_spawn_injects_0')
+monkeypatch = <_pytest.monkeypatch.MonkeyPatch object at 0x75a3526fae50>
+
+    def test_dispatcher_spawn_injects_kanban_paths_without_stale_session(
+        self, tmp_path, monkeypatch
+    ):
+        # The dispatcher must pin board paths while stripping any unrelated
+        # HERMES_SESSION_* identity inherited from the long-lived gateway.
+        # The one exception is HERMES_SESSION_SOURCE, which the dispatcher
+        # re-sets to its own `kanban` tag AFTER the strip — a value it owns,
+        # never one inherited from whatever the gateway last routed.
+        default_home = tmp_path / ".hermes"
+        default_home.mkdir()
+        self._set_home(monkeypatch, tmp_path, default_home)
+    
+        from gateway import session_context as sc
+    
+        # A dispatcher can launch before the gateway binds its first session.
+        monkeypatch.setattr(sc, "_session_context_engaged", False)
+        sc.reset_session_vars()
+        for key in sc._VAR_MAP:
+            monkeypatch.setenv(key, "stale-routing-value")
+    
+        captured = {}
+    
+        class _FakePopen:
+            def __init__(self, cmd, **kwargs):
+                captured["cmd"] = cmd
+                captured["env"] = kwargs.get("env", {})
+                self.pid = 4242
+    
+        monkeypatch.setattr("subprocess.Popen", _FakePopen)
+    
+        task = kb.Task(
+            id="t_dispatch_env",
+            title="x",
+            body=None,
+            assignee="coder",
+            status="ready",
+            priority=0,
+            created_by=None,
+            created_at=0,
+            started_at=None,
+            completed_at=None,
+            workspace_kind="worktree",
+            workspace_path=str(tmp_path / "ws"),
+            claim_lock=None,
+            claim_expires=None,
+            tenant=None,
+            branch_name="wt/t_dispatch_env",
+        )
+>       kbd._default_spawn(task, str(tmp_path / "ws"))
+
+tests/hermes_cli/test_kanban_db.py:1013: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+hermes_cli/kanban_db_dispatch.py:2749: in _default_spawn
+    cmd = _restart_safe_worker_argv(task, cmd)
+          ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+task = Task(id='t_dispatch_env', title='x', body=None, assignee='coder', status='ready', priority=0, created_by=None, created... goal_mode=False, goal_max_turns=None, session_id=None, block_kind=None, block_recurrences=0, completion_contract=None)
+command = ['/opt/venvs/t_dce82b62-flate/bin/python', '-m', 'hermes_cli.main', '-p', 'coder', '--cli', ...]
+
+    def _restart_safe_worker_argv(task: Task, command: list[str]) -> list[str]:
+        """Wrap a systemd-hosted dispatcher's worker in the shared restart-safe scope.
+    
+        Kanban workers are long-lived agentic runs that outlive the dispatcher
+        tick, so they never take cron's degraded mode under the managed gateway:
+        ``require_restart_safe_scope=True`` makes the helper raise
+        ``RestartSafeScopeUnavailable`` there (an infrastructure spawn failure the
+        dispatcher does not charge to the card). Under any other systemd unit
+        (``Type=oneshot`` dispatch timers, #113612) ``outlives_parent=True`` gets the
+        worker its own scope so the unit's cgroup teardown cannot kill it.
+        """
+        from tools.process_registry import restart_safe_gateway_child_argv
+    
+        if task.current_run_id is None:
+            # Outside managed systemd this is harmless, but a managed dispatch must
+            # never mint an untraceable worker.  Check topology through the shared
+            # helper first, using a placeholder suffix that cannot be launched.
+            dispatch = restart_safe_gateway_child_argv(
+                command,
+                unit_suffix=f"kanban-{task.id}-run-missing",
+                require_restart_safe_scope=True,
+                outlives_parent=True,
+            )
+            if dispatch.mode != "in_process":
+>               raise RuntimeError(
+                    "cannot create restart-safe systemd scope for Kanban worker: "
+                    "the claimed task has no current run id"
+                )
+E               RuntimeError: cannot create restart-safe systemd scope for Kanban worker: the claimed task has no current run id
+
+hermes_cli/kanban_db_dispatch.py:2619: RuntimeError
+------------------------------ Captured log call -------------------------------
+WARNING  hermes_state:hermes_state_wal.py:559 state.db: linked SQLite 3.46.1 (interpreter /opt/venvs/t_dce82b62-flate/bin/python) is vulnerable to the WAL-reset corruption bug (https://sqlite.org/wal.html#walresetbug) — using journal_mode=DELETE instead of enabling WAL. Upgrade to SQLite 3.51.3+ (or backports 3.50.7 / 3.44.6); Hermes-managed installs can repair the embedded runtime with `hermes update`. See `hermes doctor`. This warning fires once per process per database.
+INFO     hermes_cli.plugins:plugins.py:382 Plugin 'browser-browser-use' registered browser provider: browser-use
+INFO     hermes_cli.plugins:plugins.py:382 Plugin 'browser-browserbase' registered browser provider: browserbase
+INFO     hermes_cli.plugins:plugins.py:382 Plugin 'browser-firecrawl' registered browser provider: firecrawl
+INFO     hermes_cli.plugins:plugins.py:382 Plugin 'deepinfra' registered image_gen provider: deepinfra
+INFO     hermes_cli.plugins:plugins.py:382 Plugin 'fal' registered image_gen provider: fal
+INFO     hermes_cli.plugins:plugins.py:382 Plugin 'krea' registered image_gen provider: krea
+INFO     hermes_cli.plugins:plugins.py:382 Plugin 'meta-ai-image-gen' registered image_gen provider: meta-ai
+INFO     hermes_cli.plugins:plugins.py:382 Plugin 'openai' registered image_gen provider: openai
+INFO     hermes_cli.plugins:plugins.py:382 Plugin 'openai-codex' registered image_gen provider: openai-codex
+INFO     hermes_cli.plugins:plugins.py:382 Plugin 'openrouter' registered image_gen provider: openrouter
+INFO     hermes_cli.plugins:plugins.py:382 Plugin 'openrouter' registered image_gen provider: nous
+INFO     hermes_cli.plugins:plugins.py:382 Plugin 'xai' registered image_gen provider: xai
+INFO     hermes_cli.plugins:plugins.py:382 Plugin 'deepinfra' registered video_gen provider: deepinfra
+INFO     hermes_cli.plugins:plugins.py:382 Plugin 'fal' registered video_gen provider: fal
+INFO     hermes_cli.plugins:plugins.py:382 Plugin 'openrouter' registered video_gen provider: openrouter
+INFO     hermes_cli.plugins:plugins.py:382 Plugin 'xai' registered video_gen provider: xai
+INFO     hermes_cli.plugins:plugins.py:382 Plugin 'web-brave-free' registered web provider: brave-free
+INFO     hermes_cli.plugins:plugins.py:382 Plugin 'web-ddgs' registered web provider: ddgs
+INFO     hermes_cli.plugins:plugins.py:382 Plugin 'web-exa' registered web provider: exa
+INFO     hermes_cli.plugins:plugins.py:382 Plugin 'web-firecrawl' registered web provider: firecrawl
+INFO     hermes_cli.plugins:plugins.py:382 Plugin 'web-keenable' registered web provider: keenable
+INFO     hermes_cli.plugins:plugins.py:382 Plugin 'web-parallel' registered web provider: parallel
+INFO     hermes_cli.plugins:plugins.py:382 Plugin 'web-perplexity' registered web provider: perplexity
+INFO     hermes_cli.plugins:plugins.py:382 Plugin 'web-searxng' registered web provider: searxng
+INFO     hermes_cli.plugins:plugins.py:382 Plugin 'web-tavily' registered web provider: tavily
+INFO     hermes_cli.plugins:plugins.py:382 Plugin 'web-xai' registered web provider: xai
+INFO     hermes_cli.plugins:plugins.py:1345 Plugin discovery complete: 58 found, 52 enabled
+WARNING  tools.process_registry:process_registry.py:314 systemd unit dispatch: systemd-run --user --scope is unavailable (usually no reachable user D-Bus session at /run/user/1000/bus). On a system-level service install, run `sudo loginctl enable-linger <gateway-user>` and restart the gateway.; workers are spawned unmanaged inside this systemd unit's cgroup and will be KILLED when the unit exits (Type=oneshot dispatch timers lose every worker within a second). Give the unit's user a session bus (`loginctl enable-linger <user>`) so workers get their own scope, or set KillMode=process on the unit.
+=========================== short test summary info ============================
+FAILED tests/hermes_cli/test_kanban_db.py::TestSharedBoardPaths::test_dispatcher_spawn_injects_kanban_paths_without_stale_session
+1 failed, 113 passed, 1 skipped in 31.94s
