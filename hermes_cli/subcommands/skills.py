@@ -92,28 +92,33 @@ def build_skills_parser(subparsers, *, cmd_skills: Callable) -> None:
     add_yes_flag(skills_uninstall)
 
     skills_reset = skills_subparsers.add_parser("reset",
-        help="Reset a bundled skill — clears 'user-modified' tracking so updates work again",
+        help="Re-baseline a bundled skill's sync tracking (the way out of the old 'user-modified' flag)",
         description="Clear a bundled skill's entry from the sync manifest (~/.hermes/skills/.bundled_manifest) "
-            "so future 'hermes update' runs stop marking it as user-modified. Pass --restore to also "
-            "replace the current copy with the bundled version.")
+            "and re-baseline it, so future 'hermes update' runs accept upstream changes to it again. "
+            "Refused when your copy differs from the shipped version: clearing the entry there writes no "
+            "new origin row, so the skill would stay pinned with nothing reporting it — reconcile the "
+            "difference instead, or pass --restore (which deletes your copy and re-copies the shipped one).")
     skills_reset.add_argument("name", help="Skill name to reset (e.g. google-workspace)")
     _flag(skills_reset, "--restore",
         help="Also delete the current copy and re-copy the bundled version")
     add_yes_flag(skills_reset, "Skip confirmation prompt when using --restore")
 
     skills_list_modified = skills_subparsers.add_parser(
-        "list-modified", help="List bundled skills you've edited (which `hermes update` keeps)",
-        description="Show the bundled skills whose local copy differs from the version last "
-            "synced, i.e. the ones `hermes update` reports as user-modified and skips. "
-            "Use `hermes skills diff <name>` to see changes and `hermes skills reset "
-            "<name>` to resume updates.")
+        "list-modified", help="Why bundled skill copies are being skipped by `hermes update`, per skill",
+        description="Show the bundled skills whose local copy cannot be proven to match the version "
+            "shipped now — the ones `hermes update` keeps and skips — each under the state it is "
+            "actually in: (i) the copy IS the shipped version and only the manifest's origin row is "
+            "stale, (ii) the copy is older upstream content, (iii) the copy holds content no upstream "
+            "revision has. Only (iii) is an edit of yours. Use `hermes skills diff <name>` for the "
+            "file-level detail; `hermes skills reset <name>` re-baselines a case-(i) copy, and "
+            "`--restore` replaces any copy with the shipped version.")
     add_json_flag(skills_list_modified, "Output the list as JSON")
 
     skills_diff = skills_subparsers.add_parser(
         "diff", help="Show how your copy of a bundled skill differs from the stock version",
         description="Print a unified diff between your local copy of a bundled skill and the "
-            "current bundled (stock) version, so you can confirm what changed before "
-            "running `hermes skills reset`.")
+            "current bundled (stock) version, plus which state the copy is in, so you can decide "
+            "whether to reconcile it or run `hermes skills reset <name> --restore`.")
     skills_diff.add_argument("name", help="Skill name to diff (e.g. google-workspace)")
 
     skills_opt_out = skills_subparsers.add_parser(

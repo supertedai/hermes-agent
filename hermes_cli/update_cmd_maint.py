@@ -487,7 +487,7 @@ def _verify_and_restore_state_dbs_post_update() -> None:
 
 def _print_bundled_skills_sync_report() -> None:
     """Run ``sync_skills`` (copies new, updates changed, respects user deletions) and print its summary."""
-    from tools.skills_sync import sync_skills
+    from tools.skills_sync import _user_modified_breakdown, sync_skills
     result = sync_skills(quiet=True)
     if result["copied"]:
         print(f"  + {len(result['copied'])} new: {', '.join(result['copied'])}")
@@ -496,11 +496,20 @@ def _print_bundled_skills_sync_report() -> None:
     if result.get("user_modified"):
         print(f"  ~ {len(result['user_modified'])} user-modified (kept)")
         print("    → see them: hermes skills list-modified  (diff/reset to resume updates)")
+        # Name the states: most of what this old line called "user-modified" is not an edit (t_eb487a72).
+        if reasons := result.get("user_modified_reasons"):
+            print(_user_modified_breakdown(reasons))
     if result.get("cleaned"):
         print(f"  − {len(result['cleaned'])} removed from manifest")
     if result.get("relocated"):
         print(f"  → {len(result['relocated'])} moved to new upstream paths: {', '.join(result['relocated'])}")
-    if not result["copied"] and not result.get("updated"):
+    if result.get("manifest_error"):
+        # Never let a failed manifest write read as a clean run: the copies on disk changed, but
+        # their origin rows are not recorded, so the next run reports them as skipped (t_eb487a72).
+        print(f"  ! manifest write FAILED: {result['manifest_error']}")
+        print(f"    {len(result.get('unrecorded') or [])} skill(s) were written to disk but NOT recorded — "
+              f"run `hermes skills list-modified` to see them")
+    elif not result["copied"] and not result.get("updated"):
         print("  ✓ Skills are up to date")
 
 
@@ -824,10 +833,12 @@ def _profile_skill_sync_status(r) -> str:
     if not r:
         return "sync failed"
     parts = []
-    for key, fmt in (("copied", "+{} new"), ("updated", "↑{} updated"), ("user_modified", "~{} user-modified")):
+    for key, fmt in (("copied", "+{} new"), ("updated", "↑{} updated"), ("user_modified", "~{} not tracking upstream")):
         count = len(r.get(key, []))
         if count:
             parts.append(fmt.format(count))
+    if r.get("manifest_error"):
+        parts.append("MANIFEST WRITE FAILED")
     return ", ".join(parts) if parts else "up to date"
 
 
