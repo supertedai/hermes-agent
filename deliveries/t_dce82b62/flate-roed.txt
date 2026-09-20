@@ -1,0 +1,232 @@
+FFF..FF                                                                  [100%]
+=================================== FAILURES ===================================
+_____ test_complete_task_reports_outside_workspace_artifact_as_not_staged ______
+
+kanban_home = PosixPath('/var/tmp/pytest-of-morten/pytest-832/test_complete_task_reports_out0/.hermes')
+tmp_path = PosixPath('/var/tmp/pytest-of-morten/pytest-832/test_complete_task_reports_out0')
+
+    def test_complete_task_reports_outside_workspace_artifact_as_not_staged(
+        kanban_home, tmp_path
+    ):
+        """A declared path outside the workspace is not staged — and is reported."""
+        outside = tmp_path / "outside-report.json"
+        outside.write_text("{}", encoding="utf-8")
+        with kbc.connect() as conn:
+            t = kb.create_task(conn, title="outside artifact")
+            task = kb.get_task(conn, t)
+            ws = kbw.resolve_workspace(task)
+            kbw.set_workspace_path(conn, t, ws)
+            report: list = []
+    
+>           assert kb.complete_task(
+                conn,
+                t,
+                result="ok",
+                metadata={"artifacts": [str(outside)]},
+                artifact_report=report,
+            )
+E           TypeError: complete_task() got an unexpected keyword argument 'artifact_report'
+
+tests/hermes_cli/test_kanban_db.py:750: TypeError
+------------------------------ Captured log setup ------------------------------
+WARNING  hermes_state:hermes_state_wal.py:559 kanban.db (kanban.db): linked SQLite 3.46.1 (interpreter /opt/venvs/t_dce82b62-flate/bin/python) is vulnerable to the WAL-reset corruption bug (https://sqlite.org/wal.html#walresetbug) — using journal_mode=DELETE instead of enabling WAL. Upgrade to SQLite 3.51.3+ (or backports 3.50.7 / 3.44.6); Hermes-managed installs can repair the embedded runtime with `hermes update`. See `hermes doctor`. This warning fires once per process per database.
+_________ test_complete_task_reports_worktree_artifacts_as_not_staged __________
+
+kanban_home = PosixPath('/var/tmp/pytest-of-morten/pytest-832/test_complete_task_reports_wor0/.hermes')
+tmp_path = PosixPath('/var/tmp/pytest-of-morten/pytest-832/test_complete_task_reports_wor0')
+
+    def test_complete_task_reports_worktree_artifacts_as_not_staged(
+        kanban_home, tmp_path
+    ):
+        """``workspace_kind='worktree'`` stages nothing — not even a path inside."""
+        tree = tmp_path / "wt-tree"
+        tree.mkdir()
+        artifact = tree / "report.md"
+        artifact.write_text("built\n", encoding="utf-8")
+        with kbc.connect() as conn:
+            t = kb.create_task(
+                conn,
+                title="worktree artifact",
+                workspace_kind="worktree",
+                workspace_path=str(tree),
+            )
+            report: list = []
+    
+>           assert kb.complete_task(
+                conn,
+                t,
+                result="ok",
+                metadata={"artifacts": [str(artifact)]},
+                artifact_report=report,
+            )
+E           TypeError: complete_task() got an unexpected keyword argument 'artifact_report'
+
+tests/hermes_cli/test_kanban_db.py:792: TypeError
+_____ test_request_review_reports_outside_workspace_artifact_as_not_staged _____
+
+kanban_home = PosixPath('/var/tmp/pytest-of-morten/pytest-832/test_request_review_reports_ou0/.hermes')
+tmp_path = PosixPath('/var/tmp/pytest-of-morten/pytest-832/test_request_review_reports_ou0')
+
+    def test_request_review_reports_outside_workspace_artifact_as_not_staged(
+        kanban_home, tmp_path
+    ):
+        """The review handoff reports the same way — it is the other staging door."""
+        outside = tmp_path / "outside-evidence.json"
+        outside.write_text("{}", encoding="utf-8")
+        with kbc.connect() as conn:
+            t = kb.create_task(conn, title="outside artifact at review")
+            task = kb.get_task(conn, t)
+            ws = kbw.resolve_workspace(task)
+            kbw.set_workspace_path(conn, t, ws)
+            inside = ws / "evidence.json"
+            inside.write_text("{\"ok\": 1}", encoding="utf-8")
+            report: list = []
+    
+>           assert kb.request_review(
+                conn,
+                t,
+                summary="ready for review",
+                metadata={"artifacts": [str(inside), str(outside)]},
+                artifact_report=report,
+            )
+E           TypeError: request_review() got an unexpected keyword argument 'artifact_report'
+
+tests/hermes_cli/test_kanban_db.py:827: TypeError
+_____________ test_complete_reports_staged_and_unstaged_artifacts ______________
+
+worker_env = 't_c50a62eb'
+tmp_path = PosixPath('/var/tmp/pytest-of-morten/pytest-832/test_complete_reports_staged_a0')
+
+    def test_complete_reports_staged_and_unstaged_artifacts(worker_env, tmp_path):
+        """One declared path inside the workspace and one outside: both are named."""
+        from pathlib import Path
+        from hermes_cli import kanban_db as kb
+        from hermes_cli import kanban_db_connect as kbc
+        from hermes_cli import kanban_db_workspace as kbw
+        from tools import kanban_tools as kt
+    
+        with kbc.connect() as conn:
+            ws = kbw.resolve_workspace(kb.get_task(conn, worker_env))
+            kbw.set_workspace_path(conn, worker_env, ws)
+        inside = ws / "chart.png"
+        inside.write_bytes(b"png-bytes")
+        outside = tmp_path / "outside.txt"
+        outside.write_text("raw", encoding="utf-8")
+    
+        out = json.loads(kt._handle_complete({
+            "summary": "done",
+            "artifacts": [str(inside), str(outside)],
+        }))
+    
+        assert out["ok"] is True
+>       items = {item["path"]: item for item in out["artifacts"]}
+                                                ^^^^^^^^^^^^^^^^
+E       KeyError: 'artifacts'
+
+tests/tools/test_kanban_tools.py:242: KeyError
+------------------------------ Captured log setup ------------------------------
+INFO     hermes_cli.plugins:plugins.py:382 Plugin 'browser-browser-use' registered browser provider: browser-use
+INFO     hermes_cli.plugins:plugins.py:382 Plugin 'browser-browserbase' registered browser provider: browserbase
+INFO     hermes_cli.plugins:plugins.py:382 Plugin 'browser-firecrawl' registered browser provider: firecrawl
+INFO     hermes_cli.plugins:plugins.py:382 Plugin 'deepinfra' registered image_gen provider: deepinfra
+INFO     hermes_cli.plugins:plugins.py:382 Plugin 'fal' registered image_gen provider: fal
+INFO     hermes_cli.plugins:plugins.py:382 Plugin 'krea' registered image_gen provider: krea
+INFO     hermes_cli.plugins:plugins.py:382 Plugin 'meta-ai-image-gen' registered image_gen provider: meta-ai
+INFO     hermes_cli.plugins:plugins.py:382 Plugin 'openai' registered image_gen provider: openai
+INFO     hermes_cli.plugins:plugins.py:382 Plugin 'openai-codex' registered image_gen provider: openai-codex
+INFO     hermes_cli.plugins:plugins.py:382 Plugin 'openrouter' registered image_gen provider: openrouter
+INFO     hermes_cli.plugins:plugins.py:382 Plugin 'openrouter' registered image_gen provider: nous
+INFO     hermes_cli.plugins:plugins.py:382 Plugin 'xai' registered image_gen provider: xai
+INFO     hermes_cli.plugins:plugins.py:382 Plugin 'deepinfra' registered video_gen provider: deepinfra
+INFO     hermes_cli.plugins:plugins.py:382 Plugin 'fal' registered video_gen provider: fal
+INFO     hermes_cli.plugins:plugins.py:382 Plugin 'openrouter' registered video_gen provider: openrouter
+INFO     hermes_cli.plugins:plugins.py:382 Plugin 'xai' registered video_gen provider: xai
+INFO     hermes_cli.plugins:plugins.py:382 Plugin 'web-brave-free' registered web provider: brave-free
+INFO     hermes_cli.plugins:plugins.py:382 Plugin 'web-ddgs' registered web provider: ddgs
+INFO     hermes_cli.plugins:plugins.py:382 Plugin 'web-exa' registered web provider: exa
+INFO     hermes_cli.plugins:plugins.py:382 Plugin 'web-firecrawl' registered web provider: firecrawl
+INFO     hermes_cli.plugins:plugins.py:382 Plugin 'web-keenable' registered web provider: keenable
+INFO     hermes_cli.plugins:plugins.py:382 Plugin 'web-parallel' registered web provider: parallel
+INFO     hermes_cli.plugins:plugins.py:382 Plugin 'web-perplexity' registered web provider: perplexity
+INFO     hermes_cli.plugins:plugins.py:382 Plugin 'web-searxng' registered web provider: searxng
+INFO     hermes_cli.plugins:plugins.py:382 Plugin 'web-tavily' registered web provider: tavily
+INFO     hermes_cli.plugins:plugins.py:382 Plugin 'web-xai' registered web provider: xai
+INFO     hermes_cli.plugins:plugins.py:1345 Plugin discovery complete: 58 found, 52 enabled
+__________ test_request_review_reports_staged_and_unstaged_artifacts ___________
+
+monkeypatch = <_pytest.monkeypatch.MonkeyPatch object at 0x7483f6398150>
+worker_env = 't_5805c6cf'
+tmp_path = PosixPath('/var/tmp/pytest-of-morten/pytest-832/test_request_review_reports_st0')
+
+    def test_request_review_reports_staged_and_unstaged_artifacts(
+        monkeypatch, worker_env, tmp_path
+    ):
+        """The review handoff reports the same way (the measured fasit: 6 of 7)."""
+        from pathlib import Path
+        from hermes_cli import kanban_db as kb
+        from hermes_cli import kanban_db_connect as kbc
+        from hermes_cli import kanban_db_workspace as kbw
+        from tools import kanban_tools as kt
+    
+        (tmp_path / ".hermes" / "profiles" / "verifier").mkdir(parents=True)
+        (tmp_path / ".hermes" / "profiles" / "verifier" / "config.yaml").write_text("{}\n")
+        with kbc.connect() as conn:
+            ws = kbw.resolve_workspace(kb.get_task(conn, worker_env))
+            kbw.set_workspace_path(conn, worker_env, ws)
+            monkeypatch.setenv(
+                "HERMES_KANBAN_RUN_ID",
+                str(kb.get_task(conn, worker_env).current_run_id),
+            )
+        inside = ws / "evidence.json"
+        inside.write_text("{}", encoding="utf-8")
+        outside = tmp_path / "bevis-utenfor.json"
+        outside.write_text("{}", encoding="utf-8")
+    
+        out = json.loads(kt._handle_request_review({
+            "summary": "Ready for review.",
+            "reviewer": "verifier",
+            "artifacts": [str(inside), str(outside)],
+        }))
+    
+        assert out["ok"] is True
+        assert out["status"] == "review"
+>       items = {item["path"]: item for item in out["artifacts"]}
+                                                ^^^^^^^^^^^^^^^^
+E       KeyError: 'artifacts'
+
+tests/tools/test_kanban_tools.py:283: KeyError
+------------------------------ Captured log setup ------------------------------
+INFO     hermes_cli.plugins:plugins.py:382 Plugin 'browser-browser-use' registered browser provider: browser-use
+INFO     hermes_cli.plugins:plugins.py:382 Plugin 'browser-browserbase' registered browser provider: browserbase
+INFO     hermes_cli.plugins:plugins.py:382 Plugin 'browser-firecrawl' registered browser provider: firecrawl
+INFO     hermes_cli.plugins:plugins.py:382 Plugin 'deepinfra' registered image_gen provider: deepinfra
+INFO     hermes_cli.plugins:plugins.py:382 Plugin 'fal' registered image_gen provider: fal
+INFO     hermes_cli.plugins:plugins.py:382 Plugin 'krea' registered image_gen provider: krea
+INFO     hermes_cli.plugins:plugins.py:382 Plugin 'meta-ai-image-gen' registered image_gen provider: meta-ai
+INFO     hermes_cli.plugins:plugins.py:382 Plugin 'openai' registered image_gen provider: openai
+INFO     hermes_cli.plugins:plugins.py:382 Plugin 'openai-codex' registered image_gen provider: openai-codex
+INFO     hermes_cli.plugins:plugins.py:382 Plugin 'openrouter' registered image_gen provider: openrouter
+INFO     hermes_cli.plugins:plugins.py:382 Plugin 'openrouter' registered image_gen provider: nous
+INFO     hermes_cli.plugins:plugins.py:382 Plugin 'xai' registered image_gen provider: xai
+INFO     hermes_cli.plugins:plugins.py:382 Plugin 'deepinfra' registered video_gen provider: deepinfra
+INFO     hermes_cli.plugins:plugins.py:382 Plugin 'fal' registered video_gen provider: fal
+INFO     hermes_cli.plugins:plugins.py:382 Plugin 'openrouter' registered video_gen provider: openrouter
+INFO     hermes_cli.plugins:plugins.py:382 Plugin 'xai' registered video_gen provider: xai
+INFO     hermes_cli.plugins:plugins.py:382 Plugin 'web-brave-free' registered web provider: brave-free
+INFO     hermes_cli.plugins:plugins.py:382 Plugin 'web-ddgs' registered web provider: ddgs
+INFO     hermes_cli.plugins:plugins.py:382 Plugin 'web-exa' registered web provider: exa
+INFO     hermes_cli.plugins:plugins.py:382 Plugin 'web-firecrawl' registered web provider: firecrawl
+INFO     hermes_cli.plugins:plugins.py:382 Plugin 'web-keenable' registered web provider: keenable
+INFO     hermes_cli.plugins:plugins.py:382 Plugin 'web-parallel' registered web provider: parallel
+INFO     hermes_cli.plugins:plugins.py:382 Plugin 'web-perplexity' registered web provider: perplexity
+INFO     hermes_cli.plugins:plugins.py:382 Plugin 'web-searxng' registered web provider: searxng
+INFO     hermes_cli.plugins:plugins.py:382 Plugin 'web-tavily' registered web provider: tavily
+INFO     hermes_cli.plugins:plugins.py:382 Plugin 'web-xai' registered web provider: xai
+INFO     hermes_cli.plugins:plugins.py:1345 Plugin discovery complete: 58 found, 52 enabled
+=========================== short test summary info ============================
+FAILED tests/hermes_cli/test_kanban_db.py::test_complete_task_reports_outside_workspace_artifact_as_not_staged
+FAILED tests/hermes_cli/test_kanban_db.py::test_complete_task_reports_worktree_artifacts_as_not_staged
+FAILED tests/hermes_cli/test_kanban_db.py::test_request_review_reports_outside_workspace_artifact_as_not_staged
+FAILED tests/tools/test_kanban_tools.py::test_complete_reports_staged_and_unstaged_artifacts
+FAILED tests/tools/test_kanban_tools.py::test_request_review_reports_staged_and_unstaged_artifacts
+5 failed, 2 passed, 86 deselected in 2.35s
