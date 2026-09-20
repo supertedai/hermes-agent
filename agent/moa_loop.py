@@ -169,8 +169,12 @@ class _RefAccounting:
     _: KW_ONLY
     messages: Any = None
     output: str | None = None
+    # ``model``/``provider`` are the slot AS CONFIGURED; the ``served_`` pair names the lane that
+    # actually answered when ``call_llm`` substituted one (None = ran as configured).
     model: str | None = None
     provider: str | None = None
+    served_provider: str | None = None
+    served_model: str | None = None
     temperature: Any = None
 
 
@@ -216,6 +220,67 @@ def _slot_label(slot: dict[str, Any]) -> str:
     label = f"{(slot.get('provider') or '').strip()}:{(slot.get('model') or '').strip()}"
     effort = str(slot.get("reasoning_effort") or "").strip()
     return f"{label}[reasoning={effort}]" if effort else label
+
+
+# Providers that name no lane of their own: a slot pinned to ``auto`` (or nothing at all) hands the
+# choice to resolution, so the lane that comes back IS the configured route rather than a substitute
+# for it. Only a provider the operator actually pinned can be substituted.
+_UNPINNED_PROVIDERS = frozenset({"", "auto", "default"})
+
+
+def _degraded_marker(served_provider: str | None, served_model: str | None) -> str:
+    """The ONE builder of the substitution marker appended to a slot label.
+
+    ``[degraded → provider:model]`` names the lane that actually answered when it is not the lane
+    the preset asked for. Bracket shape on purpose: ``_slot_label`` already carries one such
+    suffix (``[reasoning=…]``), so every renderer keeps treating the label as one opaque token.
+    """
+    if not served_provider and not served_model:
+        return ""
+    return f" [degraded → {served_provider}:{served_model}]"
+
+
+def _reference_label(slot: dict[str, Any], served_provider: str | None, served_model: str | None) -> str:
+    """Label for one reference call: the configured pair, plus the marker when it was substituted."""
+    return f"{_slot_label(slot)}{_degraded_marker(served_provider, served_model)}"
+
+
+def _served_route(
+    route_info: Any, slot: dict[str, Any], response: Any
+) -> tuple[str | None, str | None]:
+    """``(served_provider, served_model)`` when the call was SUBSTITUTED, else ``(None, None)``.
+
+    ``route_info`` is written by ``call_llm`` itself: the resolution at the head of the call and,
+    when the primary failed, the lane its fallback ladder actually selected
+    (``agent/auxiliary_client.py::_record_route_info``). An EMPTY mapping therefore means "ran as
+    configured" — never "unknown": it is the normal shape for a caller that does not ask. Only a
+    recorded pair that differs from the slot's OWN configured pair marks the call as substituted;
+    a recorded pair that matches it (the primary path records the resolved route too) does not.
+
+    ``response.model`` corroborates the model term — the canonical id that ran, per
+    ``agent/plugin_llm.py::_resolve_attribution`` — but is consulted ONLY once a substitution is
+    already established, so a provider echoing an aliased or versioned id can never invent one.
+    """
+    configured_provider = str(slot.get("provider") or "").strip()
+    configured_model = str(slot.get("model") or "").strip()
+    info = route_info if isinstance(route_info, dict) else {}
+    recorded_provider = str(info.get("provider") or "").strip()
+    recorded_model = str(info.get("model") or "").strip()
+    if not recorded_provider and not recorded_model:
+        return None, None
+    provider_moved = (
+        bool(recorded_provider)
+        and configured_provider.lower() not in _UNPINNED_PROVIDERS
+        and recorded_provider.lower() != configured_provider.lower()
+    )
+    model_moved = bool(recorded_model) and recorded_model != configured_model
+    if not (provider_moved or model_moved):
+        return None, None
+    served_model = recorded_model or configured_model
+    response_model = str(getattr(response, "model", None) or "").strip()
+    if response_model and response_model not in {configured_model, recorded_model}:
+        served_model = response_model
+    return (recorded_provider or configured_provider), served_model
 
 
 def _slot_reasoning_config(slot: dict[str, Any]) -> dict[str, Any] | None:
@@ -342,20 +407,36 @@ def _maybe_apply_moa_cache_control(
 
 
 def _price_reference_response(
-    response: Any, slot: dict[str, Any], runtime: dict[str, Any]
+    response: Any, slot: dict[str, Any], runtime: dict[str, Any], *,
+    served_provider: str | None = None, served_model: str | None = None,
 ) -> tuple[Any, Any, str | None, str | None]:
-    """Normalize a reference's usage with the slot's OWN provider/api_mode and price it
-    at its own rate (hence fan-out cost is summed in dollars). Never raises."""
+    """Normalize a reference's usage on the wire that answered and price it at that route's
+    own rate (hence fan-out cost is summed in dollars). Never raises.
+
+    A SUBSTITUTED call (``served_*`` set) is priced on the lane that actually ran, not on the
+    dead slot: the cost is real spend on the serving route. Only ``provider``/``model`` cross the
+    channel, so the dead slot's ``base_url``/``api_key`` are dropped for those calls — pricing
+    them against the failed lane's endpoint would silently bill the serving model at the wrong
+    table. Without a matching pricing entry the result is an honest ``status="unknown"``, never
+    a number borrowed from the slot that did not answer.
+    """
     from agent.usage_pricing import estimate_usage_cost, normalize_usage
+    substituted = bool(served_provider or served_model)
+    # The usage SHAPE follows the wire that answered; the serving lane's api_mode is not on the
+    # channel, so a substituted call lets normalize_usage infer it from the usage object rather
+    # than asserting the dead slot's mode.
+    usage_provider = served_provider or runtime.get("provider")
+    usage_api_mode = None if substituted else runtime.get("api_mode")
     usage = CanonicalUsage()
     raw_usage = getattr(response, "usage", None)
     if raw_usage:
         with contextlib.suppress(Exception):  # pragma: no cover - defensive
-            usage = normalize_usage(raw_usage, provider=runtime.get("provider"), api_mode=runtime.get("api_mode"))
+            usage = normalize_usage(raw_usage, provider=usage_provider, api_mode=usage_api_mode)
     try:
         cost = estimate_usage_cost(
-            slot.get("model") or "", usage, provider=runtime.get("provider"),
-            base_url=runtime.get("base_url"), api_key=runtime.get("api_key"),
+            served_model or slot.get("model") or "", usage, provider=usage_provider,
+            base_url=None if substituted else runtime.get("base_url"),
+            api_key=None if substituted else runtime.get("api_key"),
         )
         return usage, cost.amount_usd, cost.status, cost.source
     except Exception:  # pragma: no cover - defensive
@@ -368,8 +449,14 @@ def _run_reference(
     cache_disabled: bool | None = None, cache_ttl: str | None = None,
 ) -> tuple[str, str, Any]:
     """Call one reference model; return ``(label, text, accounting)``. Never raises:
-    a failed reference becomes a labelled ``[failed: …]`` note. Runs in a thread pool."""
-    label = _slot_label(slot)
+    a failed reference becomes a labelled ``[failed: …]`` note. Runs in a thread pool.
+
+    The label is composed AFTER the call: ``route_info`` is a per-call channel (one dict per
+    worker, never shared) that ``call_llm`` fills with the route it actually selected, so a
+    reference answered by the fallback ladder is labelled with the lane that answered instead of
+    the configured one that never did. A failed call keeps the configured label unchanged.
+    """
+    slot_label = _slot_label(slot)
     runtime = _slot_runtime(slot)
     trace_fields = {"model": slot.get("model"), "provider": runtime.get("provider") or slot.get("provider"), "temperature": temperature}
     # The advisory view already stripped the agent's system prompt; this is the only one.
@@ -391,19 +478,33 @@ def _run_reference(
         # user's current turn, so mirror the main agent's x-initiator header.
         from agent.auxiliary_client import _normalize_aux_provider
         is_copilot = _normalize_aux_provider(str(runtime.get("provider") or "")) in ("copilot", "copilot-acp")
+        # Per-call (this runs on a pool thread): call_llm writes the route it actually selected
+        # here, so the attribution below is never the pre-resolved, possibly stale pair.
+        route_info: dict[str, str] = {}
         response = call_llm(
             task="moa_reference", messages=trimmed, temperature=temperature,
             max_tokens=max_tokens,
             timeout=reference_timeout, reasoning_config=_slot_reasoning_config(slot),
-            extra_headers={"x-initiator": "user"} if is_copilot else None, **runtime,
+            extra_headers={"x-initiator": "user"} if is_copilot else None, route_info=route_info,
+            **runtime,
         )
         output_text = _extract_text(response) or "(empty response)"
-        acct = _RefAccounting(*_price_reference_response(response, slot, runtime), messages=trimmed, output=output_text, **trace_fields)
-        return label, output_text, acct
+        served_provider, served_model = _served_route(route_info, slot, response)
+        usage, cost_usd, cost_status, cost_source = _price_reference_response(
+            response, slot, runtime, served_provider=served_provider, served_model=served_model,
+        )
+        acct = _RefAccounting(
+            usage, cost_usd, cost_status, cost_source, messages=trimmed, output=output_text,
+            served_provider=served_provider, served_model=served_model, **trace_fields,
+        )
+        return _reference_label(slot, served_provider, served_model), output_text, acct
     except Exception as exc:
-        logger.warning("MoA reference model %s failed: %s", label, exc)
+        # Unchanged failure shape: an exhausted chain (every lane dead) is [failed: …] on the
+        # configured label — route_info may name a lane that ALSO failed, which is not a serving
+        # route and must never mark the note as substituted.
+        logger.warning("MoA reference model %s failed: %s", slot_label, exc)
         note = f"[failed: {exc}]"
-        return label, note, _RefAccounting(CanonicalUsage(), messages=messages, output=note, **trace_fields)
+        return slot_label, note, _RefAccounting(CanonicalUsage(), messages=messages, output=note, **trace_fields)
 
 
 # Output headroom reserved in the reference window when reference_max_tokens is unset.
@@ -768,6 +869,26 @@ def _slot_labels(slots: list[dict[str, Any]]) -> str:
     return ", ".join(_slot_label(slot) for slot in slots)
 
 
+def _degraded_reference_labels(outputs: list[tuple[str, str, Any]]) -> list[str]:
+    """Configured names of the slots whose call was SUBSTITUTED (another lane answered them).
+
+    Read off the structured accounting, never parsed out of the display label: the label is a
+    rendering, and ``_is_failed_reference`` must stay a pure text test. The name listed is the
+    slot that did NOT answer (``xai-oauth:grok-4.6``), not the substitute — the substitute is
+    named by the label's ``[degraded → …]`` marker.
+    """
+    labels: list[str] = []
+    for label, text, acct in outputs:
+        if _is_failed_reference(text):
+            continue
+        if not (getattr(acct, "served_provider", None) or getattr(acct, "served_model", None)):
+            continue
+        provider = str(getattr(acct, "provider", None) or "").strip()
+        model = str(getattr(acct, "model", None) or "").strip()
+        labels.append(f"{provider}:{model}" if provider and model else label)
+    return labels
+
+
 def _guidance_inputs(
     reference_outputs: list[tuple[str, str, Any]], privacy_full: bool, policy: str,
 ) -> tuple[list[tuple[str, str, Any]], str, bool]:
@@ -775,11 +896,16 @@ def _guidance_inputs(
 
     'full' privacy mode redacts advisor text reaching the aggregator (applied to a
     per-call copy — caches hold raw text). Failed refs are filtered out first.
+
+    A substituted reference is NOT failed — it answered, so its text stays in the guidance — but
+    the slot that was asked did not run, so loud policy has to name it alongside the ones that
+    returned nothing.
     """
     successful = [o for o in reference_outputs if not _is_failed_reference(o[1])]
     failed_labels = [label for label, text, _acct in reference_outputs if _is_failed_reference(text)]
+    unavailable_labels = [*failed_labels, *_degraded_reference_labels(reference_outputs)]
     agg_refs = _redact_reference_outputs(successful) if privacy_full else successful
-    return agg_refs, _degraded_notice(failed_labels, policy), bool(reference_outputs) and not successful
+    return agg_refs, _degraded_notice(unavailable_labels, policy), bool(reference_outputs) and not successful
 
 
 def aggregate_moa_context(
