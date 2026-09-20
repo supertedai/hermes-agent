@@ -3,18 +3,24 @@
 ~/.hermes/skills/, tracking each synced skill's origin hash in .bundled_manifest (v2 "name:hash"
 lines; v1 plain names auto-migrate). NEW skills are copied and recorded; EXISTING skills update
 only when bundled changed AND the user copy still matches the origin hash (else user-customized
--> SKIP); user-DELETED skills are not re-added; upstream-REMOVED ones leave the manifest."""
+-> SKIP); user-DELETED skills are not re-added; upstream-REMOVED ones leave the manifest.
+
+Three properties this module has to keep honest (t_eb487a72): every manifest write is read back
+and compared (``ManifestWriteError``), an UNREADABLE manifest is an error rather than an empty
+one (``ManifestReadError``), and a skipped copy is described by the state it is actually in —
+stale origin row, behind upstream, or local content — never as "you edited it"."""
 
 import hashlib
 import logging
 import os
 import shutil
 import stat
+import subprocess
 import sys
 from contextlib import suppress
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Dict, Iterator, List, Optional, Set, Tuple
+from typing import Dict, Iterator, List, Optional, Sequence, Set, Tuple
 
 # Force UTF-8 stdout/stderr: GBK-style Windows locales can't encode the glyphs
 # printed here (✓ ↑ →), and install.ps1 parses this script's stdout as UTF-8.
@@ -27,6 +33,7 @@ from agent.skill_utils import ESSENTIAL_SKILLS, is_excluded_skill_path
 from tools.skill_usage import _read_skill_name, read_suppressed_names
 from tools.skills_sync_optional import (
     _backfill_optional_provenance, _ignore_runtime_cache, _is_runtime_cache, _read_hub_install_paths,
+    _skill_file_list,
 )
 from utils import atomic_write_text
 
@@ -109,14 +116,50 @@ def _build_external_skill_index() -> Set[str]:
     return external_names
 
 
-def _read_manifest() -> Dict[str, str]:
-    """``{skill_name: origin_hash}``; v1 plain-name lines get an empty hash (migrates next sync)."""
-    try:
-        lines = _manifest_file().read_text(encoding="utf-8").splitlines() if _manifest_file().exists() else []
-    except OSError:
-        return {}
-    pairs = (line.partition(":") for line in map(str.strip, lines) if line)
+class ManifestReadError(RuntimeError):
+    """The manifest exists but could not be read — NOT the same as an absent manifest."""
+
+
+class ManifestWriteError(RuntimeError):
+    """A manifest write did not land, or did not read back as what was written."""
+
+
+def _parse_manifest_text(text: str) -> Dict[str, str]:
+    """v1/v2 manifest text -> ``{skill_name: origin_hash}`` (v1 plain names keep an empty hash)."""
+    pairs = (line.partition(":") for line in map(str.strip, text.splitlines()) if line)
     return {name.strip(): hash_val.strip() for name, _, hash_val in pairs}
+
+
+def _manifest_mismatch(entries: Dict[str, str], written_text: str) -> str:
+    """One line describing how the file on disk differs from what we meant to write."""
+    on_disk = _parse_manifest_text(written_text)
+    missing = sorted(set(entries) - set(on_disk))
+    extra = sorted(set(on_disk) - set(entries))
+    wrong = sorted(n for n in set(entries) & set(on_disk) if entries[n] != on_disk[n])
+    first = next(iter(missing + extra + wrong), "")
+    return (f"{len(missing)} missing row(s), {len(extra)} unexpected row(s), "
+            f"{len(wrong)} wrong hash(es)" + (f"; first: {first!r}" if first else ""))
+
+
+def _read_manifest() -> Dict[str, str]:
+    """``{skill_name: origin_hash}``; v1 plain-name lines get an empty hash (migrates next sync).
+
+    A MISSING manifest is legitimately empty. An UNREADABLE one is not, and must not be reported
+    as one: the empty dict makes every bundled skill look "new", so the caller silently
+    re-baselines the lot. Raise instead, so the failure can be said out loud (t_eb487a72).
+    """
+    path = _manifest_file()
+    try:
+        if not path.exists():
+            return {}
+        text = path.read_text(encoding="utf-8")
+    except OSError as e:
+        logger.error("Skills manifest %s exists but could not be read: %s", path, e)
+        raise ManifestReadError(
+            f"skills manifest {path} exists but could not be read ({e}). Refusing to treat it as "
+            f"empty — that would re-baseline every bundled skill. Fix the file's permissions and "
+            f"retry, or delete it to deliberately start from an empty manifest.") from e
+    return _parse_manifest_text(text)
 
 
 def _read_suppressed_names() -> set:
@@ -124,15 +167,31 @@ def _read_suppressed_names() -> set:
     return read_suppressed_names()
 
 
-def _write_manifest(entries: Dict[str, str]):
-    """Atomic v2 write, preserving an existing file's mode/owner (not mkstemp's 0600)."""
+def _write_manifest(entries: Dict[str, str]) -> None:
+    """Atomic v2 write, read back and compared; raises ``ManifestWriteError`` on any deviation.
+
+    A write nobody reads back is not a write. In the 2026-09-10 update, phase 1 reported
+    ``↑ 27 updated`` and phase 2 of the SAME run read those 27 as user-modified: the rows never
+    landed, so every one of those "updated" lines was wrong (t_eb487a72). Callers that report
+    per-name success must therefore treat a raise here as "those names are not recorded" — see
+    ``sync_skills()``, which refuses to report them as updated.
+    """
+    path = _manifest_file()
     from hermes_constants import mkdir_under_hermes_home
-    mkdir_under_hermes_home(_manifest_file().parent)
+    mkdir_under_hermes_home(path.parent)
+    data = "".join(f"{n}:{h}\n" for n, h in sorted(entries.items()))
     try:
-        data = "".join(f"{n}:{h}\n" for n, h in sorted(entries.items()))
-        atomic_write_text(_manifest_file(), data, tmp_prefix=".bundled_manifest_", preserve_mode=True)
+        atomic_write_text(path, data, tmp_prefix=".bundled_manifest_", preserve_mode=True)
+        written_text = path.read_text(encoding="utf-8")
     except Exception as e:
-        logger.debug("Failed to write skills manifest %s: %s", _manifest_file(), e, exc_info=True)
+        logger.error("Failed to write skills manifest %s: %s", path, e, exc_info=True)
+        raise ManifestWriteError(f"could not write {path}: {e}") from e
+    if written_text != data:
+        logger.error("Skills manifest %s did not read back as written: %s", path,
+                     _manifest_mismatch(entries, written_text))
+        raise ManifestWriteError(
+            f"{path} did not read back as written ({_manifest_mismatch(entries, written_text)})")
+    logger.debug("Skills manifest %s written and verified (%d rows)", path, len(entries))
 
 
 def _discover_bundled_skills(bundled_dir: Path) -> List[Tuple[str, Path]]:
@@ -178,6 +237,192 @@ def _matches_origin_hash(directory: Path, origin_hash: str, user_hash: Optional[
         return False
     current = _dir_hash(directory) if user_hash is None else user_hash
     return current == origin_hash or _dir_hash(directory, include_runtime_cache=True) == origin_hash
+
+
+# ---- Why a bundled copy is flagged (three states, not one) --------------------------------
+# `list-modified` said "bundled skills you've edited", but all it tests is "the origin hash
+# cannot be proven" — which is equally true of a copy nobody touched. Measured in Morten's home
+# 2026-09-20 (this code path, live manifest vs the vendored tree the copies were synced from):
+# of 29 flagged names, 19 were byte-identical to the version shipped that day, 7 held older
+# upstream content, and 3 held content no upstream revision has (github, hermes-agent,
+# sdlc-review) — t_eb487a72. So the reader names the state it can see; "you've edited" is false
+# for the first two.
+COPY_MATCHES_STOCK = "copy_matches_stock"  # (i) stale origin row; the copy IS the shipped version
+COPY_BEHIND_UPSTREAM = "behind_upstream"   # (ii) the copy holds an older upstream revision
+COPY_LOCALLY_EDITED = "locally_edited"     # (iii) the copy holds content no upstream revision has
+COPY_UNPROVEN = "unproven"                 # differs, and no upstream history here to tell ii from iii
+
+
+def _blob_sha(data: bytes) -> str:
+    """git's blob object id for these bytes — comparable with ``git log --raw`` output."""
+    return hashlib.sha1(b"blob %d\x00" % len(data) + data).hexdigest()
+
+
+def _git(repo_dir: Path, *args: str, timeout: float) -> Optional["subprocess.CompletedProcess"]:
+    """Run git read-only against *repo_dir*; None when git is absent, refuses or times out.
+
+    ``core.abbrev=40`` is not cosmetic: ``git log --raw`` abbreviates object names by default, and
+    the shas printed here are compared against locally computed FULL blob ids.
+    """
+    env = {**os.environ, "GIT_TERMINAL_PROMPT": "0", "GIT_OPTIONAL_LOCKS": "0"}
+    try:
+        return subprocess.run(["git", "-C", str(repo_dir), "-c", "core.quotePath=false",
+                               "-c", "core.abbrev=40", *args],
+                              capture_output=True, text=True, timeout=timeout, env=env)
+    except (OSError, subprocess.SubprocessError):
+        return None
+
+
+def _upstream_blob_index(skill_dirs: Sequence[Path]) -> dict:
+    """``{git_path: {blob_sha}}`` — every blob any reachable revision holds at that path.
+
+    ``{available, reason, blobs, root}``. Read-only and tree-only (``--raw`` never needs blob
+    contents), so it stays offline even on a partial ``blob:none`` clone; the copy itself is
+    hashed locally with ``_blob_sha``. The revisions compared against are HEAD plus the tracking
+    refs of the ``upstream`` remote when one is configured — a fork's own ``origin`` is not
+    upstream — else ``origin``'s. No git, no checkout, or no reachable revision => ``available``
+    stays False and the caller must say "cannot tell" rather than guess.
+    """
+    result: dict = {"available": False, "reason": "", "blobs": {}, "root": None}
+    dirs = [d for d in skill_dirs if d]
+    if not dirs:
+        return result
+    root = _git_root(dirs[0])
+    if root is None:
+        result["reason"] = "the bundled skills are not inside a git checkout"
+        return result
+    result["root"] = root
+    fmt = _git(root, "rev-parse", "--show-object-format", timeout=10)
+    if fmt is not None and fmt.returncode == 0 and fmt.stdout.strip() not in ("", "sha1"):
+        result["reason"] = f"git object format is {fmt.stdout.strip()}, not sha1"
+        return result
+    refs = ["HEAD"]
+    for remote in ("upstream", "origin"):
+        rr = _git(root, "for-each-ref", "--format=%(refname)", f"refs/remotes/{remote}/", timeout=15)
+        if rr is not None and rr.returncode == 0 and rr.stdout.split():
+            refs += rr.stdout.split()
+            break
+    paths = []
+    for d in dirs:
+        try:
+            paths.append(d.relative_to(root).as_posix())
+        except ValueError:  # bundled dir outside the checkout: no history to read for it
+            result["reason"] = f"{d} is outside the checkout at {root}"
+            return result
+    r = _git(root, "log", "--raw", "--no-renames", "--format=%H", *refs, "--", *paths, timeout=90)
+    if r is None or r.returncode != 0:
+        result["reason"] = "git could not read this checkout's history"
+        return result
+    blobs: Dict[str, Set[str]] = {}
+    for line in r.stdout.splitlines():
+        if not line.startswith(":"):  # commit header, or a line git could not resolve as raw
+            continue
+        meta, _, path = line[1:].partition("\t")
+        fields = meta.split()
+        if not path or len(fields) < 4:  # ":<old_mode> <new_mode> <old_sha> <new_sha> <status>"
+            continue
+        for sha in fields[2:4]:
+            if sha.strip("0"):  # 0{40} is the null side of an add/delete
+                if len(sha) != 40:  # an abbreviated id can never match a full local blob id
+                    result["reason"] = f"git returned abbreviated object ids ({sha!r})"
+                    return result
+                blobs.setdefault(path, set()).add(sha)
+    if not blobs:
+        result["reason"] = f"no reachable revision touches the {len(paths)} bundled path(s)"
+        return result
+    result.update(available=True, reason="", blobs=blobs)
+    return result
+
+
+def _git_root(path: Path) -> Optional[Path]:
+    """Toplevel of the checkout *path* lives in, or None when it is not in a git work tree."""
+    probe = path if path.is_dir() else path.parent
+    r = _git(probe, "rev-parse", "--show-toplevel", timeout=10)
+    if r is None or r.returncode != 0 or not r.stdout.strip():
+        return None
+    return Path(r.stdout.strip().splitlines()[0])
+
+
+def _same_bytes(a: Path, b: Path) -> bool:
+    try:
+        return a.read_bytes() == b.read_bytes()
+    except OSError:
+        return False
+
+
+def _copy_content_in_history(history: dict, stock_src: Path, rel: str, copy_file: Path) -> bool:
+    """Does *copy_file*'s exact content exist at ``<stock_src>/<rel>`` in any reachable revision?"""
+    root = history.get("root")
+    if not root:
+        return False
+    try:
+        git_path = (stock_src.relative_to(root) / rel).as_posix()
+    except ValueError:
+        return False
+    try:
+        return _blob_sha(copy_file.read_bytes()) in history["blobs"].get(git_path, ())
+    except OSError:
+        return False
+
+
+def explain_flagged_copy(dest: Path, stock_src: Path, *, history: Optional[dict] = None) -> dict:
+    """Say WHICH of the three flagged states *dest* is in, given the stock version *stock_src*.
+
+    Returns ``{state, message, counts, history_available}``; counts are
+    ``{identical, upstream, local, only_in_stock}`` over the skill's file list. States:
+    (i) ``COPY_MATCHES_STOCK`` — the copy is today's shipped version, only the manifest row is old
+    (nothing of the user's); (ii) ``COPY_BEHIND_UPSTREAM`` — the copy is older upstream content;
+    (iii) ``COPY_LOCALLY_EDITED`` — the copy holds content no upstream revision has. When the two
+    cannot be told apart (no upstream history) the answer is ``COPY_UNPROVEN``, never a guess.
+    """
+    counts = {"identical": 0, "upstream": 0, "local": 0, "only_in_stock": 0}
+    if _dir_hash(dest) == _dir_hash(stock_src):
+        return {"state": COPY_MATCHES_STOCK, "counts": counts, "history_available": True,
+                "message": ("your copy is byte-identical to the version shipped now "
+                            "(the manifest's origin row is an older revision) — nothing of yours "
+                            "is in it")}
+    copy_files = set(_skill_file_list(dest))
+    stock_files = set(_skill_file_list(stock_src))
+    if history is None:
+        history = _upstream_blob_index([stock_src])
+    history_available = bool(history.get("available"))
+    for rel in sorted(copy_files | stock_files):
+        if rel not in copy_files:
+            counts["only_in_stock"] += 1
+            continue
+        if rel in stock_files and _same_bytes(dest / rel, stock_src / rel):
+            counts["identical"] += 1
+            continue
+        if history_available and _copy_content_in_history(history, stock_src, rel, dest / rel):
+            counts["upstream"] += 1  # this content IS an upstream revision of this path
+        else:
+            counts["local"] += 1
+    if not history_available:
+        return {"state": COPY_UNPROVEN, "counts": counts, "history_available": False,
+                "message": (f"your copy differs from the version shipped now "
+                            f"({history.get('reason', 'no upstream history available')}) — an older "
+                            f"upstream copy cannot be told from your own edit here")}
+    if counts["local"]:
+        return {"state": COPY_LOCALLY_EDITED, "counts": counts, "history_available": True,
+                "message": (f"your copy holds content that no upstream revision has "
+                            f"({counts['local']} file(s)"
+                            + (f"; {counts['upstream']} more file(s) are older upstream content"
+                               if counts["upstream"] else "") + ")")}
+    if counts["only_in_stock"]:
+        # A file the copy does not have: upstream added it in a newer revision, OR the user
+        # deleted it. Those are opposites, and this read cannot tell them apart — say so instead
+        # of claiming "nothing of your own is in it" (a deletion is something of the user's).
+        return {"state": COPY_UNPROVEN, "counts": counts, "history_available": True,
+                "message": (f"your copy is missing {counts['only_in_stock']} file(s) the shipped "
+                            f"version has — either an older upstream revision, or files you "
+                            f"removed; `hermes skills diff` shows which")}
+    if counts["upstream"]:
+        return {"state": COPY_BEHIND_UPSTREAM, "counts": counts, "history_available": True,
+                "message": (f"your copy holds older upstream content ({counts['upstream']} file(s) "
+                            f"match an upstream revision) — nothing of your own is in it")}
+    return {"state": COPY_UNPROVEN, "counts": counts, "history_available": True,
+            "message": "your copy differs from the version shipped now, but no differing file was "
+                       "identified — treating the difference as unexplained"}
 
 
 def _move_dir(src: Path, dest: Path) -> None:
@@ -237,6 +482,7 @@ class _SyncState:
     copied: List[str] = field(default_factory=list)
     updated: List[str] = field(default_factory=list)
     user_modified: List[str] = field(default_factory=list)
+    user_modified_paths: Dict[str, Tuple[Path, Path]] = field(default_factory=dict)  # name -> (copy, stock)
     suppressed: List[str] = field(default_factory=list)
     relocated: List[str] = field(default_factory=list)
     shadowed_by_external: List[str] = field(default_factory=list)
@@ -334,7 +580,16 @@ def _update_existing_skill(st: _SyncState, skill_name: str, skill_src: Path, des
         return
     if not _matches_origin_hash(dest, origin_hash, user_hash):
         st.user_modified.append(skill_name)
-        st.say(f"  ~ {skill_name} (user-modified, skipping)")
+        st.user_modified_paths[skill_name] = (dest, skill_src)
+        if user_hash == bundled_hash:
+            # The copy IS the version shipped now: only the manifest's origin row is stale. Saying
+            # "user-modified" here is a claim about the user that the evidence does not support
+            # (t_eb487a72: 20 of the 30 flagged names in Morten's home were exactly this).
+            st.say(f"  ~ {skill_name} (copy is byte-identical to the version shipped now; the "
+                   f"manifest's origin row is an older revision — skipping)")
+        else:
+            st.say(f"  ~ {skill_name} (copy differs from the version shipped now; skipping — "
+                   f"`hermes skills list-modified` says which state it is in)")
         return
     # bundled changed and the user copy is pristine -> update
     try:
@@ -361,6 +616,38 @@ def _seed_category_descriptions(bundled_dir: Path, only_dirs: Optional[Set[Path]
             logger.debug("Could not copy %s: %s", desc_md, e)
 
 
+def _user_modified_reasons(st: "_SyncState") -> Dict[str, str]:
+    """``{skill_name: state}`` for the copies this run skipped, from ONE bounded history read.
+
+    Only runs when something was skipped, so a clean sync pays nothing for it. The states are
+    what ``explain_flagged_copy()`` can *prove*; where it cannot prove, the answer is "unproven"
+    rather than the flattering one (t_eb487a72).
+    """
+    if not st.user_modified:
+        return {}
+    history = _upstream_blob_index([src for _, src in st.user_modified_paths.values()])
+    reasons = {}
+    for name in st.user_modified:
+        dest, src = st.user_modified_paths[name]
+        reasons[name] = explain_flagged_copy(dest, src, history=history)["state"]
+    return reasons
+
+
+def _user_modified_breakdown(reasons: Dict[str, str]) -> str:
+    """One line naming the states the skipped copies are actually in (never a bare 'user-modified')."""
+    order = [COPY_MATCHES_STOCK, COPY_BEHIND_UPSTREAM, COPY_LOCALLY_EDITED, COPY_UNPROVEN]
+    labels = {
+        COPY_MATCHES_STOCK: "byte-identical to the shipped version (stale manifest row)",
+        COPY_BEHIND_UPSTREAM: "behind upstream",
+        COPY_LOCALLY_EDITED: "hold local content upstream never shipped",
+        COPY_UNPROVEN: "cannot be told apart (no upstream history here)",
+    }
+    parts = [f"{sum(1 for s in reasons.values() if s == state)} {labels[state]}"
+             for state in order if any(s == state for s in reasons.values())]
+    return (f"  ~ {len(reasons)} bundled skill(s) not tracking upstream: " + "; ".join(parts)
+            + "\n    → per-name state: hermes skills list-modified")
+
+
 def sync_skills(quiet: bool = False) -> dict:
     """Sync bundled skills into ~/.hermes/skills/ using the manifest; returns the per-category
     result dict. Opted-out profiles seed ONLY ESSENTIAL_SKILLS (the system prompt always
@@ -371,14 +658,28 @@ def sync_skills(quiet: bool = False) -> dict:
     bundled_dir = _get_bundled_dir()
     if not bundled_dir.exists():
         return {"copied": [], "updated": [], "skipped": 0, "user_modified": [], "cleaned": [],
-                "suppressed": [], "total_bundled": 0, "optional_provenance_backfilled": []}
+                "suppressed": [], "total_bundled": 0, "optional_provenance_backfilled": [],
+                "user_modified_reasons": {}, "manifest_error": "", "unrecorded": []}
     _skills_dir().mkdir(parents=True, exist_ok=True)
     bundled_skills = _discover_bundled_skills(bundled_dir)
     if essential_only:
         bundled_skills = [(name, src) for name, src in bundled_skills if name in ESSENTIAL_SKILLS]
     suppressed = _read_suppressed_names()
     external_index = _build_external_skill_index()
-    st = _SyncState(manifest=_read_manifest(), quiet=quiet)
+    try:
+        existing_manifest = _read_manifest()
+    except ManifestReadError as e:
+        # Refuse the whole sync: every bundled skill would look "new" against an empty manifest,
+        # and the run would silently re-baseline the entire set — the exact damage the read error
+        # exists to prevent. Say it out loud and change nothing on disk (t_eb487a72).
+        logger.error("Refusing to sync bundled skills: %s", e)
+        if not quiet:
+            print(f"  ! {e}\n  ! No bundled skill was touched by this run.")
+        return {"copied": [], "updated": [], "skipped": 0, "user_modified": [], "cleaned": [],
+                "suppressed": [], "total_bundled": len(bundled_skills),
+                "optional_provenance_backfilled": [], "user_modified_reasons": {},
+                "manifest_error": str(e), "unrecorded": [], "relocated": []}
+    st = _SyncState(manifest=existing_manifest, quiet=quiet)
 
     for skill_name, skill_src in bundled_skills:
         # Curator-pruned built-ins must not resurrect on every update; essentials are exempt.
@@ -407,9 +708,29 @@ def sync_skills(quiet: bool = False) -> dict:
     _seed_category_descriptions(
         bundled_dir,
         {_compute_relative_dest(src, bundled_dir).parent for _, src in bundled_skills} if essential_only else None)
-    _write_manifest(st.manifest)
+    reasons = _user_modified_reasons(st)
+    manifest_error = ""
+    unrecorded: List[str] = []
+    try:
+        _write_manifest(st.manifest)
+    except ManifestWriteError as e:
+        # The copies on disk DID change, but their origin rows are not recorded — which is exactly
+        # the state that made `hermes update` report "↑ 27 updated" while the next phase of the
+        # same run read all 27 as user-modified. Do not repeat it: report the names, not a success.
+        manifest_error = str(e)
+        unrecorded = sorted(set(st.copied) | set(st.updated))
+        st.updated = []
+        logger.error("Bundled-skill sync changed %d skill(s) on disk but the manifest write failed, "
+                     "so none of their origin rows are recorded: %s", len(unrecorded), e)
+        if not quiet:
+            print(f"  ! manifest write FAILED — {len(unrecorded)} skill(s) were written to disk but "
+                  f"not recorded ({e}); they will read as user-modified on the next run.")
+    if reasons and not quiet:
+        print(_user_modified_breakdown(reasons))
     return {
         "copied": st.copied, "updated": st.updated, "skipped": st.skipped, "user_modified": st.user_modified,
+        "user_modified_reasons": reasons,
+        "manifest_error": manifest_error, "unrecorded": unrecorded,
         "cleaned": cleaned, "suppressed": st.suppressed, "relocated": st.relocated,
         "total_bundled": len(bundled_skills),
         "optional_provenance_backfilled": _backfill_optional_provenance(quiet=quiet),
@@ -446,11 +767,13 @@ if __name__ == "__main__":
     parts = [f"{len(result['copied'])} new", f"{len(result['updated'])} updated", f"{result['skipped']} unchanged"]
     if names := result["user_modified"]:
         shown = ", ".join(names[:5]) + (f", +{len(names) - 5} more" if len(names) > 5 else "")
-        parts.append(f"{len(names)} user-modified (kept): {shown}")
+        parts.append(f"{len(names)} not tracking upstream (kept): {shown}")
     if result["cleaned"]:
         parts.append(f"{len(result['cleaned'])} cleaned from manifest")
     if backfilled := result.get("optional_provenance_backfilled"):
         parts.append(f"{len(backfilled)} official optional backfilled")
+    if result["manifest_error"]:
+        parts.append(f"MANIFEST WRITE FAILED ({len(result['unrecorded'])} unrecorded)")
     print(f"\nDone: {', '.join(parts)}. {result['total_bundled']} total bundled.")
 
 

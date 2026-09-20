@@ -780,14 +780,22 @@ def do_list(source_filter: str = "all", enabled_only: bool = False,
     """List installed skills (hub / builtin / local). Enabled state comes from the active
     profile's config — ``-p`` swaps HERMES_HOME at process start, so no profile flag here."""
     from tools.skills_hub import HubLockFile, ensure_hub_dirs
-    from tools.skills_sync import _read_manifest
+    from tools.skills_sync import ManifestReadError, _read_manifest
     from tools.skills_tool import _find_all_skills
     from agent.skill_utils import get_disabled_skill_names
     from agent.skill_commands import skill_command_collision_note
     c = console or _console
     ensure_hub_dirs()
     hub_installed = {e["name"]: e for e in HubLockFile().list_installed()}
-    builtin_names = set(_read_manifest())
+    try:
+        builtin_names = set(_read_manifest())
+    except ManifestReadError as e:
+        # Degrade visibly, and say so: an absent manifest is a normal state, an unreadable one is
+        # not, and silently treating it as empty would call every bundled skill "local" here.
+        builtin_names = set()
+        c.print(f"[bold yellow]Bundled-skill manifest is unreadable:[/] {e}\n"
+                f"[dim]Listing from disk only — the builtin/hub/local column is unreliable until "
+                f"~/.hermes/skills/.bundled_manifest is fixed.[/]\n")
     all_skills = _find_all_skills(skip_disabled=True)  # include disabled ones to annotate status
     disabled_names = get_disabled_skill_names()
 
@@ -967,25 +975,66 @@ def do_reset(name: str, restore: bool = False, console: Optional[Console] = None
     _finish_change(c, invalidate_cache)
 
 
+def _state_label(state: str) -> str:
+    """Which of the flagged states this is, in plain words — never the old blanket "you've edited"."""
+    from tools.skills_sync import (COPY_BEHIND_UPSTREAM, COPY_LOCALLY_EDITED, COPY_MATCHES_STOCK,
+                                   COPY_UNPROVEN)
+    return {
+        COPY_MATCHES_STOCK: "[green]your copy IS the version shipped now[/] "
+                            "[dim](only the manifest's origin row is an older revision)[/]",
+        COPY_BEHIND_UPSTREAM: "[cyan]your copy is behind upstream[/] "
+                              "[dim](older upstream content — nothing of your own)[/]",
+        COPY_LOCALLY_EDITED: "[yellow]your copy holds local content[/] "
+                             "[dim](content no upstream revision has)[/]",
+        COPY_UNPROVEN: "[yellow]your copy differs from the shipped version[/] "
+                       "[dim](no upstream history here, so an old copy cannot be told from an edit)[/]",
+    }.get(state, f"[yellow]copy differs from the shipped version[/] [dim]({state})[/]")
+
+
 def do_list_modified(console: Optional[Console] = None, as_json: bool = False) -> None:
-    """List bundled skills the user has edited (which `hermes update` keeps)."""
+    """List the bundled skills whose copy can't be proven to match the version shipped now.
+
+    Not "skills you've edited": that was the old wording, and of the 30 names it printed in
+    Morten's home on 2026-09-20, 20 were byte-identical to the version shipped that day and 9
+    more were older upstream copies (t_eb487a72). Each name is listed under the state it is in.
+    """
     from tools.skills_sync_bundled_ops import list_user_modified_bundled_skills
+    from tools.skills_sync import (COPY_BEHIND_UPSTREAM, COPY_LOCALLY_EDITED, COPY_MATCHES_STOCK,
+                                   COPY_UNPROVEN)
     c = console or _console
     modified = list_user_modified_bundled_skills()
     if as_json:
         c.print(json.dumps([m["name"] for m in modified]))
         return
     if not modified:
-        c.print("[dim]No user-modified bundled skills — everything tracks upstream.[/]\n")
+        c.print("[dim]No bundled skill copies are out of step with upstream.[/]\n")
         return
-    c.print(f"\n[bold]{len(modified)} user-modified bundled skill(s)[/] "
-            "[dim](kept as-is by `hermes update`):[/]")
-    for entry in modified:
-        c.print(f"  [yellow]~[/] {entry['name']}")
+    groups = (
+        (COPY_MATCHES_STOCK, "the copy is the shipped version — only the manifest's origin row is stale",
+         "hermes skills reset <name>            (re-baselines it; nothing of yours is in the copy)"),
+        (COPY_BEHIND_UPSTREAM, "the copy is behind upstream — no content of your own",
+         "hermes skills reset <name> --restore  (replaces the copy with the shipped version)"),
+        (COPY_LOCALLY_EDITED, "the copy holds local content upstream never shipped",
+         "hermes skills diff <name>             (then reconcile, or --restore to drop it)"),
+        (COPY_UNPROVEN, "differs, and no upstream history here to tell an old copy from an edit",
+         "hermes skills diff <name>             (then reconcile, or --restore)"),
+    )
+    c.print(f"\n[bold]{len(modified)} bundled skill(s) not tracking upstream[/] "
+            "[dim](kept as-is by `hermes update`, which skips them):[/]")
+    for state, blurb, action in groups:
+        names = [e["name"] for e in modified if e.get("state") == state]
+        if not names:
+            continue
+        c.print(f"\n  [bold]{len(names)}[/] {blurb}:")
+        for name in names:
+            c.print(f"    [yellow]~[/] {name}")
+        c.print(f"    [dim]{action}[/]")
+    unknown = [e["name"] for e in modified if not e.get("state")]
+    if unknown:
+        c.print(f"\n  [bold]{len(unknown)}[/] state not determined: {', '.join(unknown)}")
     c.print()
-    c.print("[dim]See changes:   hermes skills diff <name>[/]")
-    c.print("[dim]Resume updates: hermes skills reset <name>          (keep your copy, re-baseline)[/]")
-    c.print("[dim]Revert to stock: hermes skills reset <name> --restore[/]\n")
+    c.print("[dim]Only the last group is what `hermes update` used to call \"user-modified\"; the "
+            "first two are copies nobody edited.[/]\n")
 
 
 def _print_diff_line(c: Console, line: str) -> None:
@@ -1005,24 +1054,35 @@ _DIFF_STATUS_LINE = {
 def do_diff(name: str, console: Optional[Console] = None) -> None:
     """Show how the user's copy of a bundled skill differs from the stock version."""
     from tools.skills_sync_bundled_ops import diff_bundled_skill
+    from tools.skills_sync import COPY_MATCHES_STOCK
     c = console or _console
     result = diff_bundled_skill(name)
     if not result["ok"]:
         _print_error(c, result["message"])
         return
     if not result["modified"]:
-        c.print(f"[green]{result['message']}[/]\n")
-        return
-    c.print(f"\n[bold]{result['message']}[/]\n")
-    for entry in result["diffs"]:
-        if entry["status"] == "modified":
-            for line in entry["diff"].splitlines():
-                _print_diff_line(c, line)
+        c.print(f"[green]{result['message']}[/]")
+    else:
+        c.print(f"\n[bold]{result['message']}[/]\n")
+        for entry in result["diffs"]:
+            if entry["status"] == "modified":
+                for line in entry["diff"].splitlines():
+                    _print_diff_line(c, line)
+            else:
+                line = _DIFF_STATUS_LINE.get(entry["status"], _DIFF_STATUS_LINE["binary"])
+                c.print(line.format(**entry))
+    # Which state the copy is in decides what reset will do — so say it, and do not promise a
+    # re-baseline that a differing copy does not get (t_eb487a72).
+    if result.get("state_message"):
+        c.print(f"\n[dim]State:[/] {_state_label(result['state'])}")
+        c.print(f"[dim]       {result['state_message']}[/]")
+        if result["state"] == COPY_MATCHES_STOCK:
+            c.print(f"[dim]Resume updates: hermes skills reset {name}[/]")
         else:
-            line = _DIFF_STATUS_LINE.get(entry["status"], _DIFF_STATUS_LINE["binary"])
-            c.print(line.format(**entry))
+            c.print(f"[dim]`hermes skills reset {name}` refuses while your copy differs; "
+                    f"`hermes skills reset {name} --restore` replaces it with the shipped "
+                    f"version.[/]")
     c.print()
-    c.print(f"[dim]Revert with: hermes skills reset {name} --restore[/]\n")
 
 
 def do_opt_out(remove: bool = False, console: Optional[Console] = None, skip_confirm: bool = False,
@@ -1045,12 +1105,12 @@ def do_opt_out(remove: bool = False, console: Optional[Console] = None, skip_con
     candidates = preview["removed"]
     if not candidates:
         c.print("[dim]No pristine bundled skills to remove "
-                "(nothing tracked, or all are user-modified/local).[/]\n")
+                "(nothing tracked, or nothing that is provably unmodified).[/]\n")
         return
     c.print(f"\n[bold]Will remove {len(candidates)} unmodified bundled skill(s):[/]")
     c.print(f"[dim]{', '.join(candidates)}[/]")
     if preview["skipped"]:
-        c.print(f"[dim]Keeping {len(preview['skipped'])} (user-modified or non-bundled).[/]")
+        c.print(f"[dim]Keeping {len(preview['skipped'])} (not provably unmodified, or non-bundled).[/]")
     if not skip_confirm and not _confirm_or_cancel(
         c, "[dim]This deletes the on-disk copies. User-edited and hub/local skills are NOT touched.[/]",
         cancel="[dim]Marker kept; no skills deleted.[/]\n"):
@@ -1474,7 +1534,8 @@ _SLASH_USAGE = {
     "uninstall": ("[bold red]Usage:[/] /skills uninstall <name> [--now]\n",),
     "reset": (
         "[bold red]Usage:[/] /skills reset <name> [--restore] [--now]\n",
-        "[dim]Clears the bundled-skills manifest entry so future updates stop marking it as user-modified.[/]",
+        "[dim]Clears the bundled-skills manifest entry so the next update re-baselines the skill. "
+        "Refused when your copy differs from the shipped version — that would only silence the flag.[/]",
         "[dim]Pass --restore to also replace the current copy with the bundled version.[/]\n"),
     "diff": ("[bold red]Usage:[/] /skills diff <name>\n",),
     "publish": ("[bold red]Usage:[/] /skills publish <skill-path> [--to github] [--repo owner/repo]\n",),
@@ -1517,9 +1578,9 @@ def _print_skills_help(console: Console) -> None:
         "  [cyan]update[/] [name]               Update hub skills with upstream changes\n"
         "  [cyan]audit[/] [name]                Re-scan hub skills for security\n"
         "  [cyan]uninstall[/] <name>            Remove a hub-installed skill\n"
-        "  [cyan]list-modified[/]               List bundled skills you've edited (kept by update)\n"
+        "  [cyan]list-modified[/]               Why bundled copies are skipped (state per skill)\n"
         "  [cyan]diff[/] <name>                 Diff your copy of a bundled skill vs the stock version\n"
-        "  [cyan]reset[/] <name> [--restore]    Reset bundled-skill tracking (fix 'user-modified' flag)\n"
+        "  [cyan]reset[/] <name> [--restore]    Re-baseline a skipped bundled skill's tracking\n"
         "  [cyan]publish[/] <path> --repo <r>   Publish a skill to GitHub via PR\n"
         "  [cyan]snapshot[/] export|import      Export/import skill configurations\n"
         "  [cyan]tap[/] list|add|remove         Manage skill sources\n",
