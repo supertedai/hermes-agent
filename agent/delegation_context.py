@@ -24,6 +24,65 @@ KANBAN_ENV_KEYS: tuple[str, ...] = (
     "HERMES_KANBAN_GOAL_MODE", "HERMES_KANBAN_GOAL_MAX_TURNS",
 )
 
+# The worker scope a process carrying it must NOT hand to a spawned cron job: the caller's
+# task identity above, plus the workspace-scoped location that NAMES the caller's card —
+# ``…/kanban/workspaces/t_<hex>`` by this house's convention, and that basename is a
+# supported way to resolve a task id. ``KANBAN_ENV_KEYS`` alone is not enough for this
+# surface: :func:`scrub_kanban_env` deliberately RETAINS location, so the lineage scrub
+# already removes identity while leaving the card's id sitting in
+# ``HERMES_KANBAN_WORKSPACE``. The board pointer (``HERMES_KANBAN_DB`` /
+# ``HERMES_KANBAN_BOARD`` / ``HERMES_KANBAN_HOME``) is board scope, not task scope, and
+# stays: a job has a legitimate board, never a legitimate caller.
+KANBAN_WORKER_SCOPE_KEYS: tuple[str, ...] = KANBAN_ENV_KEYS + (
+    "HERMES_KANBAN_WORKSPACE", "HERMES_KANBAN_WORKSPACES_ROOT", "HERMES_KANBAN_BRANCH",
+)
+
+
+def carries_kanban_worker_scope(env: Mapping[str, str]) -> bool:
+    """True when *env* belongs to a Kanban worker — or to a descendant of one — rather than
+    to a plain session. Callers use it to tell an INHERITED worker scope from a board
+    pointer a profile declared for itself."""
+    return any(key in env for key in KANBAN_WORKER_SCOPE_KEYS)
+
+
+def strip_kanban_worker_scope(env: Mapping[str, str]) -> dict[str, str]:
+    """Return *env* without the caller's worker scope (:data:`KANBAN_WORKER_SCOPE_KEYS`).
+
+    A pure filter: it decides nothing about *when* the scope must go, and it leaves the
+    board pointer, the write fence and every secret-policy decision to its caller."""
+    return {k: v for k, v in env.items() if k not in KANBAN_WORKER_SCOPE_KEYS}
+
+
+def without_caller_worker_scope(env: Mapping[str, str]) -> dict[str, str]:
+    """Return *env* for a spawned cron-job process: the calling process's worker scope gone.
+
+    The process a cron job runs in is not the caller's task — it is an independent scheduled
+    unit whose environment is the profile's — yet it is spawned FROM whichever process fired
+    the job, and :func:`scrub_kanban_env` deliberately RETAINS location. So a hand-triggered
+    run still hands the child ``HERMES_KANBAN_WORKSPACE``, whose basename is the caller's
+    card id, and the child that names its task id from the environment files its ledger line
+    on a card that has nothing to do with it (measurable: the deployed consumer resolves the
+    task variable first and the workspace basename second). ``TERMINAL_CWD`` is that same
+    dispatcher pin under another name, so it goes with the scope when it holds the same path;
+    any other cwd — one a profile declares for itself — is left alone. The gate is the
+    calling PROCESS, so a scheduled fire (a gateway, carrying no worker scope) is a no-op.
+    """
+    if not carries_kanban_worker_scope(os.environ):
+        return dict(env)
+    cleaned = strip_kanban_worker_scope(env)
+    caller_workspace = (os.environ.get("HERMES_KANBAN_WORKSPACE") or "").rstrip("/")
+    if caller_workspace and (cleaned.get("TERMINAL_CWD") or "").rstrip("/") == caller_workspace:
+        cleaned.pop("TERMINAL_CWD", None)
+    # The descendant write fence goes with the scope. It is not the job's rule — it reaches the
+    # job only because the process that fired the run happened to be a descendant — and a fenced
+    # job is a DIFFERENT job: ``hermes kanban`` from the job's script is denied by
+    # :func:`kanban_path_is_fenced` on the hand-fired run and allowed on the same job's scheduled
+    # run (the CLI enforces the marker in ``hermes_cli/kanban_db.py``, so this is not only about
+    # agent tool calls). Hand-firing a job is how it is verified before its schedule does
+    # anything, and that rehearsal is worthless if the fence makes it a different system.
+    cleaned.pop(DELEGATED_CHILD_ENV_MARKER, None)
+    return cleaned
+
 
 @contextmanager
 def delegated_child_context(session_id: str | None = None) -> Iterator[None]:

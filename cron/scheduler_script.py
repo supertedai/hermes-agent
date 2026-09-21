@@ -320,6 +320,17 @@ def _script_argv(path: Path) -> tuple[Optional[list[str]], dict[str, str], Optio
     return [python_exe, str(path)], env_overlay, None
 
 
+def _job_script_env() -> dict[str, str]:
+    """Environment handed to a cron job's script process: the profile's, minus the worker
+    scope the triggering process carries (see
+    :func:`agent.delegation_context.without_caller_worker_scope`). The factory stays the
+    owner of the secret policy, the board pointer and the descendant write fence."""
+    from agent.delegation_context import without_caller_worker_scope
+    from tools.environments.local import build_subprocess_env
+
+    return without_caller_worker_scope(build_subprocess_env(strip_launch_profile=True))
+
+
 def _run_job_script(
     script_path: str, workdir: Optional[str] = None,
     cancel_event: Optional[_CancelEventLike] = None,
@@ -343,7 +354,6 @@ def _run_job_script(
         return False, err
 
     try:
-        from tools.environments.local import build_subprocess_env
         # Lossy decode only: keep the platform-default (locale) encoding — gating ``encoding=``
         # to win32 was deliberate (#66566: unconditional UTF-8 leaked into POSIX) — but
         # ``errors=`` must not stay 'strict': one stray non-UTF-8 byte in the script's stdout
@@ -368,7 +378,8 @@ def _run_job_script(
         # the sanitizer then overlays the names the owning profile declares in
         # terminal.env_passthrough from its own secret scope (#114209). The factory snapshots the
         # process env itself — no raw copy at the spawn site (test_subprocess_env_guard).
-        env = build_subprocess_env(strip_launch_profile=True)
+        # ``_job_script_env`` additionally keeps a hand-triggered run's worker scope out of the job.
+        env = _job_script_env()
         env.update(env_overlay)
         # Subprocess cwd only (default: scripts-dir parent). NEVER os.chdir() the process.
         # Use the job's workdir as the subprocess cwd when configured, otherwise default to the scripts-dir
