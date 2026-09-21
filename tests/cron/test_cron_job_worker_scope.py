@@ -27,7 +27,10 @@ The choice these tests bind, and why the other two were rejected:
 So the job's processes lose the caller's *worker scope* (identity + workspace-scoped
 location, plus the ``TERMINAL_CWD`` the dispatcher pins on the same workspace — the same path
 under another name) and keep the board pointer (``HERMES_KANBAN_DB`` / ``_BOARD`` / ``_HOME``)
-— a job has a legitimate board, never a legitimate caller. The strip is gated on the
+— a job has a legitimate board, never a legitimate caller. The write fence the caller's
+children carry goes with the scope too: it is the caller's rule, not the job's, and a job
+under it is a DIFFERENT job (``hermes kanban`` from its own script is denied when fired by
+hand and allowed on the same job's scheduled run). The strip is gated on the
 triggering PROCESS carrying the scope, so a board pointer a profile declared for itself is
 never mistaken for an inherited one, and a scheduled run's environment is unchanged.
 """
@@ -197,15 +200,18 @@ class TestJobProcessScope:
         assert env.get("HERMES_KANBAN_BOARD") == "default"
         assert env.get("HERMES_KANBAN_HOME") == "/opt/hermes-tavle"
 
-    def test_write_fence_for_spawned_descendants_is_left_to_the_factory(
+    def test_the_inherited_write_fence_does_not_reach_the_job(
             self, cron_home, tmp_path, worker_process):
-        """Deny-by-default for a spawned descendant is a deliberate rule and not ours to
-        relax here; this test pins the boundary so a later change has to say so out loud."""
+        """The job's processes are not the caller's descendants, so the fence they would
+        inherit is not their rule. Pinned because the opposite choice was defensible — the
+        fence only ever denies, so keeping it looked like the safe direction — and the
+        measurement that decides it is that ``hermes kanban`` from the job's own script is
+        denied on a hand-fired run and allowed on the same job's scheduled run."""
         from agent.delegation_context import DELEGATED_CHILD_ENV_MARKER
 
         env = _job_env(cron_home, tmp_path)
 
-        assert env.get(DELEGATED_CHILD_ENV_MARKER)
+        assert DELEGATED_CHILD_ENV_MARKER not in env
 
     def test_scheduled_run_environment_is_unchanged(self, cron_home, tmp_path, monkeypatch):
         """No worker scope in the triggering process -> the job env is exactly what the
@@ -229,6 +235,7 @@ def test_delivery_child_is_not_handed_the_callers_card(worker_process):
     """``--deliver`` spawns a child too; it belongs to the job, not to the card that
     triggered the run."""
     from cron import scheduler_delivery as sched_delivery
+    from agent.delegation_context import DELEGATED_CHILD_ENV_MARKER
 
     calls: dict = {}
 
@@ -245,4 +252,5 @@ def test_delivery_child_is_not_handed_the_callers_card(worker_process):
     env = calls["env"]
     for key in ("HERMES_KANBAN_TASK", "HERMES_KANBAN_WORKSPACE", "TERMINAL_CWD"):
         assert key not in env, f"{key} reached the delivery child"
+    assert DELEGATED_CHILD_ENV_MARKER not in env
     assert not any(WORKER_TASK in str(v) for v in env.values())

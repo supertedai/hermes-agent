@@ -73,6 +73,14 @@ def without_caller_worker_scope(env: Mapping[str, str]) -> dict[str, str]:
     caller_workspace = (os.environ.get("HERMES_KANBAN_WORKSPACE") or "").rstrip("/")
     if caller_workspace and (cleaned.get("TERMINAL_CWD") or "").rstrip("/") == caller_workspace:
         cleaned.pop("TERMINAL_CWD", None)
+    # The descendant write fence goes with the scope. It is not the job's rule — it reaches the
+    # job only because the process that fired the run happened to be a descendant — and a fenced
+    # job is a DIFFERENT job: ``hermes kanban`` from the job's script is denied by
+    # :func:`kanban_path_is_fenced` on the hand-fired run and allowed on the same job's scheduled
+    # run (the CLI enforces the marker in ``hermes_cli/kanban_db.py``, so this is not only about
+    # agent tool calls). Hand-firing a job is how it is verified before its schedule does
+    # anything, and that rehearsal is worthless if the fence makes it a different system.
+    cleaned.pop(DELEGATED_CHILD_ENV_MARKER, None)
     return cleaned
 
 
