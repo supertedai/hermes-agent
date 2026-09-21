@@ -944,9 +944,12 @@ def _deliver_to_bot_chat(job: dict, content: str, profile: str, *, deferred: Opt
         logger.warning("Job '%s': %s", job_id, msg, **log_kwargs)
         return msg
 
-    from agent.delegation_context import delegated_child_subprocess_env
+    from agent.delegation_context import delegated_child_subprocess_env, without_caller_worker_scope
     from tools.environments.local import strip_launch_profile_env
-    env = strip_launch_profile_env(delegated_child_subprocess_env(os.environ))
+    # A delivery child is the job's, not the caller's: a hand-triggered run must not hand it
+    # the card that fired the job (see ``without_caller_worker_scope``).
+    env = strip_launch_profile_env(
+        without_caller_worker_scope(delegated_child_subprocess_env(os.environ)))
     if not home.is_dir():
         return _fail(f"bot-chat delivery target no longer exists: {home}; do not resend")
     # Discovery (or deferred admission) owns the destination, not HOME or a
