@@ -726,8 +726,13 @@ def _run_full_backup() -> None:
 
     print("◆ Creating pre-update backup...")
     t0 = _time.monotonic()
+    # WHY no archive was written has to reach the user, not just agent.log: one un-snappable
+    # database aborts the whole zip, and "no files found or write failed" hid which one (measured
+    # 2026-09-20: 2000 already-archived files and ~2.5 min thrown away every night, reason only
+    # in the log). create_pre_update_backup() never raises; it hands the reason back here.
+    failures: list[str] = []
     try:
-        out_path = create_pre_update_backup(keep=int(_keep))
+        out_path = create_pre_update_backup(keep=int(_keep), failures=failures)
     except Exception as exc:  # defensive — helper already swallows, but just in case
         print(f"  ⚠ Backup failed: {exc}")
         print("  Continuing with update.")
@@ -736,7 +741,10 @@ def _run_full_backup() -> None:
     elapsed = _time.monotonic() - t0
 
     if out_path is None:
-        print("  ⚠ Backup skipped (no files found or write failed); continuing update.")
+        if failures:
+            print(f"  ⚠ Pre-update backup not written: {failures[0]}; continuing update.")
+        else:
+            print("  ⚠ Backup skipped (no files found or write failed); continuing update.")
         print()
         return
 

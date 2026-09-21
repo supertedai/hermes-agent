@@ -1353,6 +1353,133 @@ class TestSafeCopyDb:
             proc.wait()
 
 
+    def test_live_writer_cannot_stall_the_snapshot_past_the_deadline(self, tmp_path):
+        """A busy SOURCE must not extend its own deadline by restarting the copy.
+
+        SQLite restarts a snapshot when another connection writes the source: the step still
+        reports SQLITE_OK and ``remaining`` goes back to the full page count. Measured on the code
+        before this test existed (2026-09-20): ``timeout_seconds=1.0`` did not return in 30 s on an
+        11 MB source under a writer loop, and a real ``hermes update --backup`` sat 50 minutes in
+        "Creating pre-update backup" reading 10.7 TB while writing nothing. The regression is that
+        the call does not come back at all — so this asserts on the return, with a guard.
+        """
+        import threading
+
+        from hermes_cli.backup import _safe_copy_db
+
+        src = tmp_path / "live_writer.db"
+        dst = tmp_path / "copy.db"
+        conn = sqlite3.connect(str(src))
+        conn.execute("PRAGMA journal_mode=DELETE")
+        conn.execute("CREATE TABLE t (id INTEGER PRIMARY KEY, payload BLOB)")
+        conn.executemany(
+            "INSERT INTO t (payload) VALUES (?)", [(b"x" * 256,) for _ in range(40000)])
+        conn.commit()
+        conn.close()
+
+        stop = threading.Event()
+
+        def keep_writing():
+            writer = sqlite3.connect(str(src), timeout=30.0, isolation_level=None)
+            writer.execute("PRAGMA synchronous=OFF")
+            try:
+                while not stop.is_set():
+                    writer.execute("INSERT INTO t (payload) VALUES (?)", (b"x" * 256,))
+            finally:
+                writer.close()
+
+        result: list = []
+        writer_thread = threading.Thread(target=keep_writing, daemon=True)
+        caller = threading.Thread(
+            target=lambda: result.append(_safe_copy_db(src, dst, timeout_seconds=1.0)),
+            daemon=True)
+        writer_thread.start()
+        try:
+            caller.start()
+            caller.join(30)
+            assert not caller.is_alive(), (
+                "the snapshot never returned: a 1 s deadline must expire even while another "
+                "connection keeps writing the source")
+        finally:
+            stop.set()
+            writer_thread.join(timeout=10)
+        # Fail closed: no partial destination is left behind.
+        assert result == [False]
+        assert not dst.exists()
+
+    def test_restarting_snapshot_without_new_progress_trips_the_deadline(
+        self, tmp_path, monkeypatch
+    ):
+        """``SQLITE_OK`` + a ``remaining`` that never improves is not progress.
+
+        The restarting copy reports exactly that: status OK, ``remaining`` back where it started.
+        A deadline that any OK refreshes therefore never expires — the fix measures the deadline
+        against the smallest ``remaining`` seen so far instead.
+        """
+        from hermes_cli import backup as backup_mod
+
+        src = tmp_path / "restarting.db"
+        dst = tmp_path / "copy.db"
+        src.touch()
+        dst.write_bytes(b"partial")
+
+        clock = iter((100.0, 100.5, 101.2, 102.0))
+        remaining = iter((300, 300, 300))
+
+        class FakeSourceConnection:
+            def backup(self, _destination, *, pages, progress, sleep):
+                for value in remaining:
+                    progress(sqlite3.SQLITE_OK, value, 300)
+
+            def close(self):
+                pass
+
+        class FakeDestinationConnection:
+            def close(self):
+                pass
+
+        connections = iter((FakeSourceConnection(), FakeDestinationConnection()))
+        monkeypatch.setattr(backup_mod.sqlite3, "connect", lambda *a, **kw: next(connections))
+        monkeypatch.setattr(backup_mod.time, "monotonic", lambda: next(clock))
+
+        assert backup_mod._safe_copy_db(src, dst, timeout_seconds=1.0) is False
+        assert not dst.exists()
+
+    def test_shrinking_remaining_keeps_refreshing_the_deadline(self, tmp_path, monkeypatch):
+        """The bound must not cut off a snapshot that IS moving forward, however slowly.
+
+        This one passes before and after the change on purpose: it is the guard against an
+        over-eager bound (a slow but progressing copy must survive many timeouts' worth of wall
+        clock). Only a stalled high-water mark may expire the deadline.
+        """
+        from hermes_cli import backup as backup_mod
+
+        src = tmp_path / "slow.db"
+        dst = tmp_path / "copy.db"
+        src.touch()
+
+        clock = iter((100.0, 120.0, 140.0, 160.0))
+        remaining = iter((1000, 900, 800))
+
+        class FakeSourceConnection:
+            def backup(self, _destination, *, pages, progress, sleep):
+                for value in remaining:
+                    progress(sqlite3.SQLITE_OK, value, 1000)
+
+            def close(self):
+                pass
+
+        class FakeDestinationConnection:
+            def close(self):
+                pass
+
+        connections = iter((FakeSourceConnection(), FakeDestinationConnection()))
+        monkeypatch.setattr(backup_mod.sqlite3, "connect", lambda *a, **kw: next(connections))
+        monkeypatch.setattr(backup_mod.time, "monotonic", lambda: next(clock))
+
+        assert backup_mod._safe_copy_db(src, dst, timeout_seconds=10.0) is True
+
+
     def test_is_zeroed_sqlite_file_detects_nul_header(self, tmp_path):
         from hermes_cli.backup import is_zeroed_sqlite_file
         p = tmp_path / "state.db"
@@ -1710,6 +1837,42 @@ class TestPreUpdateBackup:
         return root
 
 
+    def test_aborted_archive_names_the_database_that_did_it(self, hermes_home):
+        """One un-snappable database aborts the whole archive — the caller must learn WHICH.
+
+        Measured 2026-09-20: the abort threw away 2000 already-written entries and ~2.5 min every
+        night while the user saw only "Backup skipped (no files found or write failed)"; the name
+        of the offending file lived in agent.log alone. The contract here is structural (the reason
+        names a file that really exists in the tree), not a copy of one message.
+        """
+        from hermes_cli.backup import create_pre_update_backup
+
+        failures: list[str] = []
+        with patch("hermes_cli.backup._safe_copy_db", lambda _src, _dst: False):
+            out = create_pre_update_backup(hermes_home=hermes_home, failures=failures)
+
+        assert out is None
+        assert len(failures) == 1
+        reason = failures[0]
+        assert reason.startswith("SQLite snapshot failed for ")
+        named = reason.split("for ", 1)[1]
+        assert (hermes_home / named).is_file()
+
+    def test_failures_stay_empty_when_the_archive_is_written(self, hermes_home):
+        """A written archive must not collect a reason — the list means "not written because ..."."""
+        from hermes_cli.backup import create_pre_update_backup
+
+        failures: list[str] = []
+        out = create_pre_update_backup(hermes_home=hermes_home, failures=failures)
+        assert out is not None
+        assert failures == []
+
+    def test_failures_are_optional(self, hermes_home):
+        """Callers that only want the path keep working unchanged (no list, no crash)."""
+        from hermes_cli.backup import create_pre_update_backup
+
+        assert create_pre_update_backup(hermes_home=hermes_home) is not None
+
     def test_backup_contents_match_full_backup(self, hermes_home):
         """Pre-update backup should include the same user data that
         ``hermes backup`` would, and should exclude the same directories."""
@@ -1849,6 +2012,25 @@ class TestRunPreUpdateBackup:
         assert not self._snaps(hermes_home)
         assert not self._zips(hermes_home)
 
+
+
+    def test_aborted_archive_names_the_database_in_the_users_output(self, hermes_home, capsys):
+        """The user's output must carry the reason an archive was not written.
+
+        Same measured failure as the lib test above, one level up: ``hermes update --backup``
+        printed only "⚠ Backup skipped (no files found or write failed)" and continued, so the
+        reason for the missing recovery point was invisible unless you read agent.log.
+        """
+        self._set_mode(hermes_home, "full")
+        from hermes_cli.update_cmd import _run_pre_update_backup
+
+        with patch("hermes_cli.backup._safe_copy_db", lambda _src, _dst: False):
+            _run_pre_update_backup(Namespace(no_backup=False, backup=False))
+
+        out = capsys.readouterr().out
+        assert "Pre-update backup not written: SQLite snapshot failed for " in out
+        assert ".db" in out
+        assert not self._zips(hermes_home)
 
 
     def test_config_full_mode(self, hermes_home, capsys):
