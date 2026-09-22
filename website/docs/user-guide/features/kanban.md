@@ -1305,7 +1305,7 @@ One row per delivery decision, at the boundary that took it:
 | `receipt` | The adapter's own message id for a send, so a row can be matched against a real message in the chat. |
 | `cursor_before` → `cursor_after` | The cursor value the decision produced (`NULL` when nothing was claimed). A skip leaves the cursor untouched; a `send_failed` rewind points `cursor_after` back at the pre-claim value. |
 
-Rows are **never updated** — a retry appends — and they are written best-effort: a board whose journal cannot be written still delivers. Retention is 14 days, pruned on the notifier's hourly GC gate. Rows outlive the subscription (unsubscribe, archive, and the stale-sub GC do not touch them), so the record of a delivery survives the cursor it explains.
+Rows are **never updated** — a retry appends — and they are written best-effort: a board whose journal cannot be written still delivers. The absence of a row proves nothing about delivery either: writing is best-effort, and claim and journal are separate transactions — a crash between them leaves a moved cursor with no row, so read the journal as evidence, not as a complete audit trail. Retention is 14 days, pruned on the notifier's hourly GC gate. Rows outlive the subscription (unsubscribe, archive, and the stale-sub GC do not touch them), so the record of a delivery survives the cursor it explains.
 
 ### Multi-profile setups: delivery is profile-owned
 

@@ -17,6 +17,7 @@ decision, so "no event" / "wrong classification" / "suppressed" / "digest" /
 
 import asyncio
 import logging
+import time
 
 import pytest
 
@@ -288,6 +289,46 @@ def test_a_subscription_with_no_adapter_is_journaled_and_warned_once(board, monk
     # The skip is a claim-time refusal: the cursor is untouched, which is exactly
     # what distinguishes it from a delivery that moved the cursor.
     assert _subs(tid)[0]["last_event_id"] == cursor_before
+
+
+def test_a_failed_skip_write_is_retried_not_burned(board, monkeypatch):
+    """A failed journal write must not burn the once-per-row dedup key.
+
+    Tick 1: the journal table is gone, so the skip write fails — the key stays
+    unmarked and no row exists. Tick 2: the table is back, the write succeeds,
+    and exactly one row appears, from tick 2. Had the key been marked before
+    the write (the old shape), the skip would have vanished silently for the
+    rest of the process's lifetime — the ADR-057 silence this card exists
+    against.
+    """
+    tid = _create_subscription(platform="tui", chat_id=TUI_SESSION_KEY, complete=True)
+    conn = kbc.connect()
+    try:
+        conn.execute("DROP TABLE kanban_notify_journal")
+        conn.commit()
+    finally:
+        conn.close()
+    runner = _make_runner(RecordingAdapter())
+
+    asyncio.run(_run_one_notifier_tick(monkeypatch, runner))
+    assert all(key[0] != tid for key in notifier._SKIP_JOURNALED), \
+        "a failed write must not burn the dedup key"
+    # No row can exist while the table is gone; append-only means the count
+    # after tick 2 is what proves tick 1 wrote nothing.
+
+    kb.init_db()  # re-runs the migration pass: the journal table comes back
+    runner._running = True
+    tick_two_start = time.time()
+    asyncio.run(_run_one_notifier_tick(monkeypatch, runner))
+
+    rows = _rows(tid)
+    assert [r["outcome"] for r in rows] == ["skipped_no_adapter"], "exactly one skip row, from tick 2"
+    assert rows[0]["created_at"] >= tick_two_start - 1, "the row was written on tick 2, not before"
+    assert any(key[0] == tid for key in notifier._SKIP_JOURNALED), "the successful write marks the key"
+
+    runner._running = True
+    asyncio.run(_run_one_notifier_tick(monkeypatch, runner))
+    assert [r["outcome"] for r in _rows(tid)] == ["skipped_no_adapter"], "and still one row on tick 3"
 
 
 def test_a_gateway_with_no_adapters_warns_once(board, monkeypatch, caplog):

@@ -379,17 +379,22 @@ class _Collector:
 
         Once per row, not once per tick: the decision is a property of the row
         (this gateway has no adapter for it), and re-appending it every 5s would
-        bury the per-event rows the journal exists for.
+        bury the per-event rows the journal exists for. The dedup key is marked
+        only after a successful write: a write that fails leaves the key unmarked
+        so the next tick re-appends the skip decision instead of losing it
+        silently for the process's lifetime (the write itself reports its first
+        failure once per process at WARNING, then DEBUG).
         """
         key = (sub.get("task_id"), sub.get("platform"), sub.get("chat_id"), sub.get("thread_id") or "")
         if key in _SKIP_JOURNALED:
             return
-        _SKIP_JOURNALED.add(key)
-        _kbn().journal_notify_decision(
+        written = _kbn().journal_notify_decision(
             conn, task_id=sub["task_id"], platform=sub["platform"], chat_id=sub["chat_id"],
             thread_id=sub.get("thread_id") or "", dispatcher="gateway",
             phase="skip", outcome=outcome, reason=reason, delivery_mode=sub.get("delivery_mode"),
         )
+        if written > 0:
+            _SKIP_JOURNALED.add(key)
 
     def _claim_for_sub(self, conn: Any, slug: str, sub: dict) -> Optional[dict]:
         """Claim one subscription's unseen events; None when skipped or nothing new."""
