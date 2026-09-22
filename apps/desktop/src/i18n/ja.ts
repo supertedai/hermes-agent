@@ -2353,6 +2353,7 @@ export const ja = defineLocale({
       removeFolderFailed: 'フォルダを削除できませんでした',
       menuRestore: 'Restore',
       workspaceArchived: 'Archived',
+      workspaceShared: 'Shared',
       profileLabel: 'プロフィール',
       create: '作成',
       menu: 'アクション',
