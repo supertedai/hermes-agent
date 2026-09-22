@@ -2021,6 +2021,7 @@ export const ar = defineLocale({
       removeFolderFailed: 'تعذّر إزالة المجلد',
       menuRestore: 'Restore',
       workspaceArchived: 'Archived',
+      workspaceShared: 'Shared',
       profileLabel: 'الملف الشخصي',
       create: 'إنشاء',
       menu: 'إجراءات',
