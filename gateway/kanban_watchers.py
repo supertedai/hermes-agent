@@ -136,6 +136,18 @@ class GatewayKanbanWatchersMixin:
     def _kanban_advance(self, sub: dict, cursor: int, board: Optional[str] = None) -> None:
         self._kanban_sub_op(board, "advance_notify_cursor", sub, new_cursor=cursor)
 
+    def _kanban_journal(self, board: Optional[str], sub: dict, **fields: Any) -> None:
+        """Append one delivery decision to the board's journal (never raises).
+
+        The journal is evidence, not a gate: a board whose journal cannot be
+        written still delivers, so the failure stops here instead of unmasking
+        as a delivery error one frame up.
+        """
+        try:
+            self._kanban_sub_op(board, "journal_notify_decision", sub, **fields)
+        except Exception as exc:
+            logger.debug("kanban notifier: journal write failed for %s: %s", sub.get("task_id"), exc)
+
     def _kanban_unsub(self, sub: dict, board: Optional[str] = None) -> None:
         self._kanban_sub_op(board, "remove_notify_sub", sub)
 

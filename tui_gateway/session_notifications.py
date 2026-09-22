@@ -381,10 +381,32 @@ def _kb_poll_board(_kb, slug: str, session_key: str) -> list:
             task = _kb.get_task(conn, sub["task_id"])
             from gateway.kanban_watchers_notifier import diagnostic_event
             from gateway.warning_notifications import DiagnosticText
+            # Journaled in ONE transaction, claim rows first: this poller is the
+            # second claimer of the shared cursor, and it writes no ping
+            # checkpoint — without these rows a subscription delivered here looks
+            # exactly like one delivered nowhere.
+            entries = [
+                {
+                    "event_id": int(getattr(ev, "id", 0) or 0), "kind": getattr(ev, "kind", None),
+                    "phase": "claim", "outcome": "claimed", "delivery_mode": sub.get("delivery_mode"),
+                    "reason": f"cursor {int(_old)}→{int(_new)}",
+                    "cursor_before": int(_old), "cursor_after": int(_new),
+                }
+                for ev in events
+            ]
             for ev in events:
                 text = _format_kanban_event_text(sub, task, ev, slug)
+                entries.append({
+                    "event_id": int(getattr(ev, "id", 0) or 0), "kind": getattr(ev, "kind", None),
+                    "phase": "deliver", "delivery_mode": sub.get("delivery_mode"),
+                    "outcome": "in_process_frame" if text else "skipped_silent_kind",
+                    "reason": ("queued for this session's own status.update frame (no `tui` adapter exists)"
+                               if text else "no formatter for this event kind: claimed, cursor advanced, rendered nowhere"),
+                    "cursor_before": int(_old), "cursor_after": int(_new),
+                })
                 if text:
                     texts.append(DiagnosticText(text) if diagnostic_event(ev) else text)
+            _kbn.journal_notify_decisions(conn, dispatcher="tui", entries=entries, **sub_ident)
             # Unsubscribe only on archive: ``done`` is reversible in review/controller flows, so keeping the sub lets a
             # later reopen notify the same session. The claimed cursor prevents replay.
             if task and getattr(task, "status", "") == "archived":

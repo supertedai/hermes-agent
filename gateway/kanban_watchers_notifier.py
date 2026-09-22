@@ -10,6 +10,7 @@ from __future__ import annotations
 import asyncio
 import contextlib
 import re
+import time
 from functools import partial
 from pathlib import Path
 import weakref
@@ -62,6 +63,13 @@ def diagnostic_event(ev) -> bool:
 # every 5 seconds forever. A genuinely dead chat still drops, just ~60s later — a fine trade for an
 # unattended gate where a false drop means silent work pileup.
 MAX_SEND_FAILURES = 12
+
+# Journal retention. The journal answers "what happened to THIS event", which is
+# a question about recent traffic: 14 days covers a review cycle, and the hourly
+# GC gate in _Collector._gc_stale_subs prunes past it. Deliberately not a config
+# key — a second retention knob next to kanban.done_sub_retention_days would be
+# one more thing to get wrong, and the journal is evidence, not user data.
+_JOURNAL_RETENTION_DAYS = 14
 
 _LOCAL_PATH_RE = re.compile(r"(?<![\w:/])(?:/(?:Users|home|private|tmp|var|etc|workspace)/[^\s,;]+|" r"[A-Za-z]:\\[^\s,;]+)")
 
@@ -129,6 +137,58 @@ def _warn_anchorless_thread_sub_once(sub: dict, platform: str) -> None:
 
 
 _UNROUTABLE_WARNED: set[tuple] = set()
+
+# Platforms whose delivery path is a live in-process session poller rather than
+# a gateway adapter (``tui_gateway.session_notifications``). The gateway has no
+# adapter for these BY DESIGN, so a warning about them must name that path
+# instead of promising a delivery that will never happen. Measured 2026-09-22:
+# all 435 notification subscriptions on the house board are ``tui``; ``desktop``
+# is a surface name for the same poller (``tui_gateway.server``), not a platform.
+_IN_PROCESS_DELIVERY_PLATFORMS = frozenset({"tui"})
+
+# One WARNING per platform per process. A subscription whose platform has no
+# adapter in this gateway was skipped with a DEBUG line: the cursor stood still
+# and nothing anywhere said so — the same silence ADR-057 names. The count is
+# per tick, and the DB stays the count of record; the log carries the fact.
+_NO_ADAPTER_WARNED: set[str] = set()
+
+# A claim-time skip is a property of the ROW, not of the tick: journal it once
+# per row per process (the notifier re-reads every row every 5s otherwise).
+_SKIP_JOURNALED: set[tuple] = set()
+
+# One WARNING per process when the gateway serves no platform at all: that skips
+# every subscription on every board, every tick, at DEBUG.
+_NO_ADAPTERS_WARNED = False
+
+
+def _warn_no_adapter_platforms(skipped: dict) -> None:
+    """Say ONCE per platform that this gateway is not the delivery path for those rows.
+
+    Both cases are worth a WARNING (and neither is an error): a subscription
+    created from a TUI/desktop session is delivered in-process by that session's
+    poller while the session is live, and an unknown platform has no delivery
+    path at all. What the operator needs is the platform, the number of rows, and
+    what to do — which is what this line carries instead of a DEBUG line per row.
+    """
+    for platform in sorted(skipped):
+        if platform in _NO_ADAPTER_WARNED:
+            continue
+        _NO_ADAPTER_WARNED.add(platform)
+        count = skipped[platform]
+        if platform in _IN_PROCESS_DELIVERY_PLATFORMS:
+            logger.warning(
+                "kanban notifier: %d subscription(s) on platform %r were skipped this tick: this gateway has no %r "
+                "adapter, so it never claims or delivers them. That is by design — such a row is delivered in-process "
+                "by its live %s session's own poller, and a row whose session has ended is delivered by nothing. "
+                "Evidence per row: kanban_notify_journal (dispatcher='gateway', outcome='skipped_no_adapter').",
+                count, platform, platform, platform)
+        else:
+            logger.warning(
+                "kanban notifier: %d subscription(s) on platform %r were skipped this tick: no %r adapter exists in "
+                "this gateway, so they are never claimed and never delivered. Re-subscribe to a connected platform "
+                "(`hermes kanban notify-subscribe ...`) or archive the task. Evidence per row: "
+                "kanban_notify_journal (dispatcher='gateway', outcome='skipped_no_adapter').",
+                count, platform, platform)
 
 
 def _warn_unroutable_sub_once(sub: dict, platform: Any, message: str, *extra_args: Any) -> None:
@@ -226,6 +286,9 @@ class _Collector:
         self.gc_due = gc_due
         self.gc_retention_days = gc_retention_days
         self.deliveries: list[dict] = []
+        # Subscriptions this tick's platform pre-filter dropped, per platform:
+        # what the once-per-platform WARNING reports and the journal records.
+        self.skipped_no_adapter: dict[str, int] = {}
         self.include_unowned = runner._owns_kanban_dispatcher_lock()
         self.profile_adapters = getattr(runner, "_profile_adapters", {})
         self.notifier_profiles = {notifier_profile}
@@ -243,8 +306,19 @@ class _Collector:
             *(_platform_names(m) for m in self.profile_adapters.values()))
 
     def collect(self) -> list[dict]:
+        global _NO_ADAPTERS_WARNED
         if not self.active_platforms:
-            logger.debug("kanban notifier: no connected adapters; skipping tick")
+            # Not a per-tick DEBUG: with no adapter at all, EVERY subscription on
+            # every board stands still for as long as this gateway runs. Said once
+            # per process, at WARNING (ADR-057).
+            if not _NO_ADAPTERS_WARNED:
+                _NO_ADAPTERS_WARNED = True
+                logger.warning(
+                    "kanban notifier: no connected adapters in this gateway; every kanban subscription is skipped "
+                    "until one is connected. Configure a platform (or `hermes kanban notify-subscribe` one) and "
+                    "restart the gateway.")
+            else:
+                logger.debug("kanban notifier: no connected adapters; skipping tick")
             return self.deliveries
         # Poll each resolved DB path once: several slugs can map to one DB when
         # HERMES_KANBAN_DB pins the board path.
@@ -262,6 +336,7 @@ class _Collector:
                 continue
             seen_db_paths.add(resolved_db_path)
             self.collect_board(slug)
+        _warn_no_adapter_platforms(self.skipped_no_adapter)
         return self.deliveries
 
     def _board_has_subs(self, slug: str) -> bool:
@@ -288,18 +363,52 @@ class _Collector:
                             _purged, slug, self.gc_retention_days)
         except Exception as _gc_exc:
             logger.debug("kanban notifier: stale-sub GC failed for board %s: %s", slug, _gc_exc)
+        # The journal is append-only, not immortal: it records decisions, and a
+        # decision older than _JOURNAL_RETENTION_DAYS has no reader. Reuses this
+        # hourly gate, so no new cadence and no new config key.
+        try:
+            _pruned = _kbn().prune_notify_journal(conn, max_age_days=_JOURNAL_RETENTION_DAYS)
+            if _pruned:
+                logger.info("kanban notifier: pruned %d journal row(s) older than %dd on board %s",
+                            _pruned, _JOURNAL_RETENTION_DAYS, slug)
+        except Exception as _jp_exc:
+            logger.debug("kanban notifier: journal prune failed for board %s: %s", slug, _jp_exc)
+
+    def _journal_skip(self, conn: Any, sub: dict, *, outcome: str, reason: str) -> None:
+        """Record a claim-time skip once per row per process.
+
+        Once per row, not once per tick: the decision is a property of the row
+        (this gateway has no adapter for it), and re-appending it every 5s would
+        bury the per-event rows the journal exists for.
+        """
+        key = (sub.get("task_id"), sub.get("platform"), sub.get("chat_id"), sub.get("thread_id") or "")
+        if key in _SKIP_JOURNALED:
+            return
+        _SKIP_JOURNALED.add(key)
+        _kbn().journal_notify_decision(
+            conn, task_id=sub["task_id"], platform=sub["platform"], chat_id=sub["chat_id"],
+            thread_id=sub.get("thread_id") or "", dispatcher="gateway",
+            phase="skip", outcome=outcome, reason=reason, delivery_mode=sub.get("delivery_mode"),
+        )
 
     def _claim_for_sub(self, conn: Any, slug: str, sub: dict) -> Optional[dict]:
         """Claim one subscription's unseen events; None when skipped or nothing new."""
         owner_profile = sub.get("notifier_profile") or None
         platform = (sub.get("platform") or "").lower()
         if platform not in self.active_platforms:
-            logger.debug("kanban notifier: subscription for %s on %s skipped; adapter not connected",
-                         sub.get("task_id"), platform or "<missing>")
+            # Counted, then reported once per platform at WARNING by collect();
+            # this used to be the only trace of the skip, at DEBUG, per tick.
+            self.skipped_no_adapter[platform] = self.skipped_no_adapter.get(platform, 0) + 1
+            self._journal_skip(
+                conn, sub, outcome="skipped_no_adapter",
+                reason=f"no adapter for platform {platform!r} in this gateway process")
             return None
         from gateway.config import Platform
         if _adapter_for_subscription(self.runner, Platform(platform), sub, owner_profile or self.notifier_profile) is None:
             _warn_anchorless_thread_sub_once(sub, platform)
+            self._journal_skip(
+                conn, sub, outcome="skipped_unroutable",
+                reason="no adapter authorized for this subscription's route in this gateway process")
             return None
         old_cursor, cursor, events = _kbn().claim_unseen_events_for_sub(
             conn, task_id=sub["task_id"], platform=sub["platform"], chat_id=sub["chat_id"],
@@ -310,6 +419,13 @@ class _Collector:
         task = self.kb.get_task(conn, sub["task_id"])
         logger.debug("kanban notifier: claimed %d event(s) for %s on board %s cursor %s→%s",
                      len(events), sub["task_id"], slug, old_cursor, cursor)
+        # The claim already moved the cursor: without this row, a cursor that
+        # moved for an event that was never delivered has no explanation left.
+        _kbn().journal_notify_claim(
+            conn, task_id=sub["task_id"], platform=sub["platform"], chat_id=sub["chat_id"],
+            thread_id=sub.get("thread_id") or "", dispatcher="gateway", events=events,
+            cursor_before=old_cursor, cursor_after=cursor, delivery_mode=sub.get("delivery_mode"),
+        )
         return {"sub": sub, "old_cursor": old_cursor, "cursor": cursor, "events": events, "task": task, "board": slug}
 
     def collect_board(self, slug: str) -> None:
@@ -514,8 +630,33 @@ class _KanbanNotification:
         self.adapter: Any = None
         self.is_push_adapter = True
         self.wake_kinds: set = set()
+        # Set immediately before an adapter send so a failed attempt can be
+        # journaled with the time it was attempted, not when it was reported.
+        self._last_attempt_at: float = 0.0
 
     # -- cursor / subscription ops (blocking, run in a fresh-context thread) --
+
+    async def _journal(self, ev: Any = None, **fields: Any) -> None:
+        """Append one delivery decision to the board's journal (best-effort, never blocks a send).
+
+        ``cursor_after`` rides on every row, so a reader can line a delivery
+        decision up against the cursor value it produced — which is the whole
+        question a cursor move without a delivery leaves open.
+        """
+        entry: dict[str, Any] = {
+            "dispatcher": "gateway",
+            "cursor_before": self.d.get("old_cursor"),
+            "cursor_after": self.d.get("cursor"),
+            "delivery_mode": self.sub.get("delivery_mode"),
+        }
+        if ev is not None:
+            entry["event_id"] = int(getattr(ev, "id", 0) or 0)
+            entry["kind"] = getattr(ev, "kind", None)
+        entry.update(fields)
+        journal = getattr(self.runner, "_kanban_journal", None)
+        if journal is None:
+            return  # a runner without the journal (test double, foreign embedder)
+        await _to_thread_process_service(partial(journal, self.board_slug, self.sub, **entry))
 
     async def rewind(self) -> None:
         await _to_thread_process_service(
@@ -536,7 +677,16 @@ class _KanbanNotification:
         fails = self.sub_fail_counts.get(self.sub_key, 0) + 1
         self.sub_fail_counts[self.sub_key] = fails
         logger.warning(fmt, *prefix, fails, MAX_SEND_FAILURES, exc, exc_info=exc_info)
-        if fails >= MAX_SEND_FAILURES:
+        dropped = fails >= MAX_SEND_FAILURES
+        # The event is about to be retried (rewind → the cursor goes back) or
+        # given up on (drop → the cursor stays where the claim left it): both are
+        # delivery outcomes, and neither is visible in the cursor alone.
+        await self._journal(
+            phase="deliver", outcome="dropped" if dropped else "send_failed",
+            attempted_at=self._last_attempt_at or None, send_result=f"failed: {exc}",
+            reason=f"attempt {fails}/{MAX_SEND_FAILURES}",
+            cursor_after=self.d.get("cursor") if dropped else self.d.get("old_cursor"))
+        if dropped:
             logger.warning(drop_fmt, self.task_id, self.platform_str, fails)
             await self.unsub()
             self.clear_failures()
@@ -671,16 +821,31 @@ class _KanbanNotification:
         if sub.get("thread_id") and not metadata.get("thread_id"):
             metadata["thread_id"] = sub["thread_id"]
         _send_res = None
+
         async def send_ping():
             nonlocal _send_res
+            self._last_attempt_at = time.time()
             _send_res = await adapter.send(sub["chat_id"], msg, metadata=metadata)
+
         if not await present_notification(send_ping, platform=self.platform_str, diagnostic=diagnostic_event(ev)):
+            # A diagnostic event deliberately suppressed for this platform
+            # (display.<platform>.suppress_warning_notifications). Silent by
+            # design, but it IS a delivery decision: the event is claimed, the
+            # cursor moves, and no ping is recorded.
+            await self._journal(
+                ev, phase="deliver", outcome="suppressed_by_policy",
+                reason="display.<platform>.suppress_warning_notifications suppressed this diagnostic notification")
             return False
         # SendResult(success=False) without an exception is a FAILED delivery
         # (else the event is lost); None / non-SendResult keeps the
         # "no exception == delivered" contract.
         if getattr(_send_res, "success", True) is False:
             raise RuntimeError(f"adapter send() reported failure: {getattr(_send_res, 'error', None) or 'unknown error'}")
+        # The receipt: the adapter's own id for the message it created, so this
+        # row can be matched against a concrete message in the channel.
+        await self._journal(
+            ev, phase="deliver", outcome="sent", attempted_at=self._last_attempt_at, send_result="ok",
+            receipt=getattr(_send_res, "message_id", None))
         logger.debug("kanban notifier: delivered %s event for %s to %s/%s on board %s",
                      ev.kind, self.task_id, self.platform_str, sub["chat_id"], self.board_slug)
         # Upload artifact paths from the handoff payload / legacy result as
@@ -699,16 +864,27 @@ class _KanbanNotification:
         return True
 
     async def _send_pings(self) -> bool:
-        """Send every text ping; False when a send failed (claim already rewound/dropped)."""
+        """Send every text ping; False when a send failed (claim already rewound/dropped).
+
+        Every branch that leaves without sending journals why: the event is
+        claimed either way, so a skip that is not on the record looks exactly
+        like a delivery that was never attempted.
+        """
         for ev in self.d["events"]:
             msg = self.format_event(ev)
             if msg is None:
+                await self._journal(
+                    ev, phase="deliver", outcome="skipped_silent_kind",
+                    reason="no formatter for this event kind: claimed, cursor advanced, rendered nowhere")
                 continue
             # Non-push adapters (api_server) always report SendResult(success=False)
             # from send(); treating that as failure would drop the sub forever and
             # make the wake path unreachable. Skip the doomed send; the self-post
             # IS the delivery and resolves the failure counter.
             if not self.is_push_adapter and self.wake_agent:
+                await self._journal(
+                    ev, phase="deliver", outcome="skipped_non_push_wake",
+                    reason="adapter has no push channel; the wake self-post is the delivery")
                 logger.debug(
                     "kanban notifier: adapter %s has no push channel; skipping text ping for %s, relying "
                     "on wake self-post instead", self.platform_str, self.task_id,
@@ -716,8 +892,14 @@ class _KanbanNotification:
                 continue
             if not self.send_passive:
                 # Wake-only: the wake path is the sole delivery and resolves the counter.
+                await self._journal(
+                    ev, phase="deliver", outcome="skipped_wake_only",
+                    reason="delivery_mode='wake': the wake turn is the sole delivery")
                 continue
             if ev.id <= self.sub.get("last_ping_event_id", 0):
+                await self._journal(
+                    ev, phase="deliver", outcome="skipped_already_pinged",
+                    reason=f"ping checkpoint {int(self.sub.get('last_ping_event_id', 0))} already covers event {int(ev.id)}")
                 continue
             try:
                 if await self._send_event(ev, msg) is False:
@@ -739,6 +921,14 @@ class _KanbanNotification:
         try:
             self.plat = self.platform_cls(self.platform_str)
         except ValueError:
+            # A platform value with no member and no registered plugin: the claim
+            # cannot be sent anywhere, and the cursor is settled anyway. This is
+            # the exact shape of a cursor that moved with nothing delivered, so it
+            # is on the record instead of only in the cursor's history.
+            await self._journal(
+                phase="deliver", outcome="advanced_unknown_platform",
+                reason=f"platform {self.platform_str!r} is not a Platform member and no plugin registered it; "
+                       "the claim was settled undelivered")
             await self.advance()
             return
         # Recheck the exact route after claiming: config/adapters can change between ticks. The
@@ -747,6 +937,10 @@ class _KanbanNotification:
         adapter = await asyncio.to_thread(
             _adapter_for_subscription, self.runner, self.plat, self.sub, self.sub_profile or None)
         if adapter is None:
+            await self._journal(
+                phase="deliver", outcome="rewound_no_adapter",
+                reason="the adapter the claim was taken for is gone; the claim is rewound for the next tick",
+                cursor_after=self.d.get("old_cursor", self.d.get("cursor")))
             logger.debug("kanban notifier: adapter %s disconnected before delivery for %s; rewinding claim",
                          self.platform_str, self.task_id)
             await self.rewind()
@@ -792,6 +986,10 @@ class _KanbanNotification:
             except WakeNotAccepted:
                 # Startup / full queue is not a dead destination. Keep the durable
                 # subscription alive regardless of how long admission takes.
+                await self._journal(
+                    phase="deliver", outcome="rewound_wake_not_accepted",
+                    reason="the wake was not admitted (startup / full queue); the claim is rewound",
+                    cursor_after=self.d.get("old_cursor", self.d.get("cursor")))
                 await self.rewind()
                 return
             except Exception as _wk_err:
