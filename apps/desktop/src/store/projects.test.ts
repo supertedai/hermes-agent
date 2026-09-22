@@ -484,10 +484,13 @@ describe('removeProjectFolder', () => {
 
     $projects.set([projectWith(state.folders, state.primary_path)])
     $projectTree.set([node('/repo/wiki')])
+
     let settle: (value: unknown) => void = () => {}
+
     const inFlight = new Promise(resolve => {
       settle = resolve
     })
+
     const request = vi.fn(async (method: string) => {
       if (method === 'projects.remove_folder') {
         return inFlight

@@ -990,7 +990,9 @@ export async function removeProjectFolder(id: string, path: string): Promise<voi
         proj.id === id
           ? {
               ...proj,
-              folders: remaining.map(folder => (demote ? { ...folder, is_primary: folder.path === next?.path } : folder)),
+              folders: remaining.map(folder =>
+                demote ? { ...folder, is_primary: folder.path === next?.path } : folder
+              ),
               ...(demote && { primary_path: next?.path ?? null })
             }
           : proj
