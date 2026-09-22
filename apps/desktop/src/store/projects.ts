@@ -735,6 +735,43 @@ const reconcileProjects = (): void => {
   void refreshProjectTree()
 }
 
+// Fold a server read-back of ONE project into the cached list + tree. Every
+// projects.* mutation answers with the project row read fresh from the
+// per-profile DB after the write, so this is the authority an optimistic guess
+// settles on — e.g. which folder the backend repointed primary_path to. A no-op
+// for a project the cache doesn't know: the background reconcile carries it.
+function applyProjectReadback(project: null | ProjectInfo): void {
+  if (!project) {
+    return
+  }
+
+  const list = $projects.get()
+
+  if (list.some(proj => proj.id === project.id)) {
+    $projects.set(list.map(proj => (proj.id === project.id ? project : proj)))
+  }
+
+  // The tree node's path is the project's primary folder — the anchor reveal
+  // and "Start work" use. Re-derive it (null once no folder is left), but keep
+  // the array reference on a no-op so the sidebar tree doesn't re-render.
+  const path = project.primary_path ?? project.folders?.[0]?.path ?? null
+  let changed = false
+
+  const tree = $projectTree.get().map(node => {
+    if (node.id !== project.id || node.path === path) {
+      return node
+    }
+
+    changed = true
+
+    return { ...node, path }
+  })
+
+  if (changed) {
+    $projectTree.set(tree)
+  }
+}
+
 // Map a ProjectInfo (list shape) onto a minimal overview tree node so a created
 // project paints instantly. The backend seeds each folder as an (empty) repo, so
 // the next tree refresh fills in repos/counts; this is just the optimistic stub.
@@ -924,6 +961,55 @@ export async function addProjectFolder(
   reconcileProjects()
 }
 
+// Remove one folder from a project — the missing half of "move a folder"
+// (a move is remove + add). Mirrors addProjectFolder: the cache updates
+// optimistically, the write rides the active gateway so it lands in the profile
+// the session is actually on, and the server's read-back is what the cache
+// settles on. Only the projects.db row goes: the folder on disk is never
+// touched. Removing the primary is legal — it repoints to the earliest folder
+// left, or leaves the project with none (primary_path = NULL).
+export async function removeProjectFolder(id: string, path: string): Promise<void> {
+  if ($projectsRpcAvailable.get() === false) {
+    throw projectsStaleBackendError()
+  }
+
+  const snap = snapshotProjects()
+  const trimmed = path.trim()
+  const folders = snap.projects.find(proj => proj.id === id)?.folders ?? []
+  const dropped = folders.find(folder => folder.path === trimmed)
+
+  if (dropped) {
+    const remaining = folders.filter(folder => folder.path !== trimmed)
+    // Leftover primary, picked the way the backend picks it (earliest added
+    // first). Optimistic only — the read-back below has the last word.
+    const next = dropped.is_primary ? (remaining[0] ?? null) : null
+    const demote = dropped.is_primary
+
+    $projects.set(
+      snap.projects.map(proj =>
+        proj.id === id
+          ? {
+              ...proj,
+              folders: remaining.map(folder => (demote ? { ...folder, is_primary: folder.path === next?.path } : folder)),
+              ...(demote && { primary_path: next?.path ?? null })
+            }
+          : proj
+      )
+    )
+
+    if (demote) {
+      $projectTree.set(snap.tree.map(node => (node.id === id ? { ...node, path: next?.path ?? null } : node)))
+    }
+  }
+
+  await persistOrRollback(snap, async () => {
+    const res = await gatewayRequest<{ project: null | ProjectInfo }>('projects.remove_folder', { id, path })
+
+    applyProjectReadback(res.project)
+  })
+  reconcileProjects()
+}
+
 // True when the session currently open in the main pane belongs to `projectId`.
 // Used so deleting a project you have a session open from kicks you back to the
 // intro draft instead of stranding you in a now-orphaned view.
@@ -974,10 +1060,10 @@ export async function setActiveProject(id: null | string): Promise<void> {
 
 // ── Project management dialog ────────────────────────────────────────────────
 // A single dialog mounted in the sidebar reads this atom, so a project node's
-// menu can open create / rename / add-folder flows without prop threading
-// (mirrors $profileCreateRequest).
+// menu can open create / rename / add-folder / remove-folder flows without prop
+// threading (mirrors $profileCreateRequest).
 export interface ProjectDialogState {
-  mode: 'add-folder' | 'create' | 'rename'
+  mode: 'add-folder' | 'create' | 'remove-folder' | 'rename'
   projectId?: string
   name?: string
 }
@@ -1003,6 +1089,12 @@ export function openProjectRename(project: { id: string; name: string }): void {
 
 export function openProjectAddFolder(project: { id: string; name: string }): void {
   $projectDialog.set({ mode: 'add-folder', name: project.name, projectId: project.id })
+}
+
+// Remove-folder rides the same dialog atom: the picker lists the project's
+// folders, which the menu row that opens it doesn't carry.
+export function openProjectRemoveFolder(project: { id: string; name: string }): void {
+  $projectDialog.set({ mode: 'remove-folder', name: project.name, projectId: project.id })
 }
 
 export function closeProjectDialog(): void {

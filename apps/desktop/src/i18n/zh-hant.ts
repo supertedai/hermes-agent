@@ -1641,7 +1641,7 @@ export const zhHant = defineLocale({
       noFolders: '尚未新增資料夾。',
       addFolder: '新增資料夾',
       primaryBadge: '主要',
-      removeFolder: '移除',
+      removeFolder: '移除資料夾',
       create: '建立',
       menu: '動作',
       menuRename: '重新命名',

@@ -226,6 +226,76 @@ def test_delete_removes_project(tmp_path):
     assert "projects.delete" in server._methods
 
 
+def _db_folders(pid: str) -> tuple[list[dict], str | None]:
+    """Read the project straight back out of the per-profile projects.db.
+
+    Deliberately not the RPC: the desktop's "Remove folder" picker trusts this
+    method to make the folder row go and to repoint (or NULL) primary_path, so
+    the assertion has to hold in the DB, not just in the reply.
+    """
+    from hermes_cli import projects_db as pdb
+
+    with pdb.connect_closing() as conn:
+        # `added_at` has second resolution, so path is the stable order here.
+        rows = [
+            dict(r)
+            for r in conn.execute(
+                "SELECT path, is_primary FROM project_folders WHERE project_id = ? ORDER BY path",
+                (pid,),
+            ).fetchall()
+        ]
+        primary = conn.execute(
+            "SELECT primary_path FROM projects WHERE id = ?", (pid,)
+        ).fetchone()["primary_path"]
+    return rows, primary
+
+
+def test_remove_folder_is_visible_in_the_db(tmp_path):
+    """Removing a folder mutates the store, and touches nothing on disk.
+
+    Three behaviors the client depends on:
+      * a non-primary folder goes and the primary is left alone;
+      * removing the PRIMARY repoints it to the folder that is left;
+      * removing the last folder leaves zero folders and NULL primary_path.
+    """
+    wiki, notes, scratch = tmp_path / "wiki", tmp_path / "notes", tmp_path / "scratch"
+    for d in (wiki, notes, scratch):
+        d.mkdir()
+
+    pid = _call(
+        "projects.create", {"name": "Wiki", "folders": [str(wiki)], "primary_path": str(wiki)}
+    )["project"]["id"]
+    for extra in (notes, scratch):
+        _call("projects.add_folder", {"id": pid, "path": str(extra)})
+
+    # Non-primary: the row goes, the primary stays. (Raw column values: SQLite
+    # hands back 1/0 for the boolean column.)
+    reply = _call("projects.remove_folder", {"id": pid, "path": str(notes)})["project"]
+    rows, primary = _db_folders(pid)
+    assert rows == [{"path": str(scratch), "is_primary": 0}, {"path": str(wiki), "is_primary": 1}]
+    assert primary == str(wiki)
+    assert [f["path"] for f in reply["folders"]] == [str(wiki), str(scratch)]
+    assert reply["primary_path"] == str(wiki)
+
+    # Primary: repointed to the folder that is left (earliest added first) —
+    # both in the DB column and in the reply the desktop caches.
+    reply = _call("projects.remove_folder", {"id": pid, "path": str(wiki)})["project"]
+    rows, primary = _db_folders(pid)
+    assert rows == [{"path": str(scratch), "is_primary": 1}]
+    assert primary == str(scratch)
+    assert [(f["path"], f["is_primary"]) for f in reply["folders"]] == [(str(scratch), True)]
+    assert reply["primary_path"] == str(scratch)
+
+    # Last folder: a folder-less project is legal — primary_path goes NULL.
+    _call("projects.remove_folder", {"id": pid, "path": str(scratch)})
+    rows, primary = _db_folders(pid)
+    assert rows == []
+    assert primary is None
+
+    # Only the project's bookkeeping changed: every folder is still on disk.
+    assert wiki.is_dir() and notes.is_dir() and scratch.is_dir()
+
+
 def test_discover_repos_is_registered_long_handler():
     assert "projects.discover_repos" in server._methods
     assert "projects.discover_repos" in server._LONG_HANDLERS

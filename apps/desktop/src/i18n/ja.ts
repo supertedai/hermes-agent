@@ -1696,7 +1696,7 @@ export const ja = defineLocale({
       noFolders: 'まだフォルダがありません。',
       addFolder: 'フォルダを追加',
       primaryBadge: 'メイン',
-      removeFolder: '削除',
+      removeFolder: 'フォルダを削除',
       create: '作成',
       menu: 'アクション',
       menuRename: '名前を変更',

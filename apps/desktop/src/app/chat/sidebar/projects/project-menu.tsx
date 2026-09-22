@@ -23,9 +23,11 @@ import { useI18n } from '@/i18n'
 import { cn } from '@/lib/utils'
 import { $panesFlipped, dismissAutoProject } from '@/store/layout'
 import {
+  $projects,
   copyPath,
   deleteProject,
   openProjectAddFolder,
+  openProjectRemoveFolder,
   openProjectRename,
   revealPath,
   setActiveProject,
@@ -40,7 +42,7 @@ import type { SidebarProjectTree } from './workspace-groups'
 // Desktop / GitKraken): reveal in the file manager, copy path, and "Remove from
 // sidebar" (never deletes files — auto projects are dismissed, explicit ones
 // drop their entry). Explicit projects additionally get rename / add folder /
-// set active.
+// remove folder / set active.
 function useProjectActions({
   project,
   isActive,
@@ -56,6 +58,12 @@ function useProjectActions({
   const p = t.sidebar.projects
   const target = { id: project.id, name: project.label }
   const [confirmDeleteOpen, setConfirmDeleteOpen] = useState(false)
+  // The tree node carries no folder detail — the cached project list does (a
+  // projects.* read-back folds into it after every mutation). Only computed for
+  // the explicit-project items below: an auto row never reaches them (its
+  // `identityItems` is empty), so an isAuto guard here would be dead logic.
+  const projects = useStore($projects)
+  const folders = projects.find(proj => proj.id === project.id)?.folders ?? []
 
   const removeAuto = () => {
     dismissAutoProject(project.id)
@@ -73,9 +81,9 @@ function useProjectActions({
     }
   }
 
-  // Rename / add folder / set active — explicit projects only (auto ones lack a
-  // materialized record). Appearance is handled per-surface (popover vs submenu)
-  // by the caller since its picker chrome differs.
+  // Rename / add folder / remove folder / set active — explicit projects only
+  // (auto ones lack a materialized record). Appearance is handled per-surface
+  // (popover vs submenu) by the caller since its picker chrome differs.
   const identityItems: ActionItemSpec[] = project.isAuto
     ? []
     : [
@@ -86,6 +94,18 @@ function useProjectActions({
           label: p.menuAddFolder,
           onSelect: () => openProjectAddFolder(target)
         },
+        // Only when there IS a folder to take out: a project whose last folder
+        // was already removed would open an empty picker.
+        ...(folders.length
+          ? [
+              {
+                icon: 'remove',
+                key: 'remove-folder',
+                label: `${p.removeFolder}…`,
+                onSelect: () => openProjectRemoveFolder(target)
+              }
+            ]
+          : []),
         {
           disabled: isActive,
           icon: 'target',

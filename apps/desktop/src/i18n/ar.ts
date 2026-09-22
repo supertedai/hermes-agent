@@ -1571,7 +1571,7 @@ export const ar = defineLocale({
       noFolders: 'لم تتم إضافة أي مجلدات بعد.',
       addFolder: 'إضافة مجلد',
       primaryBadge: 'أساسي',
-      removeFolder: 'إزالة',
+      removeFolder: 'إزالة مجلد',
       create: 'إنشاء',
       menu: 'إجراءات',
       menuRename: 'إعادة تسمية',
