@@ -203,6 +203,29 @@ _SPECS = [
                   "to skip the brief running-to-blocked transition."),
         _json_flag(help="Emit JSON output"),
     ], help="Create a new task"),
+    _cmd("enqueue", [
+        _arg("title", help="Task title"),
+        _arg("--body", default=None, help="Optional task body"),
+        _arg("--assignee", default=None, help="Profile name to assign"),
+        _arg("--workspace", default="scratch",
+             help="scratch | worktree | worktree:<path> | dir:<path>"),
+        _arg("--branch", default=None, help="Branch name for worktree tasks"),
+        _arg("--project", default=None,
+             help="Project id/slug for a project-anchored worktree"),
+        _arg("--priority", type=int, default=None,
+             help="Priority tiebreaker (omitted = keep the card's current value)"),
+        _arg("--idempotency-key", required=True,
+             help="Stable producer key used to prevent duplicate cards"),
+        _arg("--created-by", default="cron", help="Author recorded on the task"),
+        _json_flag(help="Emit JSON output"),
+    ], help="Idempotently create or refresh one automation-owned task", description=(
+        "Create or refresh ONE automation-owned card, keyed by --idempotency-key, so a "
+        "periodic producer can enqueue the same maintenance card again. A repeat enqueue "
+        "updates the card it already owns; a card that reached done/blocked/review is "
+        "re-armed — to ready, or to todo while a parent is undone — and its claim metadata "
+        "is cleared. Claiming, workspace setup, and worker spawning stay the dispatcher's "
+        "job: enqueue never claims and never spawns."
+    )),
     _cmd("swarm", [
         _arg("goal", help="Swarm goal / final outcome"),
         _arg("--worker", action="append", default=[], metavar="PROFILE:TITLE[:SKILL,SKILL]",
