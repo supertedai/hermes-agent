@@ -1935,6 +1935,7 @@ export function ChatSidebar({
                 projectContent={inProject ? enteredProjectContent : undefined}
                 projectOverview={projectOverview}
                 projectOverviewHidden={overviewHidden}
+                projectOverviewProfiles={profileScope === ALL_PROFILES}
                 projectOverviewPreviews={overviewPreviews}
                 projectRepoWorktrees={inProject ? scopedRepoWorktrees : undefined}
                 projectsLoading={worktreeGroupingActive ? projectTreeLoading : false}
