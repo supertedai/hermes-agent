@@ -483,8 +483,11 @@ def journal_notify_decisions(
     ``entries`` carry the per-event facts: ``event_id``, ``kind``, ``phase``
     (``claim`` / ``deliver`` / ``skip``), ``outcome``, ``reason``,
     ``delivery_mode``, ``attempted_at``, ``send_result``, ``receipt``,
-    ``cursor_before``, ``cursor_after``. Returns the number of rows appended, or
-    0 when the journal is unavailable — never raises.
+    ``cursor_before``, ``cursor_after``. An empty iterable returns ``0`` and
+    appends nothing. A positive return is emitted only after the transaction's
+    commit succeeds; ``0`` means that there is no confirmed append (empty input
+    or a write/commit failure), and never authorizes a caller to burn a dedup
+    key. The function never raises for journal-storage failures.
     """
     rows = [
         (

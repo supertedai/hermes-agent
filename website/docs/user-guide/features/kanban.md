@@ -1300,6 +1300,7 @@ One row per delivery decision, at the boundary that took it:
 | Column | Meaning |
 |--------|---------|
 | `dispatcher` | `gateway` or `tui` — which path took the decision. |
+| `event_id` / `kind` | The terminal event the row explains. Pre-claim adapter skips carry one row per unseen event; only a status fallback for a subscription whose successful event read found no unseen event has `event_id = NULL`. |
 | `phase` / `outcome` | `claim`/`claimed` for a claimed event; `deliver`/`sent`, `in_process_frame`, `send_failed`, `dropped`, `suppressed_by_policy`, `rewound_*`, `advanced_unknown_platform`; `skip`/`skipped_*` for a decision taken before any event was claimed. |
 | `reason` | Why — including `no formatter for this event kind`, a rewind, or the suppressing setting. |
 | `receipt` | The adapter's own message id for a send, so a row can be matched against a real message in the chat. |

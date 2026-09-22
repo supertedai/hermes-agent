@@ -202,6 +202,27 @@ def test_the_journal_write_failure_never_raises(board):
     assert written == 0
 
 
+def test_the_journal_return_count_is_zero_for_empty_and_positive_after_commit(board):
+    """A positive return means the append committed; zero means no row was persisted."""
+    tid = _create_subscription(complete=True)
+    conn = kbc.connect()
+    try:
+        assert kbn.journal_notify_decisions(
+            conn, task_id=tid, platform="telegram", chat_id="chat-1", dispatcher="gateway", entries=[]
+        ) == 0
+        written = kbn.journal_notify_decisions(
+            conn, task_id=tid, platform="telegram", chat_id="chat-1", dispatcher="gateway",
+            entries=[{"phase": "skip", "outcome": "skipped_no_adapter", "event_id": 1}],
+        )
+    finally:
+        conn.close()
+
+    assert written == 1
+    rows = _rows(tid)
+    assert len(rows) == 1
+    assert rows[0]["phase"] == "skip"
+
+
 def test_prune_drops_only_rows_past_retention(board):
     tid = _create_subscription(complete=True)
     conn = kbc.connect()
@@ -282,45 +303,95 @@ def test_a_subscription_with_no_adapter_is_journaled_and_warned_once(board, monk
     assert adapter.sent == []
 
     rows = _rows(tid)
-    assert [r["outcome"] for r in rows] == ["skipped_no_adapter"], "one row per subscription, not per tick"
+    assert [r["outcome"] for r in rows] == ["skipped_no_adapter"], "one row per unseen event, not per tick"
     assert rows[0]["phase"] == "skip" and rows[0]["dispatcher"] == "gateway"
-    assert rows[0]["event_id"] is None
+    assert rows[0]["event_id"] > 0
+    assert rows[0]["kind"] == "completed"
     assert rows[0]["cursor_before"] is None and rows[0]["cursor_after"] is None
     # The skip is a claim-time refusal: the cursor is untouched, which is exactly
     # what distinguishes it from a delivery that moved the cursor.
     assert _subs(tid)[0]["last_event_id"] == cursor_before
 
 
-def test_a_failed_skip_write_is_retried_not_burned(board, monkeypatch):
-    """A failed journal write must not burn the once-per-row dedup key.
-
-    Tick 1: the journal table is gone, so the skip write fails — the key stays
-    unmarked and no row exists. Tick 2: the table is back, the write succeeds,
-    and exactly one row appears, from tick 2. Had the key been marked before
-    the write (the old shape), the skip would have vanished silently for the
-    rest of the process's lifetime — the ADR-057 silence this card exists
-    against.
-    """
+def test_a_no_adapter_skip_is_journaled_once_per_terminal_event(board, monkeypatch):
+    """Distinct unseen terminal events get distinct, correlatable skip rows."""
     tid = _create_subscription(platform="tui", chat_id=TUI_SESSION_KEY, complete=True)
+    cursor_before = _subs(tid)[0]["last_event_id"]
     conn = kbc.connect()
     try:
-        conn.execute("DROP TABLE kanban_notify_journal")
-        conn.commit()
+        with kb.write_txn(conn):
+            kb._append_event(conn, tid, "status", {"status": "blocked"})
     finally:
         conn.close()
+
     runner = _make_runner(RecordingAdapter())
+    asyncio.run(_run_one_notifier_tick(monkeypatch, runner))
+    runner._running = True
+    asyncio.run(_run_one_notifier_tick(monkeypatch, runner))
+
+    rows = _rows(tid)
+    assert len(rows) == 2
+    assert [(row["phase"], row["outcome"]) for row in rows] == [
+        ("skip", "skipped_no_adapter"), ("skip", "skipped_no_adapter")]
+    event_ids = [row["event_id"] for row in rows]
+    assert all(event_id > 0 for event_id in event_ids)
+    assert len(set(event_ids)) == 2, "a later terminal event must not be hidden by row-level dedup"
+    assert {row["kind"] for row in rows} == {"completed", "status"}
+    assert _subs(tid)[0]["last_event_id"] == cursor_before, "journaling skips must not claim events"
+
+
+def test_an_unreadable_skip_event_query_does_not_fabricate_null_row(board, monkeypatch):
+    """A read error is not evidence that the subscription has no terminal event."""
+    tid = _create_subscription(platform="tui", chat_id=TUI_SESSION_KEY, complete=True)
+    cursor_before = _subs(tid)[0]["last_event_id"]
+
+    def unreadable(*_args, **_kwargs):
+        raise RuntimeError("task event table unavailable")
+
+    monkeypatch.setattr(kbn, "unseen_events_for_sub", unreadable)
+    asyncio.run(_run_one_notifier_tick(monkeypatch, _make_runner(RecordingAdapter())))
+
+    assert _rows(tid) == []
+    assert _subs(tid)[0]["last_event_id"] == cursor_before
+
+
+def test_a_failed_skip_write_is_retried_not_burned(board, monkeypatch):
+    """A failed journal write must not burn the once-per-event dedup key.
+
+    A spy makes the two writes deterministic: tick 1 enters the skip branch and
+    returns 0, tick 2 calls the real writer and returns 1. The old
+    key-before-write form fails because it would call the spy only once and
+    leave no row for tick 2.
+    """
+    tid = _create_subscription(platform="tui", chat_id=TUI_SESSION_KEY, complete=True)
+    runner = _make_runner(RecordingAdapter())
+    real_journal = kbn.journal_notify_decision
+    calls = []
+    returns = []
+
+    def journal_spy(conn, **kwargs):
+        calls.append(kwargs)
+        written = 0 if len(calls) == 1 else real_journal(conn, **kwargs)
+        returns.append(written)
+        return written
+
+    monkeypatch.setattr(kbn, "journal_notify_decision", journal_spy)
 
     asyncio.run(_run_one_notifier_tick(monkeypatch, runner))
+    assert len(calls) == 1, "tick 1 must attempt the skip write"
+    assert returns == [0]
+    assert calls[0]["event_id"] > 0
     assert all(key[0] != tid for key in notifier._SKIP_JOURNALED), \
-        "a failed write must not burn the dedup key"
-    # No row can exist while the table is gone; append-only means the count
-    # after tick 2 is what proves tick 1 wrote nothing.
+        "a failed write must not burn the event dedup key"
+    assert _rows(tid) == []
 
-    kb.init_db()  # re-runs the migration pass: the journal table comes back
     runner._running = True
     tick_two_start = time.time()
     asyncio.run(_run_one_notifier_tick(monkeypatch, runner))
 
+    assert len(calls) == 2, "tick 2 must retry the same skip branch"
+    assert returns == [0, 1], "a positive result is the successful committed append"
+    assert calls[1]["event_id"] == calls[0]["event_id"]
     rows = _rows(tid)
     assert [r["outcome"] for r in rows] == ["skipped_no_adapter"], "exactly one skip row, from tick 2"
     assert rows[0]["created_at"] >= tick_two_start - 1, "the row was written on tick 2, not before"
@@ -328,7 +399,8 @@ def test_a_failed_skip_write_is_retried_not_burned(board, monkeypatch):
 
     runner._running = True
     asyncio.run(_run_one_notifier_tick(monkeypatch, runner))
-    assert [r["outcome"] for r in _rows(tid)] == ["skipped_no_adapter"], "and still one row on tick 3"
+    assert len(calls) == 2, "a successful row is not appended again on tick 3"
+    assert [r["outcome"] for r in _rows(tid)] == ["skipped_no_adapter"]
 
 
 def test_a_gateway_with_no_adapters_warns_once(board, monkeypatch, caplog):

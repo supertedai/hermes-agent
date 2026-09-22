@@ -152,8 +152,10 @@ _IN_PROCESS_DELIVERY_PLATFORMS = frozenset({"tui"})
 # per tick, and the DB stays the count of record; the log carries the fact.
 _NO_ADAPTER_WARNED: set[str] = set()
 
-# A claim-time skip is a property of the ROW, not of the tick: journal it once
-# per row per process (the notifier re-reads every row every 5s otherwise).
+# A claim-time skip is a property of the event/subscription pair, not of the
+# tick: journal it once per unseen terminal event (the notifier re-reads every
+# row every 5s otherwise). A ``None`` event id is the fallback status row used
+# only when a successful event read finds no unseen event.
 _SKIP_JOURNALED: set[tuple] = set()
 
 # One WARNING per process when the gateway serves no platform at all: that skips
@@ -375,26 +377,56 @@ class _Collector:
             logger.debug("kanban notifier: journal prune failed for board %s: %s", slug, _jp_exc)
 
     def _journal_skip(self, conn: Any, sub: dict, *, outcome: str, reason: str) -> None:
-        """Record a claim-time skip once per row per process.
+        """Record a pre-claim skip once per unseen event/subscription pair.
 
-        Once per row, not once per tick: the decision is a property of the row
-        (this gateway has no adapter for it), and re-appending it every 5s would
-        bury the per-event rows the journal exists for. The dedup key is marked
-        only after a successful write: a write that fails leaves the key unmarked
-        so the next tick re-appends the skip decision instead of losing it
-        silently for the process's lifetime (the write itself reports its first
-        failure once per process at WARNING, then DEBUG).
+        A skip is decided before the atomic claim, so it must not move the
+        cursor or pretend that an event was delivered. Read the same terminal
+        event set the claim path would see and append one row per event; the
+        event id is what correlates a skipped decision with the later claim or
+        delivery path. When a successful event read returns no rows, keep the
+        subscription-level status row with ``event_id=NULL`` so a persistent
+        unroutable subscription is still observable. An event-read failure is
+        not treated as an empty result, because that would misattribute an
+        unreadable terminal event.
+
+        The dedup key is marked only after a successful write: a write that
+        fails leaves the key unmarked so the next tick re-appends the skip
+        decision instead of losing it silently for the process's lifetime (the
+        write itself reports its first failure once per process at WARNING,
+        then DEBUG).
         """
-        key = (sub.get("task_id"), sub.get("platform"), sub.get("chat_id"), sub.get("thread_id") or "")
-        if key in _SKIP_JOURNALED:
+        identity = (sub.get("task_id"), sub.get("platform"), sub.get("chat_id"), sub.get("thread_id") or "")
+        try:
+            _new_cursor, events = _kbn().unseen_events_for_sub(
+                conn, task_id=sub["task_id"], platform=sub["platform"], chat_id=sub["chat_id"],
+                thread_id=sub.get("thread_id") or "", kinds=TERMINAL_KINDS,
+            )
+        except Exception as exc:
+            # A failed event read is not a confirmed empty result: do not emit
+            # a subscription-wide NULL row that could hide which terminal event
+            # was waiting. The WARNING from the skip branch still identifies the
+            # undeliverable platform, and the next tick retries the read.
+            logger.debug("kanban notifier: cannot read unseen events for skip journal: %s", exc)
             return
-        written = _kbn().journal_notify_decision(
-            conn, task_id=sub["task_id"], platform=sub["platform"], chat_id=sub["chat_id"],
-            thread_id=sub.get("thread_id") or "", dispatcher="gateway",
-            phase="skip", outcome=outcome, reason=reason, delivery_mode=sub.get("delivery_mode"),
-        )
-        if written > 0:
-            _SKIP_JOURNALED.add(key)
+
+        # ``None`` is an explicit subscription-status row, not a substitute
+        # for an event when events are available. Event rows carry their own
+        # terminal id so later gateway/TUI rows can be correlated exactly.
+        candidates = list(events) if events else [None]
+        for ev in candidates:
+            event_id = int(getattr(ev, "id", 0) or 0) if ev is not None else None
+            key = (*identity, event_id)
+            if key in _SKIP_JOURNALED:
+                continue
+            written = _kbn().journal_notify_decision(
+                conn, task_id=sub["task_id"], platform=sub["platform"], chat_id=sub["chat_id"],
+                thread_id=sub.get("thread_id") or "", dispatcher="gateway",
+                phase="skip", outcome=outcome, event_id=event_id,
+                kind=getattr(ev, "kind", None) if ev is not None else None,
+                reason=reason, delivery_mode=sub.get("delivery_mode"),
+            )
+            if written > 0:
+                _SKIP_JOURNALED.add(key)
 
     def _claim_for_sub(self, conn: Any, slug: str, sub: dict) -> Optional[dict]:
         """Claim one subscription's unseen events; None when skipped or nothing new."""
