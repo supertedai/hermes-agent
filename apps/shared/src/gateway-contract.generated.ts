@@ -1955,6 +1955,7 @@ export interface ProjectsTreeParams {
   profile?: string | null
   preview_limit?: number | null
   session_limit?: number | null
+  include_archived?: boolean | null
 }
 export interface ProjectsTreeResult {
   projects: ProjectTreeNode[]
@@ -1977,6 +1978,8 @@ export interface ProjectTreeNode {
   repos?: ProjectTreeRepo[]
   previewSessions?: ProjectTreeSession[]
   sessionIds?: string[]
+  profiles?: string[]
+  profileIds?: Record<string, string>
 }
 export interface ProjectTreeRepo {
   id: string
