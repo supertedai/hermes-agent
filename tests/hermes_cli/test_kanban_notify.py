@@ -1328,3 +1328,62 @@ def test_gc_archived_rows_already_removed_by_unsub(kanban_home):
         assert kbn.list_notify_subs(conn, tid) == []
     finally:
         conn.close()
+
+
+# ---------------------------------------------------------------------------
+# `hermes kanban notify-journal` — the read side of the delivery journal
+# ---------------------------------------------------------------------------
+
+def _journal_row(conn, tid, **over):
+    entry = dict(task_id=tid, platform="telegram", chat_id="chat1", dispatcher="gateway",
+                 phase="deliver", outcome="sent", cursor_before=1, cursor_after=2, send_result="ok")
+    entry.update(over)
+    kbn.journal_notify_decision(conn, **entry)
+
+
+def test_notify_journal_prints_each_decision_with_its_receipt(kanban_home, capsys):
+    conn = kbc.connect()
+    try:
+        tid = kb.create_task(conn, title="journal", assignee="worker")
+        _journal_row(conn, tid, phase="claim", outcome="claimed", send_result=None,
+                     reason="cursor 1→2")
+        _journal_row(conn, tid, outcome="in_process_frame", dispatcher="tui", receipt="msg-7",
+                     send_result=None, reason="queued for this session's own status.update frame")
+    finally:
+        conn.close()
+
+    assert kc._cmd_notify_journal(SimpleNamespace(task_id=tid, limit=50, json=False)) == 0
+    out = capsys.readouterr().out
+    assert "claimed" in out and "in_process_frame" in out
+    assert "msg-7" in out, "the receipt is what makes a row matchable against a real message"
+    claim_line = next(ln for ln in out.splitlines() if "claimed" in ln)
+    assert claim_line.count("cursor 1→2") == 1, "a claim's reason is its cursor move; printed once, not twice"
+
+
+def test_notify_journal_says_so_when_there_is_nothing(kanban_home, capsys):
+    conn = kbc.connect()
+    try:
+        tid = kb.create_task(conn, title="quiet", assignee="worker")
+    finally:
+        conn.close()
+
+    assert kc._cmd_notify_journal(SimpleNamespace(task_id=tid, limit=50, json=False)) == 0
+    assert "no delivery decisions journaled" in capsys.readouterr().out
+
+
+def test_notify_journal_json_is_the_readable_shape(kanban_home, capsys):
+    import json
+
+    conn = kbc.connect()
+    try:
+        tid = kb.create_task(conn, title="journal-json", assignee="worker")
+        _journal_row(conn, tid, outcome="send_failed", receipt=None, send_result="failed: chat is gone",
+                     cursor_after=1, reason="attempt 1/12")
+    finally:
+        conn.close()
+
+    assert kc._cmd_notify_journal(SimpleNamespace(task_id=tid, limit=50, json=True)) == 0
+    rows = json.loads(capsys.readouterr().out)
+    assert isinstance(rows, list) and len(rows) == 1
+    assert rows[0]["outcome"] == "send_failed"
+    assert rows[0]["cursor_before"] == 1 and rows[0]["cursor_after"] == 1

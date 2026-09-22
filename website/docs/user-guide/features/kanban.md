@@ -978,6 +978,7 @@ hermes kanban notify-subscribe <id>                    # gateway bridge hook (us
         --platform <name> --chat-id <id> [--thread-id <id>] [--user-id <id>]
         [--chat-type dm|group|channel|thread] [--delivery-mode notify|notify+wake|wake]
 hermes kanban notify-list [<id>] [--json]
+hermes kanban notify-journal [<id>] [--limit N] [--json]   # delivery decisions: why a cursor moved
 hermes kanban notify-unsubscribe <id>
         --platform <name> --chat-id <id> [--thread-id <id>]
 hermes kanban context <id>                             # what a worker sees
@@ -1278,6 +1279,34 @@ A "wake" forges a synthetic inbound message to the destination gateway agent so 
 **Which events wake.** The ones that return a task outcome or require orchestration attention: `completed`, `blocked`, `gave_up`, `crashed`, `timed_out`, `review_requested` (a worker finished the implementation and handed off via `kanban_request_review`) and `block_loop_detected` (the task was routed to `triage` after repeated blocks). `status`, `archived` and `unblocked` are delivered but never wake — they are bookkeeping transitions, not attention signals. When a `completed` or `review_requested` event carries a summary, that handoff rides the wake turn, so the woken agent sees what the worker actually did.
 
 `--chat-type` (`dm` | `group` | `channel` | `thread`) records the originating chat's type so a woken turn resolves the operator's **real** session: `build_session_key` keys groups, channels, and threads differently from DMs, so an inaccurate `chat_type` would route the wake into a separate, context-less session. The `/kanban` auto-subscribe and slash-command paths capture this automatically — you only set it by hand when subscribing a chat from a script or cron. Omit it to leave an existing subscription unchanged (new subscriptions default to `dm`).
+
+### Reading the delivery journal
+
+The subscription's cursor (`last_event_id`) is advanced by **whichever path claims the event first**, and there are two of them:
+
+- the **gateway notifier**, which sends through a platform adapter, and
+- the **in-process session poller** (`tui_gateway.session_notifications`), which renders a `status.update` frame in the live TUI/Desktop session — the gateway has no `tui` adapter, by design.
+
+Both claim the same cursor. Only the gateway path writes a ping checkpoint (`last_ping_event_id`), so a subscription delivered in-process ends up with a moved cursor, `last_ping_event_id = 0` and no gateway-side trace — which is indistinguishable from "claimed and never delivered" unless something records the decision. That is what the append-only journal does:
+
+```bash
+hermes kanban notify-journal                 # the 50 most recent decisions, all tasks
+hermes kanban notify-journal t_abcd --limit 200
+hermes kanban notify-journal t_abcd --json
+```
+
+One row per delivery decision, at the boundary that took it:
+
+| Column | Meaning |
+|--------|---------|
+| `dispatcher` | `gateway` or `tui` — which path took the decision. |
+| `event_id` / `kind` | The terminal event the row explains. Pre-claim adapter skips carry one row per unseen event; only a status fallback for a subscription whose successful event read found no unseen event has `event_id = NULL`. |
+| `phase` / `outcome` | `claim`/`claimed` for a claimed event; `deliver`/`sent`, `in_process_frame`, `send_failed`, `dropped`, `suppressed_by_policy`, `rewound_*`, `advanced_unknown_platform`; `skip`/`skipped_*` for a decision taken before any event was claimed. |
+| `reason` | Why — including `no formatter for this event kind`, a rewind, or the suppressing setting. |
+| `receipt` | The adapter's own message id for a send, so a row can be matched against a real message in the chat. |
+| `cursor_before` → `cursor_after` | The cursor value the decision produced (`NULL` when nothing was claimed). A skip leaves the cursor untouched; a `send_failed` rewind points `cursor_after` back at the pre-claim value. |
+
+Rows are **never updated** — a retry appends — and they are written best-effort: a board whose journal cannot be written still delivers. The absence of a row proves nothing about delivery either: writing is best-effort, and claim and journal are separate transactions — a crash between them leaves a moved cursor with no row, so read the journal as evidence, not as a complete audit trail. Retention is 14 days, pruned on the notifier's hourly GC gate. Rows outlive the subscription (unsubscribe, archive, and the stale-sub GC do not touch them), so the record of a delivery survives the cursor it explains.
 
 ### Multi-profile setups: delivery is profile-owned
 
