@@ -1,4 +1,4 @@
-"""Two lifecycle invariants, using real SQLite and a local GitHub HTTP contract."""
+"""Lifecycle invariants and gh output parsing, using real SQLite and a local GitHub HTTP contract."""
 import json
 import os
 import sys
@@ -60,9 +60,26 @@ def github(tmp_path, monkeypatch):
     shim = tmp_path / "bin"
     shim.mkdir()
     gh = shim / "gh"
-    gh.write_text(f"#!{sys.executable}\nimport sys,urllib.request\n"
-                  f"u='http://127.0.0.1:{server.server_port}/'+sys.argv[2]\n"
-                  "print(urllib.request.urlopen(u).read().decode())\n")
+    # Faithful stand-in for the host's gh (measured 2.46.0): ``--slurp`` is an
+    # unknown flag that exits 1, and ``--paginate`` prints one JSON document
+    # per page instead of a slurped array. A shim that silently tolerated
+    # every flag hid exactly that host gap.
+    gh.write_text(
+        f"#!{sys.executable}\n"
+        "import json, sys, urllib.request\n"
+        "argv = sys.argv[1:]\n"
+        "if '--slurp' in argv:\n"
+        "    print('unknown flag: --slurp', file=sys.stderr)\n"
+        "    sys.exit(1)\n"
+        "endpoint = next(a for a in argv[1:] if not a.startswith('-'))\n"
+        f"raw = urllib.request.urlopen('http://127.0.0.1:{server.server_port}/' + endpoint).read().decode()\n"
+        "value = json.loads(raw)\n"
+        "if '--paginate' in argv and isinstance(value, list):\n"
+        "    for page in value:\n"
+        "        print(json.dumps(page))\n"
+        "else:\n"
+        "    print(json.dumps(value))\n"
+    )
     gh.chmod(0o755)
     monkeypatch.setenv("PATH", str(shim) + os.pathsep + os.environ["PATH"])
     monkeypatch.setenv("HERMES_HOME", str(tmp_path / "home"))
@@ -129,3 +146,14 @@ def test_acceptance_receipts_and_terminal_write_share_run_ownership(github):
             assert kb.get_task(conn, tid).status != "done"
             assert conn.execute("SELECT count(*) FROM task_events WHERE task_id=? AND kind='pr_acceptance'", (tid,)).fetchone()[0] == 0
             github.pop("race")
+
+
+def test_paginated_output_decodes_document_by_document():
+    """The page stream gh prints without ``--slurp``: one document per page."""
+    from hermes_cli.kanban_pr_acceptance import _pages
+
+    assert _pages("") == []
+    assert _pages("\n \n") == []
+    assert _pages('{"total_count": 0}') == [{"total_count": 0}]
+    assert _pages('{"page": 1}\n{"page": 2}') == [{"page": 1}, {"page": 2}]
+    assert _pages('[]\n[{"id": 1}]') == [[], [{"id": 1}]]

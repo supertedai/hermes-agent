@@ -8,6 +8,7 @@ from __future__ import annotations
 import json
 import re
 import subprocess
+from typing import Any
 from urllib.parse import quote
 
 _REPO = re.compile(r"[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+")
@@ -22,15 +23,38 @@ def validate_contract(value: str | None) -> str:
     return value
 
 
-def _api(endpoint: str, *, query: str | None = None, paginate: bool = False):
+def _pages(stdout: str) -> list:
+    """Decode ``gh api --paginate`` output: one JSON document per page.
+
+    ``--slurp`` would wrap the pages in one array, but it only exists on gh
+    >= 2.50 and the host that runs this gate may predate it (measured on gh
+    2.46.0: the flag answers ``unknown flag: --slurp``). gh prints every page
+    as a consecutive JSON document in both generations, so decoding the
+    stream document by document needs no flag at all.
+    """
+    decoder = json.JSONDecoder()
+    documents: list = []
+    cursor = 0
+    end = len(stdout)
+    while cursor < end:
+        while cursor < end and stdout[cursor] in " \t\r\n":
+            cursor += 1
+        if cursor >= end:
+            break
+        document, cursor = decoder.raw_decode(stdout, cursor)
+        documents.append(document)
+    return documents
+
+
+def _api(endpoint: str, *, query: str | None = None, paginate: bool = False) -> Any:
     command = ["gh", "api", endpoint, "--hostname", "github.com"]
     if query is not None:
         command += ["-f", "query=" + query]
     if paginate:
-        command += ["--paginate", "--slurp"]
+        command += ["--paginate"]
     result = subprocess.run(command, stdin=subprocess.DEVNULL, capture_output=True,
                             text=True, timeout=30, check=True)
-    value = json.loads(result.stdout)
+    value = _pages(result.stdout) if paginate else json.loads(result.stdout)
     if isinstance(value, dict) and value.get("errors"):
         raise ValueError("GitHub returned incomplete GraphQL evidence")
     return value
