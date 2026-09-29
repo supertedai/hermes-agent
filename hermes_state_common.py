@@ -624,6 +624,8 @@ CREATE INDEX IF NOT EXISTS idx_messages_display_backfill
 CREATE INDEX IF NOT EXISTS idx_messages_display_identity
     ON messages(session_id, display_identity, display_order)
     WHERE display_identity IS NOT NULL AND (active = 1 OR compacted = 1);
+CREATE INDEX IF NOT EXISTS idx_messages_display_metadata
+    ON messages(display_metadata);
 DROP TRIGGER IF EXISTS messages_message_uid_insert;
 CREATE TRIGGER IF NOT EXISTS messages_message_uid_insert
 AFTER INSERT ON messages WHEN new.message_uid IS NULL
