@@ -1,0 +1,47 @@
+Port-verifikasjon for t_16db1a56 — `hermes kanban enqueue` i `_SPECS`-treet
+Tre:      /opt/agent-work/hermes-agent/.worktrees/t_16db1a56  (wt/t_16db1a56)
+Base:     upstream-main @ c1488ac947
+Runtree:  den utrullede runtimeen ~/.hermes/hermes-agent (tatt opp for kontrast)
+Kjørt:    2026-09-22 CEST
+
+1) Enhetstester (PR #13s 9 + én port-test som leser `_SPECS` selv)
+   $ python -m pytest tests/hermes_cli/test_kanban_enqueue.py -q
+   10 passed in 3.03s
+
+2) Negativ kontroll: mutasjon, kjørt og reversert (ikke en påstand)
+   verbet ut av `_SPECS`        -> 9 failed, 1 passed
+   handleren ut av `_HANDLERS`  -> 9 failed, 1 passed
+   etter reversering (md5sum identisk med baseline) -> 10 passed
+
+3) Regresjon: kanban-subsettet (72 testfiler), kanonisk runner per fil
+   endret tre:   === Summary: 72 files, 502 tests passed, 14 failed, 2 skipped ===
+   uendret base: === Summary: 71 files, 492 tests passed, 14 failed, 2 skipped ===
+   (basen mangler den nye testfila: 492 + 10 = 502)
+   Feilsettet er IDENTISK: samme fil (tests/hermes_cli/test_kanban_notify.py),
+   samme 14 tester, diff 0 linjer. Feilene er miljøbetingede og står også på basen.
+
+4) E2E mot ekte CLI — adr/efc-cron-kanban-enqueue/evidence/e2e_enqueue_gate.sh
+   Gaten navngir selv parseren den målte mot:
+   == tre: …/.worktrees/t_16db1a56 (parser: hermes_cli/kanban_parser.py::_SPECS)
+   RESULTAT: ALLE KONTROLLER OK
+   Full utskrift: evidence/e2e_enqueue_gate.out
+
+5) Produsentkontrakten (Hetzner-repoet:
+   docs/dryrun/stoepeform/produsentkontrakt.py, kjørt med --jobs
+   ~/.hermes/profiles/researcher/cron/jobs.json)
+   a) mot den UTRULLEDE runtimeen:
+      VENTER  efc-vedlikehold  inngangen «hermes kanban enqueue» finnes IKKE i den
+              utrullede runtimeen (45 verb, hermes_cli/kanban_parser.py) — MENNESKEGATE.
+   b) samme kjøring med port-treet spilt inn som --runtime (kontrollforsøk, IKKE
+      utrulling):
+      OK      efc-vedlikehold  inngangen «hermes kanban enqueue» finnes i runtimeen
+              (46 verb, hermes_cli/kanban_parser.py)
+   Funn utenfor porten, rapportert og ikke rettet her (definisjonen ligger i et annet
+   repo): `unblock-tar-bare-blocked` og fork-ankeret for `inngang` melder FRAVÆR —
+   ankrene deres står ikke lenger der definisjonen sier. Se 11-port-til-specs-20260922.md §6.
+
+6) Paritet med PR #13
+   `kb.enqueue_task` er byte-identisk med PR #13s funksjon
+   (143 linjer, sha256 9b2864cbb1d84660). `_cmd_enqueue` avviker på fire
+   dokumenterte punkter (kbc.connect_closing, _err, `ws_kind or "scratch"`,
+   status fra payload) — se 11-port-til-specs-20260922.md §3.

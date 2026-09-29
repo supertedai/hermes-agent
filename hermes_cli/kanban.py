@@ -388,6 +388,53 @@ def _cmd_create(args: argparse.Namespace) -> int:
     return 0
 
 
+def _cmd_enqueue(args: argparse.Namespace) -> int:
+    """Enqueue without claiming: the embedded dispatcher owns execution."""
+    try:
+        ws_kind, ws_path = _parse_workspace_flag(args.workspace)
+        branch_name = _parse_branch_flag(args.branch)
+    except argparse.ArgumentTypeError as exc:
+        return _err(f"kanban: {exc}", 2)
+    if branch_name and ws_kind != "worktree":
+        return _err("kanban: --branch is only valid with --workspace worktree", 2)
+    with kbc.connect_closing() as conn:
+        task_id, created = kb.enqueue_task(
+            conn,
+            title=args.title,
+            body=args.body,
+            assignee=args.assignee,
+            created_by=args.created_by or _profile_author(),
+            workspace_kind=ws_kind or "scratch",
+            workspace_path=ws_path,
+            branch_name=branch_name,
+            project_id=args.project,
+            priority=args.priority,
+            idempotency_key=args.idempotency_key,
+        )
+        task = kb.get_task(conn, task_id)
+    payload = {
+        "task_id": task_id,
+        "created": created,
+        "status": task.status if task is not None else "unknown",
+    }
+    if created and (task is None or not task.assignee):
+        # Et kort uten eier sendes aldri ut av dispatcheren. Fraværet skal være
+        # synlig i produsentens eget svar, ikke oppdages som et stille dropp.
+        print(
+            "kanban: advarsel: ingen --assignee — kortet kan ikke sendes ut "
+            "av dispatcheren før det er tildelt",
+            file=sys.stderr,
+        )
+    if getattr(args, "json", False):
+        # Én linje, ikke ``_print_json``: produsenter og e2e-gaten leser svaret
+        # linjevis, og advarselen over går på stderr uten å gjøre det uparsbart.
+        print(json.dumps(payload, ensure_ascii=False))
+    else:
+        verb = "Enqueued" if created else "Refreshed"
+        print(f"{verb} {task_id} ({payload['status']})")
+    return 0
+
+
 def _cmd_swarm(args: argparse.Namespace) -> int:
     try:
         workers = [ks.parse_worker_arg(raw) for raw in (args.worker or [])]
@@ -1294,7 +1341,7 @@ def _cmd_decompose(args: argparse.Namespace) -> int:
 
 
 _HANDLERS = {
-    "init": _cmd_init, "create": _cmd_create, "swarm": _cmd_swarm,
+    "init": _cmd_init, "create": _cmd_create, "enqueue": _cmd_enqueue, "swarm": _cmd_swarm,
     "list": _cmd_list, "ls": _cmd_list, "show": _cmd_show,
     "assign": _cmd_assign, "set-model": _cmd_set_model,
     "reclaim": _cmd_reclaim, "reassign": _cmd_reassign,
