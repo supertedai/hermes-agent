@@ -436,6 +436,154 @@ def rewind_notify_cursor(
     return cur.rowcount > 0
 
 
+# --- Delivery journal (append-only; see kanban_notify_journal in SCHEMA_SQL) ---
+#
+# The cursor (``last_event_id``) is advanced by whichever delivery path claims
+# the event first — the gateway notifier, or a live TUI/desktop session poller
+# that emits an in-process frame because no ``tui`` platform adapter exists. So
+# the cursor alone cannot answer "was this delivered": the ping checkpoint
+# belongs to the gateway path, and the poller writes no checkpoint at all. One
+# append per delivery decision closes that gap: the row names the path that took
+# the decision, the receipt (adapter message id) when there is one, and the
+# cursor value the decision produced.
+#
+# A write must never gate a delivery: every function here swallows its errors
+# (first one per process at WARNING, then DEBUG), exactly like the gateway's
+# delivery_ledger. Callers journal on the same connection they already hold.
+
+_JOURNAL_WRITE_FAILED_LOGGED = False
+
+
+def _journal_write_failed(exc: BaseException) -> int:
+    """Report a failed journal write once, at WARNING; delivery is unaffected."""
+    global _JOURNAL_WRITE_FAILED_LOGGED
+    if not _JOURNAL_WRITE_FAILED_LOGGED:
+        _JOURNAL_WRITE_FAILED_LOGGED = True
+        _kb._log.warning(
+            "kanban notify journal: write failed (%s: %s); notification delivery is unaffected",
+            type(exc).__name__, exc,
+        )
+    else:
+        _kb._log.debug("kanban notify journal: write failed again: %s", exc)
+    return 0
+
+
+def journal_notify_decisions(
+    conn: sqlite3.Connection,
+    *,
+    task_id: str,
+    platform: str,
+    chat_id: str,
+    thread_id: Optional[str] = None,
+    dispatcher: str,
+    entries: Iterable[Mapping[str, Any]],
+) -> int:
+    """Append delivery decisions for one subscription in ONE write transaction.
+
+    ``entries`` carry the per-event facts: ``event_id``, ``kind``, ``phase``
+    (``claim`` / ``deliver`` / ``skip``), ``outcome``, ``reason``,
+    ``delivery_mode``, ``attempted_at``, ``send_result``, ``receipt``,
+    ``cursor_before``, ``cursor_after``. An empty iterable returns ``0`` and
+    appends nothing. A positive return is emitted only after the transaction's
+    commit succeeds; ``0`` means that there is no confirmed append (empty input
+    or a write/commit failure), and never authorizes a caller to burn a dedup
+    key. The function never raises for journal-storage failures.
+    """
+    rows = [
+        (
+            entry.get("event_id"), task_id, platform, chat_id, thread_id or "",
+            entry.get("kind"), entry.get("phase") or "deliver", entry.get("outcome") or "unknown",
+            entry.get("reason"), entry.get("delivery_mode"), dispatcher,
+            entry.get("attempted_at"), entry.get("send_result"), entry.get("receipt"),
+            entry.get("cursor_before"), entry.get("cursor_after"), time.time(),
+        )
+        for entry in entries
+    ]
+    if not rows:
+        return 0
+    try:
+        with _kb.write_txn(conn):
+            conn.executemany(
+                "INSERT INTO kanban_notify_journal "
+                "(event_id, task_id, platform, chat_id, thread_id, kind, phase, outcome, reason, "
+                " delivery_mode, dispatcher, attempted_at, send_result, receipt, cursor_before, "
+                " cursor_after, created_at) "
+                "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                rows,
+            )
+        return len(rows)
+    except Exception as exc:  # sqlite3.Error, missing table on an un-migrated board, ...
+        return _journal_write_failed(exc)
+
+
+def journal_notify_decision(conn: sqlite3.Connection, *, task_id: str, platform: str, chat_id: str,
+                            thread_id: Optional[str] = None, dispatcher: str, **entry: Any) -> int:
+    """Append ONE delivery decision (see :func:`journal_notify_decisions`)."""
+    return journal_notify_decisions(
+        conn, task_id=task_id, platform=platform, chat_id=chat_id, thread_id=thread_id,
+        dispatcher=dispatcher, entries=[entry])
+
+
+def journal_notify_claim(
+    conn: sqlite3.Connection,
+    *,
+    task_id: str,
+    platform: str,
+    chat_id: str,
+    thread_id: Optional[str] = None,
+    dispatcher: str,
+    events: Iterable[Any],
+    cursor_before: int,
+    cursor_after: int,
+    delivery_mode: Optional[str] = None,
+) -> int:
+    """Journal one row per CLAIMED event — the rows that explain a cursor move.
+
+    Called by whichever path claimed the range, before any rendering: a claim
+    that is later dropped (silent kind, dead session, failed send) already moved
+    the cursor, so the claim itself has to be on the record.
+    """
+    return journal_notify_decisions(
+        conn, task_id=task_id, platform=platform, chat_id=chat_id, thread_id=thread_id,
+        dispatcher=dispatcher,
+        entries=[
+            {
+                "event_id": int(getattr(ev, "id", 0) or 0), "kind": getattr(ev, "kind", None),
+                "phase": "claim", "outcome": "claimed", "delivery_mode": delivery_mode,
+                "reason": f"cursor {int(cursor_before)}→{int(cursor_after)}",
+                "cursor_before": int(cursor_before),
+                "cursor_after": int(cursor_after),
+            }
+            for ev in events
+        ],
+    )
+
+
+def notify_journal_rows(
+    conn: sqlite3.Connection, *, task_id: Optional[str] = None, limit: int = 50,
+) -> list[dict]:
+    """Most recent journal rows, newest last — the read side of the journal."""
+    sql = "SELECT * FROM kanban_notify_journal"
+    params: list[Any] = []
+    if task_id is not None:
+        sql += " WHERE task_id = ?"
+        params.append(task_id)
+    sql += " ORDER BY id DESC LIMIT ?"
+    params.append(int(limit))
+    rows = [dict(row) for row in conn.execute(sql, params)]
+    return list(reversed(rows))
+
+
+def prune_notify_journal(conn: sqlite3.Connection, *, max_age_days: int = 14) -> int:
+    """Drop journal rows older than ``max_age_days``. Append-only, not immortal:
+    the journal is the record of a decision, not a second event log. Runs on the
+    notifier's hourly GC gate; a failed prune never blocks delivery."""
+    cutoff = time.time() - max(1, int(max_age_days)) * 86400
+    with _kb.write_txn(conn):
+        cur = conn.execute("DELETE FROM kanban_notify_journal WHERE created_at < ?", (cutoff,))
+    return int(cur.rowcount or 0)
+
+
 # Late-bound origin namespace (see module docstring); imported LAST so this
 # module is fully populated before ``kanban_db`` imports from it.
 from hermes_cli import kanban_db as _kb  # noqa: E402

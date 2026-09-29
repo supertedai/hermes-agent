@@ -393,6 +393,12 @@ _SPECS = [
     ], help="Subscribe a gateway source to a task's terminal events (used by /kanban subscribe in the gateway adapter)"),
     _cmd("notify-list", [_arg("task_id", nargs="?"), _json_flag()],
          help="List notification subscriptions (optionally for a single task)"),
+    _cmd("notify-journal", [
+        _arg("task_id", nargs="?", help="Only this task's delivery decisions"),
+        _arg("--limit", type=int, default=50, help="Max rows, newest last (default: 50)"),
+        _json_flag(),
+    ], help="Why a subscription's cursor moved: one row per delivery decision, at the boundary that took it "
+            "(dispatcher, outcome, receipt, cursor before→after)"),
     _cmd("notify-unsubscribe", [_TASK_ID, *_NOTIFY_TARGET], help="Remove a gateway subscription from a task"),
     _cmd("log", [_TASK_ID, _arg("--tail", type=int, help="Only print the last N bytes")],
          help="Print the worker log for a task (from <kanban-root>/kanban/logs/)"),

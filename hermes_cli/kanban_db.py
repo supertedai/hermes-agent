@@ -1063,6 +1063,48 @@ CREATE TABLE IF NOT EXISTS kanban_notify_subs (
     PRIMARY KEY (task_id, platform, chat_id, thread_id)
 );
 
+-- Append-only delivery journal: WHY a subscription's cursor (last_event_id)
+-- moved, per terminal event, at the delivery boundary that moved it.
+--
+-- Two delivery paths claim the same cursor: the gateway notifier (which sends
+-- through a platform adapter) and the per-session TUI/desktop poller (which
+-- emits an in-process frame, because no ``tui`` adapter exists). Both advance
+-- ``last_event_id`` before the event is rendered, so a cursor that moved says
+-- nothing about delivery on its own, and the ping checkpoint
+-- (``last_ping_event_id``) is written by the gateway path only — it stays 0 for
+-- a subscription that is delivered in-process. This table is the missing
+-- receipt side: one row per (event, subscription) decision, plus one row per
+-- subscription for a decision taken before any event is claimed (``event_id``
+-- NULL, e.g. no adapter for that platform).
+--
+-- Rows are never updated — a retry appends. ``outcome`` carries the delivery
+-- decision (``sent`` / ``in_process_frame`` / ``skipped_*`` / ``send_failed`` /
+-- ``rewound`` / ``dropped``), ``receipt`` the adapter's own message id so a row
+-- can be matched against a concrete message in the recipient channel, and
+-- ``cursor_after`` ties the row to the cursor value it explains. Reads and
+-- retention: ``hermes_cli.kanban_db_notify.notify_journal_rows`` /
+-- ``prune_notify_journal``. Writes are best-effort and never gate delivery.
+CREATE TABLE IF NOT EXISTS kanban_notify_journal (
+    id            INTEGER PRIMARY KEY AUTOINCREMENT,
+    event_id      INTEGER,
+    task_id       TEXT NOT NULL,
+    platform      TEXT NOT NULL,
+    chat_id       TEXT NOT NULL,
+    thread_id     TEXT NOT NULL DEFAULT '',
+    kind          TEXT,
+    phase         TEXT NOT NULL,
+    outcome       TEXT NOT NULL,
+    reason        TEXT,
+    delivery_mode TEXT,
+    dispatcher    TEXT NOT NULL,
+    attempted_at  REAL,
+    send_result   TEXT,
+    receipt       TEXT,
+    cursor_before INTEGER,
+    cursor_after  INTEGER,
+    created_at    REAL NOT NULL
+);
+
 CREATE INDEX IF NOT EXISTS idx_tasks_status          ON tasks(status);
 CREATE INDEX IF NOT EXISTS idx_links_child           ON task_links(child_id);
 CREATE INDEX IF NOT EXISTS idx_links_parent          ON task_links(parent_id);
@@ -1072,6 +1114,8 @@ CREATE INDEX IF NOT EXISTS idx_runs_task             ON task_runs(task_id, start
 CREATE INDEX IF NOT EXISTS idx_runs_status           ON task_runs(status);
 CREATE INDEX IF NOT EXISTS idx_attachments_task      ON task_attachments(task_id, created_at);
 CREATE INDEX IF NOT EXISTS idx_notify_task           ON kanban_notify_subs(task_id);
+CREATE INDEX IF NOT EXISTS idx_notify_journal_task   ON kanban_notify_journal(task_id, id);
+CREATE INDEX IF NOT EXISTS idx_notify_journal_at     ON kanban_notify_journal(created_at);
 """
 
 

@@ -1174,6 +1174,37 @@ def _cmd_notify_list(args: argparse.Namespace) -> int:
     return 0
 
 
+def _cmd_notify_journal(args: argparse.Namespace) -> int:
+    """Why a subscription's cursor moved: the append-only delivery journal.
+
+    A cursor that moved says nothing about delivery on its own — two paths claim
+    the same one, and one of them writes no ping checkpoint. This reads the rows
+    that name the path, the decision and (when there is one) the receipt.
+    """
+    limit = max(1, int(args.limit or 50))
+    with kbc.connect_closing() as conn:
+        rows = kbn.notify_journal_rows(conn, task_id=args.task_id, limit=limit)
+    if _json_out(args, rows):
+        return 0
+    if not rows:
+        print("(no delivery decisions journaled — nothing claimed, skipped or delivered in the window)")
+        return 0
+    for r in rows:
+        when = time.strftime("%Y-%m-%d %H:%M:%S", time.localtime(r["created_at"] or 0))
+        target = f"{r['platform']}:{r['chat_id']}"
+        if r.get("thread_id"):
+            target += f":{r['thread_id']}"
+        move = ""
+        if r.get("cursor_before") is not None or r.get("cursor_after") is not None:
+            move = f"cursor {r['cursor_before']}→{r['cursor_after']}"
+        detail = r.get("receipt") or r.get("send_result") or r.get("reason") or ""
+        if detail == move:
+            detail = ""  # a claim's reason IS its cursor move; the columns already say it
+        print(f"  {when}  {r['task_id']:10s}  {target:30s}  {r['dispatcher']:8s}  "
+              f"{r['phase']:7s}  {r['outcome']:24s}  {move:13s}  {detail}")
+    return 0
+
+
 def _cmd_notify_unsubscribe(args: argparse.Namespace) -> int:
     with kbc.connect_closing() as conn:
         ok = kbn.remove_notify_sub(conn, task_id=args.task_id, platform=args.platform, chat_id=args.chat_id,
@@ -1310,7 +1341,8 @@ _HANDLERS = {
     "daemon": _cmd_daemon, "watch": _cmd_watch, "stats": _cmd_stats,
     "log": _cmd_log, "runs": _cmd_runs, "heartbeat": _cmd_heartbeat,
     "assignees": _cmd_assignees, "notify-subscribe": _cmd_notify_subscribe,
-    "notify-list": _cmd_notify_list, "notify-unsubscribe": _cmd_notify_unsubscribe,
+    "notify-list": _cmd_notify_list, "notify-journal": _cmd_notify_journal,
+    "notify-unsubscribe": _cmd_notify_unsubscribe,
     "context": _cmd_context, "specify": _cmd_specify, "decompose": _cmd_decompose,
     "gc": _cmd_gc,
 }

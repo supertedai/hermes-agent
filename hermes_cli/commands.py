@@ -250,7 +250,7 @@ COMMAND_REGISTRY: list[CommandDef] = [
                             "reclaim", "reassign", "diagnostics", "diag", "link", "unlink",
                             "claim", "comment", "complete", "edit", "block", "unblock",
                             "archive", "tail", "dispatch", "stats", "notify-subscribe",
-                            "notify-list", "notify-unsubscribe", "log", "runs",
+                            "notify-list", "notify-journal", "notify-unsubscribe", "log", "runs",
                             "heartbeat", "assignees", "context", "specify", "gc"),
                busy_policy="dispatch", desktop="advanced"),
     CommandDef("reload", "Reload .env variables into the running session", "Tools & Skills",
