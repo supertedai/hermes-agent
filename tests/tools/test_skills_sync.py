@@ -4,11 +4,18 @@ import shutil
 import json
 import os
 import stat
+import subprocess
 import pytest
 from pathlib import Path
 from unittest.mock import patch
 
 from tools.skills_sync import (
+    COPY_BEHIND_UPSTREAM,
+    COPY_LOCALLY_EDITED,
+    COPY_MATCHES_STOCK,
+    COPY_UNPROVEN,
+    ManifestReadError,
+    ManifestWriteError,
     _get_bundled_dir,
     _read_manifest,
     _read_skill_name,
@@ -16,9 +23,10 @@ from tools.skills_sync import (
     _discover_bundled_skills,
     _compute_relative_dest,
     _dir_hash,
+    explain_flagged_copy,
     sync_skills,
 )
-from tools.skills_sync_bundled_ops import reset_bundled_skill
+from tools.skills_sync_bundled_ops import list_user_modified_bundled_skills, reset_bundled_skill
 from tools.skills_sync_optional import restore_official_optional_skill
 
 
@@ -1000,3 +1008,198 @@ class TestCallTimeDirResolution:
                 ss._rmtree_writable(foreign)
         finally:
             reset_hermes_home_override(token)
+
+
+# --- t_eb487a72 ---------------------------------------------------------------------------
+# The 2026-09-10 update reported "↑ 27 updated" in phase 1 and read the same 27 as user-modified
+# in phase 2 of the SAME run: the manifest rows never landed. And the flag it left behind was
+# called "user-modified" for copies nobody had edited.
+
+def _stale_origin_env(tmp_path, copy_text, *, origin_hash=None):
+    """A bundled 'gw' plus a user copy whose manifest row is an older origin hash."""
+    bundled = tmp_path / "bundled_skills"
+    (bundled / "cat" / "gw").mkdir(parents=True)
+    (bundled / "cat" / "gw" / "SKILL.md").write_text("---\nname: gw\n---\n# GW v2 (upstream)\n")
+    skills_dir = tmp_path / "user_skills"
+    door = skills_dir / "cat" / "gw"
+    door.mkdir(parents=True)
+    (door / "SKILL.md").write_text(copy_text)
+    manifest_file = skills_dir / ".bundled_manifest"
+    manifest_file.write_text(f"gw:{origin_hash or _dir_hash(door)}\n", encoding="utf-8")
+    return bundled, skills_dir, manifest_file, door
+
+
+def _sync_patches(bundled, skills_dir, manifest_file):
+    from contextlib import ExitStack
+    stack = ExitStack()
+    stack.enter_context(patch("tools.skills_sync._get_bundled_dir", return_value=bundled))
+    stack.enter_context(patch("tools.skills_sync._get_optional_dir", return_value=bundled.parent / "optional-skills"))
+    stack.enter_context(patch("tools.skills_sync.SKILLS_DIR", skills_dir))
+    stack.enter_context(patch("tools.skills_sync.MANIFEST_FILE", manifest_file))
+    return stack
+
+
+class TestManifestIsReadBack:
+    """A manifest write nobody reads back is not a write."""
+
+    def test_write_that_does_not_land_is_a_loud_error(self, tmp_path):
+        manifest_file = tmp_path / ".bundled_manifest"
+        with patch("tools.skills_sync.MANIFEST_FILE", manifest_file), patch(
+                "tools.skills_sync.atomic_write_text",
+                side_effect=PermissionError(13, "Permission denied")):
+            with pytest.raises(ManifestWriteError) as excinfo:
+                _write_manifest({"foo": "hash"})
+        assert "could not write" in str(excinfo.value)
+        assert not manifest_file.exists()
+
+    def test_write_that_reads_back_different_is_a_loud_error(self, tmp_path):
+        """The 2026-09-10 shape: the file on disk keeps the old rows while the run says updated."""
+        manifest_file = tmp_path / ".bundled_manifest"
+        manifest_file.write_text("foo:stale\n", encoding="utf-8")
+
+        def _write_something_else(path, content, **kwargs):
+            Path(path).write_text("foo:stale\n", encoding="utf-8")
+
+        with patch("tools.skills_sync.MANIFEST_FILE", manifest_file), patch(
+                "tools.skills_sync.atomic_write_text", side_effect=_write_something_else):
+            with pytest.raises(ManifestWriteError) as excinfo:
+                _write_manifest({"foo": "fresh"})
+        assert "did not read back as written" in str(excinfo.value)
+        assert "wrong hash" in str(excinfo.value)
+
+    def test_unreadable_manifest_is_an_error_not_an_empty_one(self, tmp_path):
+        """`except OSError: return {}` made "I cannot read it" look like "you have none"."""
+        manifest_file = tmp_path / ".bundled_manifest"
+        manifest_file.mkdir()  # exists, but reading it as a file cannot work
+        with patch("tools.skills_sync.MANIFEST_FILE", manifest_file):
+            with pytest.raises(ManifestReadError) as excinfo:
+                _read_manifest()
+        assert "could not be read" in str(excinfo.value)
+
+    def test_sync_reports_no_updated_when_the_manifest_write_fails(self, tmp_path):
+        """The door may be replaced, but the run must not claim an update whose row is unrecorded."""
+        bundled, skills_dir, manifest_file, door = _stale_origin_env(tmp_path, "# GW v1 (old)\n")
+        with _sync_patches(bundled, skills_dir, manifest_file), patch(
+                "tools.skills_sync.atomic_write_text",
+                side_effect=PermissionError(13, "Permission denied")):
+            result = sync_skills(quiet=True)
+
+        assert result["manifest_error"], "a failed manifest write must be reported"
+        assert result["updated"] == [], "no 'updated' claim for a row that was not recorded"
+        assert result["unrecorded"] == ["gw"], "the names that changed on disk must still be named"
+        assert "GW v2" in (door / "SKILL.md").read_text(), "the copy itself WAS updated"
+
+
+    def test_sync_refuses_and_touches_nothing_when_the_manifest_is_unreadable(self, tmp_path):
+        """An unreadable manifest must not be spent as "you have none" — nothing is re-baselined."""
+        bundled, skills_dir, manifest_file, door = _stale_origin_env(tmp_path, "# GW v1 (old)\n")
+        manifest_file.unlink()
+        manifest_file.mkdir()  # exists, but not readable as a file
+
+        with _sync_patches(bundled, skills_dir, manifest_file):
+            result = sync_skills(quiet=True)
+
+        assert result["manifest_error"]
+        assert result["copied"] == [] and result["updated"] == []
+        assert (door / "SKILL.md").read_text() == "# GW v1 (old)\n", "the copy must be untouched"
+
+
+class TestSkippedCopyStates:
+    """The flag is three states, and only one of them is an edit."""
+
+    def test_copy_identical_to_stock_with_a_stale_origin_is_not_an_edit(self, tmp_path):
+        bundled, skills_dir, manifest_file, _ = _stale_origin_env(
+            tmp_path, "---\nname: gw\n---\n# GW v2 (upstream)\n", origin_hash="OLDORIGIN0000")
+
+        with _sync_patches(bundled, skills_dir, manifest_file):
+            result = sync_skills(quiet=True)
+            # Still skipped (behaviour unchanged), but the reason is named.
+            assert result["user_modified"] == ["gw"]
+            assert result["user_modified_reasons"]["gw"] == COPY_MATCHES_STOCK
+            entries = list_user_modified_bundled_skills()
+
+        assert [e["state"] for e in entries] == [COPY_MATCHES_STOCK]
+        assert "byte-identical" in entries[0]["state_message"]
+        assert "edit" not in entries[0]["state_message"]
+        assert entries[0]["state_counts"]["local"] == 0
+
+    def test_copy_that_differs_without_history_says_unproven(self, tmp_path):
+        bundled, skills_dir, manifest_file, _ = _stale_origin_env(
+            tmp_path, "# my own rewrite\n", origin_hash="OLDORIGIN0000")
+
+        with _sync_patches(bundled, skills_dir, manifest_file), patch(
+                "tools.skills_sync._git_root", return_value=None):
+            entries = list_user_modified_bundled_skills()
+
+        assert [e["state"] for e in entries] == [COPY_UNPROVEN]
+        assert "cannot be told" in entries[0]["state_message"]
+        assert "not inside a git checkout" in entries[0]["state_message"]
+
+
+@pytest.mark.skipif(shutil.which("git") is None, reason="git is required to read upstream history")
+class TestCopyStatesAgainstRealHistory:
+    """(ii) and (iii) are told apart by the checkout's own history, not by a guess."""
+
+    @staticmethod
+    def _git(repo, *args):
+        subprocess.run(["git", "-C", str(repo), "-c", "user.email=t@example.com",
+                        "-c", "user.name=t", *args], check=True, capture_output=True)
+
+    def _repo(self, tmp_path):
+        repo = tmp_path / "repo"
+        skill = repo / "skills" / "cat" / "gw"
+        skill.mkdir(parents=True)
+        (skill / "SKILL.md").write_text("# v1\n", encoding="utf-8")
+        self._git(repo, "init", "-q")
+        self._git(repo, "add", "-A")
+        self._git(repo, "commit", "-q", "-m", "v1")
+        (skill / "SKILL.md").write_text("# v2\n", encoding="utf-8")
+        self._git(repo, "commit", "-qam", "v2")
+        return repo, skill
+
+    def _copy(self, tmp_path, text, extra=None):
+        door = tmp_path / "user_skills" / "cat" / "gw"
+        door.mkdir(parents=True, exist_ok=True)
+        (door / "SKILL.md").write_text(text, encoding="utf-8")
+        for name, body in (extra or {}).items():
+            (door / name).write_text(body, encoding="utf-8")
+        return door
+
+    def test_older_upstream_content_is_behind_not_edited(self, tmp_path):
+        _, skill = self._repo(tmp_path)
+        door = self._copy(tmp_path, "# v1\n")  # exactly what upstream shipped before v2
+
+        verdict = explain_flagged_copy(door, skill)
+        assert verdict["state"] == COPY_BEHIND_UPSTREAM
+        assert verdict["counts"]["local"] == 0
+        assert "older upstream content" in verdict["message"]
+
+    def test_content_upstream_never_had_is_locally_edited(self, tmp_path):
+        _, skill = self._repo(tmp_path)
+        door = self._copy(tmp_path, "# my own rewrite\n")
+
+        verdict = explain_flagged_copy(door, skill)
+        assert verdict["state"] == COPY_LOCALLY_EDITED
+        assert verdict["counts"]["local"] == 1
+
+    def test_a_copy_that_is_both_reports_the_local_content(self, tmp_path):
+        """A lagging copy with one house file is a local edit: that is the part reset would lose."""
+        _, skill = self._repo(tmp_path)
+        door = self._copy(tmp_path, "# v1\n", extra={"house.md": "# ours\n"})
+
+        verdict = explain_flagged_copy(door, skill)
+        assert verdict["state"] == COPY_LOCALLY_EDITED
+        assert verdict["counts"]["upstream"] == 1 and verdict["counts"]["local"] == 1
+
+    def test_a_missing_file_is_not_called_nothing_of_yours(self, tmp_path):
+        """Upstream adding a file and the user deleting one look identical from here."""
+        repo, skill = self._repo(tmp_path)
+        (skill / "extra.md").write_text("# added in v2\n", encoding="utf-8")
+        self._git(repo, "add", "-A")
+        self._git(repo, "commit", "-q", "-m", "extra")
+        door = self._copy(tmp_path, "# v1\n")  # no extra.md
+
+        verdict = explain_flagged_copy(door, skill)
+        assert verdict["state"] == COPY_UNPROVEN
+        assert verdict["counts"]["only_in_stock"] == 1
+        assert "or files you removed" in verdict["message"]

@@ -1023,17 +1023,33 @@ Hermes ships with a set of bundled skills in `skills/` inside the repo. On insta
 On each sync, Hermes recomputes the hash of your local copy and compares it to the origin hash:
 
 - **Unchanged** → safe to pull upstream changes, copy the new bundled version in, record the new origin hash.
-- **Changed** → treated as **user-modified** and skipped forever, so your edits never get stomped.
+- **Changed** → the copy is **skipped**, so your edits never get stomped. The copy is kept, and so is the manifest row — which is what makes it show up in `hermes skills list-modified`.
 
-Generated runtime caches inside a skill (`__pycache__/`, `.pytest_cache/`, `.mypy_cache/`, `.ruff_cache/`, and a `.pyc` sitting next to its `.py`) are not part of the hash, so running a skill's helper script never marks it user-modified or hides it from `hermes skills list-modified` / `diff`.
+"Changed" is not the same as "you edited it", and `list-modified` says which of these it is:
 
-The protection is good, but it has one sharp edge. If you edit a bundled skill and then later want to abandon your changes and go back to the bundled version by just copy-pasting from `~/.hermes/hermes-agent/skills/`, the manifest still holds the *old* origin hash from whenever the last successful sync ran. Your fresh copy-paste contents (current bundled hash) won't match that stale origin hash, so sync keeps flagging it as user-modified.
+| State | What the copy is | What fixes it |
+|-------|------------------|---------------|
+| `copy_matches_stock` | byte-identical to the version shipped today — only the manifest's origin row is stale | `hermes skills reset <name>` (re-baselines; nothing of yours is in the copy) |
+| `behind_upstream` | an older upstream revision, with nothing of your own in it | `hermes skills reset <name> --restore` |
+| `locally_edited` | content no upstream revision ever had — this is the case the protection exists for | `hermes skills diff <name>`, then reconcile (or `reset --restore` to drop it) |
+| `unproven` | differs, and this checkout's history cannot say which of the two it is | `hermes skills diff <name>` and decide yourself |
 
-`hermes skills reset` is the escape hatch:
+The classification reads the repository's own history (`git log --raw` over the bundled paths), so it needs the install to still be a git checkout; without one every differing copy reads `unproven` rather than being guessed at.
+
+Generated runtime caches inside a skill (`__pycache__/`, `.pytest_cache/`, `.mypy_cache/`, `.ruff_cache/`, and a `.pyc` sitting next to its `.py`) are not part of the hash, so running a skill's helper script never makes a copy look changed or hides it from `hermes skills list-modified` / `diff`.
+
+The manifest itself is read back after every write: if the file does not land as written (read-only home, full disk, a concurrent writer), the update reports the failure and names the skills whose rows were *not* recorded, instead of printing an "updated" count for changes it cannot remember. A manifest that exists but cannot be read is likewise an error, never treated as an empty manifest — that distinction is what stops a sync from quietly re-baselining every skill at once.
+
+The protection has one sharp edge, and it is the first row of the table above. If you edit a bundled skill and later abandon your changes by copy-pasting the bundled version back from `~/.hermes/hermes-agent/skills/`, the manifest still holds the *old* origin hash from the last successful sync. Your fresh copy-paste contents (the current bundled hash) won't match that stale origin hash, so sync keeps listing it. It is not an edit and there is nothing of yours to lose — `reset` re-baselines it.
+
+`hermes skills reset` is the escape hatch, and it refuses when the copy really does differ:
 
 ```bash
 # Safe: clears the manifest entry for this skill. Your current copy is preserved,
-# but the next sync re-baselines against it so future updates work normally.
+# and the next sync re-baselines against it (the copy is the shipped version, so
+# nothing of yours is lost). Refused with a pointer to `diff` when the copy
+# differs from the shipped version — clearing the row there would only silence
+# the flag while the skill stays pinned.
 hermes skills reset google-workspace
 
 # Full restore: also deletes your local copy and re-copies the current bundled
