@@ -679,11 +679,15 @@ class DockerEnvironment(BaseEnvironment):
         # creation, so reusing a pre-egress container would bypass the firewall.
         profile_name = _container_identity(shared_container_key)
         task_label = _sanitize_label_value(task_id)
+        # vertsrettelse (hermes-opus/vertsrettelser.py): mount-settet inn i
+        # gjenbruksnøkkelen, ellers gjenbrukes en container med utdaterte mounts.
+        self._mounts_label = _hermes_opus_mount_fingerprint(all_run_args)
         self._labels = {
             "hermes-agent": "1",
             "hermes-task-id": task_label,
             "hermes-profile": profile_name,
-            _EGRESS_LABEL_KEY: egress_label}
+            _EGRESS_LABEL_KEY: egress_label,
+            "hermes-mounts": self._mounts_label}
         # Saved for container recreation on "No such container" recovery.
         self._image = image
         self._image_pinned = image_pinned
@@ -1169,6 +1173,9 @@ class DockerEnvironment(BaseEnvironment):
             "--filter", f"label=hermes-task-id={task_label}",
             "--filter", f"label=hermes-profile={profile_label}",
             "--filter", f"label={_EGRESS_LABEL_KEY}={egress_label}"]
+        _mounts_label = getattr(self, "_mounts_label", "")
+        if _mounts_label:
+            filters.extend(["--filter", f"label=hermes-mounts={_mounts_label}"])
         result = _docker_query(
             [self._docker_exe, "ps", "-a", *filters, "--format", "{{.ID}}\t{{.State}}"], timeout=10,
             fail="docker ps probe failed: %s — will start a fresh container",
@@ -1272,3 +1279,37 @@ class DockerEnvironment(BaseEnvironment):
             return True
         thread.join(timeout=timeout)
         return not thread.is_alive()
+
+
+def _hermes_opus_mount_fingerprint(run_args) -> str:
+    """Kort fingeravtrykk av bind-mountene i *run_args* (vertsrettelse).
+
+    Uten dette matcher container-gjenbruk bare på labels — hermes-task-id,
+    hermes-profile og hermes-egress. Mount-settet inngår ikke, og persist-modus
+    river aldri containeren. En container som ble laget før
+    ``terminal.docker_extra_args`` endret seg blir derfor gjenbrukt for alltid,
+    og arbeidstreet er ikke montert i den. Workeren melder da at arbeidstreet
+    «ikke er montert i terminal-containeren» — mens `docker inspect` på en
+    NYERE container viser mounten, så feilen ser umulig ut.
+
+    Målt 2026-08-19: Joakims default-container var to døgn gammel og hadde helt
+    tomt /opt, mens konfigurasjonen hans hadde hatt /opt/agent-work i timevis.
+    Se docs/sandkasse-mount-drift.md.
+
+    Finner vi ingen mount-argumenter i det hele tatt, returnerer vi en LESBAR
+    markør i stedet for sha256 av tom streng. Da står det «tomt-mount-sett» i
+    `docker ps`, og en død mekanisme kan ikke forveksles med en virksom en.
+    """
+    spesar = []
+    forrige = None
+    for arg in run_args or ():
+        tekst = str(arg)
+        if forrige in ("-v", "--volume", "--mount"):
+            spesar.append(tekst)
+        elif tekst.startswith("--volume=") or tekst.startswith("--mount="):
+            spesar.append(tekst.split("=", 1)[1])
+        forrige = tekst
+    if not spesar:
+        return "tomt-mount-sett"
+    rå = "\n".join(sorted(spesar)).encode("utf-8")
+    return hashlib.sha256(rå).hexdigest()[:16]
