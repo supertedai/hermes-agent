@@ -182,6 +182,8 @@ updates:
 
 `updates.pre_update_backup` is a single knob with three modes: `quick` (default — the lightweight state snapshot described above), `full` (the quick snapshot plus a complete `HERMES_HOME` zip; can add minutes on large homes), and `off` (no pre-update backup at all — `--no-backup` does the same for a single run). Legacy boolean values still work: `true` means `full`, `false` means `off`.
 
+The full zip is all-or-nothing: every database in it is copied through SQLite's own backup API so the archive is consistent while the gateway keeps writing, and if one database cannot be snapshotted the archive is abandoned rather than written incomplete. A database that is written continuously can never be snapshotted — the copy restarts on every write — so the snapshot gives up instead of reading forever, and the update prints which file caused it (`⚠ Pre-update backup not written: SQLite snapshot failed for …`). The previous archive, if any, is left untouched.
+
 :::tip Moving to a new machine instead?
 Update backups protect an in-place update. If you're migrating your whole setup to different hardware, use `hermes backup` + `hermes import` instead — see [Exporting Hermes to another machine](../reference/faq.md#exporting-hermes-to-another-machine) and [`hermes backup` vs `hermes profile export`](../reference/faq.md#hermes-backup-vs-hermes-profile-export).
 :::

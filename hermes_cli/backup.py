@@ -328,6 +328,14 @@ def _safe_copy_db(src: Path, dst: Path, *, timeout_seconds: float = 10.0) -> boo
     """Copy a SQLite database with the backup() API (WAL-safe consistent snapshot).
 
     Fails closed when no consistent snapshot can be made: copying only the main file loses WAL data.
+
+    ``timeout_seconds`` bounds how long the snapshot may run WITHOUT FORWARD PROGRESS, not merely
+    how long the source stays locked: a writer on another connection makes ``sqlite3_backup_step``
+    restart the copy, which returns ``SQLITE_OK`` while ``remaining`` jumps back to the full page
+    count. A deadline that any ``SQLITE_OK`` refreshes therefore never fires — measured 2026-09-20:
+    a 1 s deadline did not return in 30 s on an 11 MB source under a live writer, and a real
+    ``hermes update --backup`` sat in "Creating pre-update backup" for 50 minutes reading 10.7 TB
+    while writing nothing.
     """
     conn = backup_conn = None
     try:
@@ -347,19 +355,40 @@ def _safe_copy_db(src: Path, dst: Path, *, timeout_seconds: float = 10.0) -> boo
             finally:
                 os.close(secure_fd)
         # timeout=0.0 disables sqlite3's implicit busy wait so the progress callback owns the
-        # full locked-source deadline instead of adding the default timeout before each callback.
+        # full deadline instead of adding the default timeout before each callback.
         conn = sqlite3.connect(f"file:{src}?mode=ro", uri=True, timeout=0.0)
         backup_conn = sqlite3.connect(str(dst))
-        busy_deadline = time.monotonic() + max(0.0, timeout_seconds)
+        deadline = time.monotonic() + max(0.0, timeout_seconds)
+        # Only a SHRINKING ``remaining`` proves the snapshot is getting closer to DONE. A writer
+        # on another connection restarts the copy (status SQLITE_OK, ``remaining`` back at the
+        # full page count) and a source that keeps growing can push ``remaining`` up for as long
+        # as it is written, so "the step said OK" is not progress. Bound the high-water mark
+        # instead: if it does not improve within ``timeout_seconds``, this snapshot is not going
+        # to finish and the caller gets an honest failure rather than an unbounded read loop.
+        best_remaining: Optional[int] = None
 
-        def _check_backup_progress(status: int, _remaining: int, _total: int) -> None:
-            nonlocal busy_deadline
+        def _check_backup_progress(status: int, remaining: int, _total: int) -> None:
+            nonlocal deadline, best_remaining
             now = time.monotonic()
             if status in (sqlite3.SQLITE_BUSY, sqlite3.SQLITE_LOCKED):
-                if now >= busy_deadline:
+                if now >= deadline:
                     raise _SQLiteBackupTimeout(f"database remained locked for {timeout_seconds:g} seconds")
-            else:
-                busy_deadline = now + max(0.0, timeout_seconds)
+                return
+            # ``remaining == 0`` carries no information about progress: it is either the final
+            # callback before SQLITE_DONE or a no-page-count first callback. Letting it set the
+            # high-water mark would pin it at 0 and abort a healthy copy later on (measured: a
+            # healthy copy of an 11 MB source reports 2675 -> 115 -> DONE, never (OK, 0)), and a
+            # stalled copy never reports 0 (its ``remaining`` climbs back up on every restart).
+            if remaining <= 0:
+                return
+            if best_remaining is None or remaining < best_remaining:
+                best_remaining = remaining
+                deadline = now + max(0.0, timeout_seconds)
+            elif now >= deadline:
+                raise _SQLiteBackupTimeout(
+                    f"no snapshot progress for {timeout_seconds:g} seconds "
+                    f"({remaining} of {_total} pages still to copy — the source is being written "
+                    "faster than it can be copied)")
 
         conn.backup(backup_conn, pages=256, progress=_check_backup_progress, sleep=0.1)
         return True
@@ -1604,26 +1633,45 @@ def run_quick_backup(args) -> None:
 
 # --- Shared full-zip backup helper ---
 
-def _write_full_zip_backup(out_path: Path, hermes_root: Path) -> Optional[Path]:
+def _note_full_backup_failure(failures: Optional[List[str]], reason: str) -> None:
+    """Record why an automatic full-zip backup was not written, for the caller's user-facing report.
+
+    ``failures`` is ``None`` for callers that only need the path (they keep logging alone); the CLI
+    entry points pass a list so the reason reaches the user instead of stopping at ``agent.log``.
+    """
+    if failures is not None:
+        failures.append(reason)
+
+
+def _write_full_zip_backup(
+    out_path: Path, hermes_root: Path, *, failures: Optional[List[str]] = None) -> Optional[Path]:
     """Full zip snapshot of ``hermes_root`` to ``out_path`` under the backup slot (same rules as
-    :func:`run_backup`); None when nothing to back up, another backup running, or write error."""
+    :func:`run_backup`); None when nothing to back up, another backup running, or write error.
+
+    ``failures``, when given, receives one human-readable reason per failure so the caller can
+    name it (see :func:`_note_full_backup_failure`).
+    """
     try:
         with _backup_operation_lock(hermes_root):
-            return _write_full_zip_backup_locked(out_path, hermes_root)
+            return _write_full_zip_backup_locked(out_path, hermes_root, failures=failures)
     except BackupInProgressError as exc:
         logger.warning("Full-zip backup skipped: %s", exc)
+        _note_full_backup_failure(failures, str(exc))
         return None
 
 
-def _write_full_zip_backup_locked(out_path: Path, hermes_root: Path) -> Optional[Path]:
+def _write_full_zip_backup_locked(
+    out_path: Path, hermes_root: Path, *, failures: Optional[List[str]] = None) -> Optional[Path]:
     scan_started = time.monotonic()
     logger.info("automatic backup phase=scan status=started")
     try:
         files_to_add = list(_iter_backup_files(hermes_root, out_path))
     except OSError as exc:
         logger.warning("Full-zip backup: walk failed: %s", exc)
+        _note_full_backup_failure(failures, f"could not list files under {hermes_root}: {exc}")
         return None
     if not files_to_add:
+        _note_full_backup_failure(failures, "no files matched the backup walk")
         return None
     logger.info("automatic backup phase=scan status=complete duration_ms=%.1f files=%d",
                 (time.monotonic() - scan_started) * 1000, len(files_to_add))
@@ -1644,6 +1692,13 @@ def _write_full_zip_backup_locked(out_path: Path, hermes_root: Path) -> Optional
     except (OSError, _SQLiteSnapshotError) as exc:
         # The hidden partial is already gone; ``out_path`` may be a previous valid backup: keep it.
         logger.warning("Full-zip backup: zip write failed: %s", exc)
+        # The database that could not be snapshotted is the actionable half: one un-snappable file
+        # aborts the whole archive (measured 2026-09-20: 2000 already-written entries, ~2.5 min,
+        # every night, and the user only saw "Backup skipped (no files found or write failed)").
+        _note_full_backup_failure(
+            failures,
+            f"SQLite snapshot failed for {exc}" if isinstance(exc, _SQLiteSnapshotError)
+            else f"zip write failed: {exc}")
         return None
     logger.info("automatic backup phase=archive status=complete duration_ms=%.1f files=%d bytes=%d",
                 (time.monotonic() - archive_started) * 1000, len(files_to_add),
@@ -1671,39 +1726,57 @@ def _prune_prefixed_zips(backup_dir: Path, prefix: str, keep: int, what: str) ->
 
 
 def _create_prefixed_full_backup(
-    hermes_home: Optional[Path], prefix: str, keep: int, what: str, prune_what: str) -> Optional[Path]:
+    hermes_home: Optional[Path], prefix: str, keep: int, what: str, prune_what: str,
+    *, failures: Optional[List[str]] = None) -> Optional[Path]:
     """Write ``<HERMES_HOME>/backups/<prefix><timestamp>.zip`` and prune older same-prefix zips.
-    Returns the path, or ``None`` if nothing to back up or the write failed. Never raises."""
+    Returns the path, or ``None`` if nothing to back up or the write failed. Never raises.
+
+    ``failures``, when given, receives one human-readable reason per failure (see
+    :func:`_note_full_backup_failure`) so the caller can name it in the user's output.
+    """
     hermes_root = hermes_home or get_default_hermes_root()
     if not hermes_root.is_dir():
+        _note_full_backup_failure(failures, f"{hermes_root} is not a directory")
         return None
     backup_dir = hermes_root / _PRE_UPDATE_BACKUPS_DIR
     try:
         backup_dir.mkdir(parents=True, exist_ok=True)
     except OSError as exc:
         logger.warning("Could not create %s backup dir %s: %s", what, backup_dir, exc)
+        _note_full_backup_failure(failures, f"could not create {backup_dir}: {exc}")
         return None
     out_path = backup_dir / f"{prefix}{datetime.now().strftime('%Y-%m-%d-%H%M%S')}.zip"
-    if _write_full_zip_backup(out_path, hermes_root) is None:
+    if _write_full_zip_backup(out_path, hermes_root, failures=failures) is None:
         return None
     _prune_prefixed_zips(backup_dir, prefix, keep, prune_what)
     return out_path
 
 
 def create_pre_update_backup(
-    hermes_home: Optional[Path] = None, keep: int = _PRE_UPDATE_DEFAULT_KEEP) -> Optional[Path]:
+    hermes_home: Optional[Path] = None, keep: int = _PRE_UPDATE_DEFAULT_KEEP,
+    *, failures: Optional[List[str]] = None) -> Optional[Path]:
     """Full zip backup to ``backups/pre-update-<timestamp>.zip``, auto-pruned; ``None`` if nothing
-    was found or the backup failed. Never raises — ``hermes update`` continues anyway."""
-    return _create_prefixed_full_backup(hermes_home, _PRE_UPDATE_PREFIX, max(keep, 1), "pre-update", "backup")
+    was found or the backup failed. Never raises — ``hermes update`` continues anyway.
+
+    ``failures``, when given, receives one human-readable reason per failure so ``hermes update``
+    can print WHY it continued without a recovery point instead of the lumped
+    "no files found or write failed" (which hid the one un-snappable database that aborted the
+    archive). See :func:`_note_full_backup_failure`.
+    """
+    return _create_prefixed_full_backup(
+        hermes_home, _PRE_UPDATE_PREFIX, max(keep, 1), "pre-update", "backup", failures=failures)
 
 
 def create_pre_migration_backup(
-    hermes_home: Optional[Path] = None, keep: int = _PRE_MIGRATION_DEFAULT_KEEP) -> Optional[Path]:
+    hermes_home: Optional[Path] = None, keep: int = _PRE_MIGRATION_DEFAULT_KEEP,
+    *, failures: Optional[List[str]] = None) -> Optional[Path]:
     """Full zip backup to ``backups/pre-migration-<timestamp>.zip`` before ``hermes claw migrate``
     (same dir as update backups so listings/``hermes import`` find it); ``None`` if nothing was
-    found or the write failed. Never raises."""
+    found or the write failed. Never raises. ``failures`` behaves as in
+    :func:`create_pre_update_backup`."""
     return _create_prefixed_full_backup(
-        hermes_home, _PRE_MIGRATION_PREFIX, max(keep, 0), "pre-migration", "pre-migration backup")
+        hermes_home, _PRE_MIGRATION_PREFIX, max(keep, 0), "pre-migration", "pre-migration backup",
+        failures=failures)
 
 
 # ---- BEGIN PLUGIN-COMPAT (revert-scheduled; see COMPAT_MANIFEST.md) ----

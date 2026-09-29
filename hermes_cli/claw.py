@@ -354,12 +354,20 @@ def _apply_migration(run_migrator: Callable[[bool], dict], opts: SimpleNamespace
         try:
             from hermes_cli.backup import create_pre_migration_backup
             from hermes_cli.sizefmt import format_bytes as _format_size
-            backup_archive = create_pre_migration_backup(hermes_home=opts.hermes_home)
+            # Ask for the reason: a failed/aborted archive used to be silent here, so the user
+            # learned post-hoc that the migration had no restore point (same class as the
+            # pre-update "Backup skipped" message).
+            backup_failures: list[str] = []
+            backup_archive = create_pre_migration_backup(
+                hermes_home=opts.hermes_home, failures=backup_failures)
             if backup_archive:
                 print()
                 print_success(f"Pre-migration backup: {backup_archive} "
                               f"({_format_size(backup_archive.stat().st_size)})")
                 print_info(f"Restore with: hermes import {backup_archive.name}")
+            elif backup_failures:
+                print_info(f"⚠ Pre-migration backup not written: {backup_failures[0]}")
+                print_info("Continuing with the migration.")
         except Exception as e:
             return _error_block(
                 f"Could not create pre-migration backup: {e}",
