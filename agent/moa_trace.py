@@ -45,7 +45,10 @@ def _sanitize_session_id(session_id: Optional[str]) -> str:
 
 
 _USAGE_FIELDS = ("input_tokens", "output_tokens", "cache_read_tokens", "cache_write_tokens", "reasoning_tokens")
-_ACCT_FIELDS = ("model", "provider", "temperature")
+# ``model``/``provider`` are the slot as CONFIGURED; ``served_*`` name the lane that actually
+# answered after a substitution (None = ran as configured). Both pairs are recorded so a reader
+# can tell "the advisor we asked" from "the advisor that replied" without parsing a label.
+_ACCT_FIELDS = ("model", "provider", "served_provider", "served_model", "temperature")
 _COST_FIELDS = ("cost_usd", "cost_status", "cost_source")
 
 
