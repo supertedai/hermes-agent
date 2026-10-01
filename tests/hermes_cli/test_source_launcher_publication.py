@@ -402,6 +402,12 @@ def test_repin_without_distlib_retires_stale_native_launcher(tmp_path, monkeypat
 def test_windows_repair_upgrades_healthy_old_pm_external_launchers(tmp_path, monkeypatch):
     from hermes_cli._install_repair import ensure_windows_bin_launchers
 
+    # The stand-in below has the LIVE shape (<home>/hermes-agent under a home
+    # with a store), and this is a pytest run: the publisher's test-context
+    # clause refuses that by design. The test declares its intent instead of
+    # weakening the guard — it is exercising the repair, not the boundary.
+    monkeypatch.setenv(_launchers._LAUNCHER_GUARD_BYPASS_ENV, "1")
+
     repo, home, interpreter = fixture_tree(tmp_path, monkeypatch)
     managed = home / "hermes-agent"
     shutil.move(repo, managed)

@@ -353,6 +353,7 @@ def _owns_launcher(target: Path, root: Path) -> bool:
 
 def _publish_conveniences(root: Path, out_dir: Path, names, *, create: bool = True) -> dict[Path, bool]:
     """User-bin commands forward to durable local launchers, not a Python pin."""
+    _refuse_unsafe_publication(root, out_dir)
     if create:
         out_dir.mkdir(parents=True, exist_ok=True)
     elif not out_dir.is_dir():
@@ -371,9 +372,205 @@ def _publish_conveniences(root: Path, out_dir: Path, names, *, create: bool = Tr
     return published
 
 
+# ── Live-installation guard ─────────────────────────────────────────────────
+# Measured 2026-09-30: a pytest run resolved its store interpreter from its own
+# sandbox HERMES_HOME and published it into the RUNNING installation's launcher
+# (`<tree>/.hermes/bin/hermes`). Every `hermes` call on the host then died on the
+# missing sandbox interpreter — including the watchdogs, which run through that
+# very file — and the dispatcher stood still for 2h44m. A launcher is not a bad
+# file when it is wrong; the installation is dead.
+#
+# `hermes_state_guard` / `hermes_state._ensure_test_isolation` close the same
+# class for `state.db`. This is the publisher's half, and it refuses before
+# anything is written.
+
+#: The Hermes-home markers (hermes_constants' set, MINUS a bare ``.env``: a
+#: developer workspace carries one, and mistaking a workspace for a home would
+#: refuse an ordinary checkout) plus the directories that carry install state —
+#: together they answer "does this directory own the installations under it?".
+_HOME_MARKERS = ("config.yaml", "state.db")
+
+#: Env twin of the module global below (mirrors
+#: `hermes_state._STATE_DB_GUARD_BYPASS_ENV`): a module global cannot cross a
+#: process boundary, and a child armed by ancestry needs a way out.
+_LAUNCHER_GUARD_BYPASS_ENV = "HERMES_LAUNCHER_GUARD_BYPASS"
+
+#: Test-only escape hatch, mirroring `hermes_state._STATE_DB_GUARD_BYPASS`.
+_LAUNCHER_GUARD_BYPASS = False
+
+
+class LauncherPublicationRefused(RuntimeError):
+    """A publication that would bind an installation to another home's store.
+
+    Raised *instead of* writing. Every command that runs `hermes` executes the
+    published launcher, so a launcher carrying another home's interpreter is a
+    dead installation, not a wrong file.
+    """
+
+
+def _looks_like_hermes_home(directory: Path) -> bool:
+    """True when *directory* owns the installations under it."""
+    try:
+        if (directory / "profiles").is_dir() or (directory / "installs").is_dir():
+            return True
+        if any((directory / marker).is_file() for marker in _HOME_MARKERS):
+            return True
+        # A store of its own: the very thing this guard reasons about.
+        return (directory / "tools" / "facts.json").is_file()
+    except OSError:
+        return False
+
+
+def installation_home(root: Path) -> Path | None:
+    """The home a MANAGED installation lives in, or ``None`` for a bare checkout.
+
+    ``<home>/hermes-agent`` is the managed shape: the tree's parent is the home
+    that owns its dependency store. A developer checkout, a CI tree or a bundle
+    payload has no owning home here and keeps the process's own dependency home,
+    exactly as it did before this guard existed.
+    """
+    parent = Path(root).resolve().parent
+    return parent if _looks_like_hermes_home(parent) else None
+
+
+def _in_test_context() -> bool:
+    """True when this process — or a parent process — is a pytest run.
+
+    `hermes_state_guard` owns the definition: the env markers *and* process
+    ancestry, because a child spawned with a rebuilt environment loses
+    ``PYTEST_*`` and the ``HERMES_HOME`` redirect together (#82770). Falls back
+    to the environment half when that module is unavailable, as it fails open
+    without psutil.
+    """
+    try:
+        import hermes_state_guard
+
+        return bool(hermes_state_guard._in_test_context())
+    except Exception:
+        return bool(os.environ.get("PYTEST_CURRENT_TEST")
+                    or os.environ.get("PYTEST_VERSION")
+                    or os.environ.get("HERMES_TEST_ISOLATION"))
+
+
+def _live_installation_root() -> Path | None:
+    """The platform's OWN home (``~/.hermes``), resolved WITHOUT ``HERMES_HOME``.
+
+    The same helper `hermes_state` uses to recognize the live database: a tree
+    under it is the RUNNING installation, whoever is asking.
+    """
+    try:
+        import hermes_state_guard
+
+        return hermes_state_guard._real_platform_state_root()
+    except Exception:
+        try:
+            user_home = Path(os.path.expanduser("~"))
+            if os.name == "nt":
+                base = os.environ.get("LOCALAPPDATA", "").strip()
+                root = (Path(base) / "hermes") if base else user_home / "AppData" / "Local" / "hermes"
+            else:
+                root = user_home / ".hermes"
+            return root.resolve()
+        except Exception:
+            return None
+
+
+def _bypass_requested() -> bool:
+    """The documented escape hatch, and only its documented value.
+
+    ``HERMES_LAUNCHER_GUARD_BYPASS=0`` (or any other non-empty value) must not
+    disarm a protection that exists to keep a host alive; an inherited variable
+    set to a false-looking value would otherwise do exactly that.
+    """
+    if _LAUNCHER_GUARD_BYPASS:
+        return True
+    return os.environ.get(_LAUNCHER_GUARD_BYPASS_ENV, "") == "1"
+
+
+def _installation_has_own_store(home: Path) -> bool:
+    """True when *home* already carries a dependency store (an EXISTING install).
+
+    A fresh tree may bind whatever store its caller resolved — that is how
+    ``pm install`` works, and the installer legitimately points
+    ``HERMES_RUNTIME_DIR`` at its own tool store while the tree has no store of
+    its own (measured in the fork's install-e2e lane 2026-10-01: refusing that
+    broke `install.sh`). An installation whose home already has a store has a
+    durable binding, and rebinding it to another home's interpreter is the
+    incident this guard exists for.
+
+    Deliberately NOT keyed on the launcher file: the publisher writes that file
+    itself, one entry point at a time, so a launcher written by the call in
+    progress would make a fresh installation look bound.
+    """
+    try:
+        return (home / "tools" / "facts.json").is_file()
+    except OSError:
+        return False
+
+
+def _refuse_unsafe_publication(root: Path, *targets: Path) -> None:
+    """Refuse a launcher publication that would bind *root* to another home.
+
+    Called before anything is written, with every directory the caller is about
+    to write into. Three escapes are closed, all of them measured on
+    2026-09-30 (Hetzner t_04285d23):
+
+    * a test process may not write a launcher into the live installation at
+      all — not through its own tree and not through another checkout's
+      ``out_dir``, which is why the targets are checked with the tree, and
+    * an EXISTING managed installation may only be published with a store from
+      its own home — the sandbox interpreter that killed the host came from
+      another one.
+    """
+    if _bypass_requested():
+        return
+    resolved = Path(root).resolve()
+    live = _live_installation_root()
+    if live is not None and _in_test_context():
+        # The live TREE, not the whole home: what must never be rewritten by a
+        # test is the launcher file every `hermes` call on the host executes.
+        # Convenience directories under the same home (…/bin, …/.local/bin) are
+        # guarded by `_owns_launcher` instead — they are only ever repointed at
+        # a tree that already owns them, and suite fixtures publish those inside
+        # their own redirected HOME by design.
+        live_tree = live / "hermes-agent"
+        for candidate in (resolved, *(Path(target).resolve() for target in targets)):
+            if not candidate.is_relative_to(live_tree):
+                continue
+            raise LauncherPublicationRefused(
+                f"launcher publication refused: {candidate} is the live installation "
+                f"under {live}, and this is a test process — a test must not publish a "
+                "launcher into the running installation. No launcher was written. If "
+                f"this run genuinely needs it, export {_LAUNCHER_GUARD_BYPASS_ENV}=1 in "
+                "its environment (or set hermes_cli._launchers._LAUNCHER_GUARD_BYPASS) "
+                "and say why.")
+    home = installation_home(resolved)
+    if home is None:
+        return  # a bare checkout: the process's own dependency home is the contract
+    try:
+        store = Path(store_root(resolved)).resolve()
+    except Exception:
+        return  # an unresolvable store fails loudly further down; never invent a refusal
+    if store.is_relative_to(home):
+        return
+    if not _installation_has_own_store(home):
+        return  # a fresh tree: the caller's store is the installation's first one
+    raise LauncherPublicationRefused(
+        f"launcher publication refused: the store interpreter for {resolved} would come "
+        f"from {store}, outside the installation's own home {home}, and {resolved} is "
+        "already an installation (it has a launcher or a store of its own). The dependency "
+        f"home was redirected (HERMES_HOME={os.environ.get('HERMES_HOME', '')!r}, "
+        f"HERMES_RUNTIME_DIR={os.environ.get('HERMES_RUNTIME_DIR', '')!r}) away from the "
+        "installation, and a launcher published this way boots another home's "
+        "interpreter — measured 2026-09-30, that killed every `hermes` call on the host. "
+        "No launcher was written. If this is deliberate, export "
+        f"{_LAUNCHER_GUARD_BYPASS_ENV}=1 (or set hermes_cli._launchers._LAUNCHER_GUARD_BYPASS).")
+
+
 def stage_launcher(name: str, repo_root: Path, out_dir: Path) -> Path | None:
     """Publish one launcher bound to store Python, or refuse missing tools."""
     repo_root = Path(repo_root)
+    _refuse_unsafe_publication(repo_root, out_dir)
     store_python = resolve_store_python(repo_root)
     if store_python is not None:
         path = mint_launcher(name, repo_root, out_dir, store_python, None)
@@ -392,6 +589,7 @@ def ensure_install_launchers(repo_root: Path, out_dir: Path) -> list[str]:
     """Publish exact-install commands; conveniences follow them across Python repins."""
     root = Path(repo_root).resolve()
     local = root / ".hermes" / "bin"
+    _refuse_unsafe_publication(root, local, out_dir)
     local.mkdir(parents=True, exist_ok=True)
     written = [str(path) for name in WINDOWS_BIN_LAUNCHERS
                if (path := stage_launcher(name, root, local)) is not None]
@@ -612,7 +810,11 @@ if __name__ == "__main__":
     if resolve_store_python(repo_root) is None:
         parser.exit(1, "hermes: store interpreter is missing; finish pm install before publishing launchers\n")
     args.out_dir.mkdir(parents=True, exist_ok=True)
-    written = ensure_install_launchers(repo_root, args.out_dir)
+    try:
+        written = ensure_install_launchers(repo_root, args.out_dir)
+    except LauncherPublicationRefused as exc:
+        # Named, not a traceback: the site of the refusal is the message.
+        parser.exit(1, f"hermes: {exc}\n")
     if len(written) != len(ENTRY_POINTS):
         parser.exit(1, "hermes: launcher publication failed\n")
     print("\n".join(written))
