@@ -17,6 +17,8 @@ from typing import Optional
 from typing import TYPE_CHECKING
 import contextlib
 
+from hermes_cli.worktree_ops import _cleanup_failed_worktree_add
+from hermes_cli.worktree_ops import _resolve_worktree_base
 from hermes_cli.worktree_ops import release_lsp_clients
 
 if TYPE_CHECKING:
@@ -424,23 +426,91 @@ def _repo_root_for_worktree_target(path: Path) -> Optional[Path]:
         current = current.parent
 
 
-def _ensure_git_worktree(repo_root: Path, target: Path, branch_name: str) -> None:
-    """Materialize ``target`` as a linked git worktree under ``repo_root``."""
+def _ensure_git_worktree(repo_root: Path, target: Path, branch_name: str) -> str:
+    """Materialize ``target`` as a linked git worktree under ``repo_root`` -> base label.
+
+    A NEW branch is cut from the *fetched remote tip* (``origin/main``, resolved by
+    ``_resolve_worktree_base``), never from the primary checkout's literal ``HEAD``:
+    a board's ``default_workdir`` is routinely parked on another card's branch, and
+    ``HEAD`` then grafts that card's commits into every new diff (measured
+    2026-10-01: six branches born from ``wt/t_acbeed4d-konsol-alarm``). The
+    resolver is asked with ``prefer_current_upstream=False`` so a *pushed* foreign
+    branch cannot win through its ``@{upstream}`` either — the anchor is the
+    remote **default** branch, whatever the primary tree stands on (review round
+    1 measured exactly that leak). Local ``HEAD`` stays the base only as a *named*
+    fallback when the fetch cannot reach the remote: the returned label says which
+    of the two it was, so the caller can record it instead of assuming.
+    """
     target = target.expanduser()
     repo_common = _git_common_dir(repo_root)
     if target.exists() and repo_common is not None and _git_common_dir(target) == repo_common:
-        return
+        return _reuse_existing_worktree(repo_root, target, branch_name)
     target.parent.mkdir(parents=True, exist_ok=True)
-    if _git_branch_exists(repo_root, branch_name):
-        args = ["worktree", "add", str(target), branch_name]
+    creating_branch = not _git_branch_exists(repo_root, branch_name)
+    if creating_branch:
+        base_ref, base_label = _resolve_worktree_base(
+            str(repo_root), prefer_current_upstream=False)
+        args = ["worktree", "add", "-b", branch_name, str(target), base_ref]
     else:
-        args = ["worktree", "add", "-b", branch_name, str(target), "HEAD"]
-    result = _git(repo_root, *args, timeout=60)
+        # An existing branch tip is the base — re-dispatch resumes the task's own
+        # commits; name it rather than letting the base look like the remote tip.
+        base_label = f"{branch_name} (existing branch tip)"
+        args = ["worktree", "add", str(target), branch_name]
+    try:
+        result = _git(repo_root, *args, timeout=60)
+    except Exception as exc:
+        # subprocess.run raises TimeoutExpired instead of returning a CompletedProcess;
+        # cleanup must cover that path too, or a killed checkout poisons the retry.
+        _cleanup_failed_worktree_add(
+            str(repo_root), target, branch_name, delete_branch=creating_branch
+        )
+        if isinstance(exc, subprocess.TimeoutExpired):
+            reason = f"timed out after {exc.timeout}s"
+        else:
+            reason = f"raised {type(exc).__name__}: {exc}"
+        raise RuntimeError(
+            f"git worktree add {reason} for {target} on branch {branch_name} "
+            f"(base {base_label})"
+        ) from exc
     if result.returncode != 0:
+        # A pre-existing branch is not ours to delete, but its partial checkout/admin
+        # entry is still ours to sweep so a retry can start cleanly.
+        _cleanup_failed_worktree_add(
+            str(repo_root), target, branch_name, delete_branch=creating_branch
+        )
         stderr = (result.stderr or result.stdout or "").strip()
         raise RuntimeError(
-            f"git worktree add failed for {target} on branch {branch_name}: {stderr}"
+            f"git worktree add failed for {target} on branch {branch_name} "
+            f"(base {base_label}): {stderr}"
         )
+    _kb._log.info("kanban worktree %s on %s cut from %s", target, branch_name, base_label)
+    return base_label
+
+
+def _reuse_existing_worktree(repo_root: Path, target: Path, branch_name: str) -> str:
+    """Reuse the tree already at ``target`` — or refuse it, naming why.
+
+    Re-dispatch onto the same tree is the retry path (a reclaimed task resumes in
+    place), so a tree on THIS task's branch is reused. A tree on another branch is
+    not — the task would silently run on that branch, the same cross-task
+    provenance corruption ``_resolve_worktree_workspace`` refuses for explicit
+    paths. The base is resolved and named here too, so a tree standing on another
+    line is visible in the log instead of assumed.
+    """
+    actual_branch = _git_current_branch(target)
+    if actual_branch != branch_name:
+        raise RuntimeError(
+            f"refusing to reuse {target} for branch {branch_name}: it is checked out on "
+            f"{actual_branch or 'a detached HEAD'}; reusing it would run this task on "
+            "another branch. Remove the tree (git worktree remove --force) or fix the "
+            "task's branch_name."
+        )
+    head = _kb._git_out(target, "rev-parse", "HEAD") or "?"
+    _base_ref, base_label = _resolve_worktree_base(
+        str(repo_root), prefer_current_upstream=False)
+    label = f"{branch_name} (existing tree, HEAD {head[:12]} — base {base_label})"
+    _kb._log.info("reusing kanban worktree %s: %s", target, label)
+    return label
 
 
 def _anchored_worktree(repo_root: Path, task_id: str, branch_name: str) -> tuple[Path, str]:

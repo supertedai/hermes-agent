@@ -93,12 +93,16 @@ def release_lsp_clients(wt_path: str) -> None:
         logger.debug("LSP release for worktree %s failed: %s", wt_path, e)
 
 
-def _cleanup_failed_worktree_add(repo_root: str, wt_path: Path, branch_name: str) -> None:
-    """Sweep the leftovers of a failed/timed-out ``git worktree add`` (fail-soft).
+def _cleanup_failed_worktree_add(
+    repo_root: str, wt_path: Path, branch_name: str, *, delete_branch: bool = True
+) -> None:
+    """Sweep leftovers of a failed/timed-out ``git worktree add`` (fail-soft).
 
     ``worktree add`` is not transactional: killed mid-checkout it leaves the partial dir, a
     LOCKED admin entry naming the *live* pid (immune to the pruner's dead-pid unlock) and
-    sometimes the branch, so any retry of the same name fails.
+    sometimes the branch, so any retry of the same name fails. A branch that existed before
+    the add attempt is not owned by the failed attempt and is preserved when
+    ``delete_branch`` is false.
     """
     try:
         # Unlock first: `worktree remove --force` refuses a locked tree.
@@ -108,7 +112,8 @@ def _cleanup_failed_worktree_add(repo_root: str, wt_path: Path, branch_name: str
             shutil.rmtree(wt_path, ignore_errors=True)
         # `remove` needs the dir; `prune` drops the admin entry when it is already gone.
         _git_quiet(["worktree", "prune"], repo_root, timeout=15)
-        _git_quiet(["branch", "-D", branch_name], repo_root, timeout=15)
+        if delete_branch:
+            _git_quiet(["branch", "-D", branch_name], repo_root, timeout=15)
     except Exception as e:
         logger.debug("cleanup after failed worktree add: %s", e)
 
@@ -206,7 +211,8 @@ def _maintain_pack_health(repo_root: str) -> None:
 
 
 def _resolve_worktree_base(repo_root: str, fetch_timeout: float = 5,
-                           freshness_window: float = 300) -> tuple:
+                           freshness_window: float = 300,
+                           prefer_current_upstream: bool = True) -> tuple:
     """Resolve the freshest base ref to branch a new worktree from -> ``(base_ref, banner_label)``.
 
     Local ``HEAD`` can lag the remote by hundreds of commits, so try in order: (1) the current
@@ -214,6 +220,14 @@ def _resolve_worktree_base(repo_root: str, fetch_timeout: float = 5,
     (3) local ``HEAD``. The fetch is skipped when ``FETCH_HEAD`` is younger than
     *freshness_window* s, capped at *fetch_timeout*, and never retried: on failure the cached
     remote-tracking ref is used (the pre-push stale-base gate backstops genuine staleness).
+
+    *prefer_current_upstream=False* skips (1): the dispatcher's primary checkout is
+    routinely parked on *another card's* branch (measured 2026-10-01: a board's
+    ``default_workdir`` left on a pushed ``wt/…`` branch), and ``@{upstream}`` then
+    resolves to that foreign branch's own remote tip — the exact tip the anchor must
+    NOT be. Callers that cut branches for other cards pass False and resolve the
+    remote default branch directly; the interactive CLI flow (``_worktree_add``)
+    keeps the default and prefers its own upstream.
     """
     from hermes_cli._subprocess_compat import noninteractive_git_env
 
@@ -257,16 +271,20 @@ def _resolve_worktree_base(repo_root: str, fetch_timeout: float = 5,
             return ref, f"{ref} (cached — {reason})"
         return "HEAD", f"HEAD (local — {reason}, no cached {ref})"
 
-    # 1. Current branch's upstream, if it tracks one.
-    try:
-        up = _run(["rev-parse", "--abbrev-ref", "--symbolic-full-name", "@{upstream}"])
-        if up.returncode == 0:
-            upstream = up.stdout.strip()
-            if upstream and "/" in upstream:
-                remote, branch = upstream.split("/", 1)
-                return _refresh(remote, branch, upstream)
-    except Exception as e:
-        logger.debug("worktree base: upstream resolution failed: %s", e)
+    # 1. Current branch's upstream, if it tracks one — and only when the caller
+    #    resolves a base for the branch it stands on. The dispatcher passes
+    #    prefer_current_upstream=False: its primary tree is parked on whatever
+    #    card ran last, and a pushed foreign branch would win this step.
+    if prefer_current_upstream:
+        try:
+            up = _run(["rev-parse", "--abbrev-ref", "--symbolic-full-name", "@{upstream}"])
+            if up.returncode == 0:
+                upstream = up.stdout.strip()
+                if upstream and "/" in upstream:
+                    remote, branch = upstream.split("/", 1)
+                    return _refresh(remote, branch, upstream)
+        except Exception as e:
+            logger.debug("worktree base: upstream resolution failed: %s", e)
 
     # 2. Remote default branch (origin/HEAD).
     try:
