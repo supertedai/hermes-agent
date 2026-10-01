@@ -433,10 +433,13 @@ def _ensure_git_worktree(repo_root: Path, target: Path, branch_name: str) -> str
     ``_resolve_worktree_base``), never from the primary checkout's literal ``HEAD``:
     a board's ``default_workdir`` is routinely parked on another card's branch, and
     ``HEAD`` then grafts that card's commits into every new diff (measured
-    2026-10-01: six branches born from ``wt/t_acbeed4d-konsol-alarm``). Local ``HEAD``
-    stays the base only as a *named* fallback when the fetch cannot reach the remote:
-    the returned label says which of the two it was, so the caller can record it
-    instead of assuming.
+    2026-10-01: six branches born from ``wt/t_acbeed4d-konsol-alarm``). The
+    resolver is asked with ``prefer_current_upstream=False`` so a *pushed* foreign
+    branch cannot win through its ``@{upstream}`` either — the anchor is the
+    remote **default** branch, whatever the primary tree stands on (review round
+    1 measured exactly that leak). Local ``HEAD`` stays the base only as a *named*
+    fallback when the fetch cannot reach the remote: the returned label says which
+    of the two it was, so the caller can record it instead of assuming.
     """
     target = target.expanduser()
     repo_common = _git_common_dir(repo_root)
@@ -445,7 +448,8 @@ def _ensure_git_worktree(repo_root: Path, target: Path, branch_name: str) -> str
     target.parent.mkdir(parents=True, exist_ok=True)
     creating_branch = not _git_branch_exists(repo_root, branch_name)
     if creating_branch:
-        base_ref, base_label = _resolve_worktree_base(str(repo_root))
+        base_ref, base_label = _resolve_worktree_base(
+            str(repo_root), prefer_current_upstream=False)
         args = ["worktree", "add", "-b", branch_name, str(target), base_ref]
     else:
         # An existing branch tip is the base — re-dispatch resumes the task's own
@@ -486,7 +490,8 @@ def _reuse_existing_worktree(repo_root: Path, target: Path, branch_name: str) ->
             "task's branch_name."
         )
     head = _kb._git_out(target, "rev-parse", "HEAD") or "?"
-    _base_ref, base_label = _resolve_worktree_base(str(repo_root))
+    _base_ref, base_label = _resolve_worktree_base(
+        str(repo_root), prefer_current_upstream=False)
     label = f"{branch_name} (existing tree, HEAD {head[:12]} — base {base_label})"
     _kb._log.info("reusing kanban worktree %s: %s", target, label)
     return label

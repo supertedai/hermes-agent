@@ -71,6 +71,33 @@ def repo(tmp_path: Path) -> Path:
     return project
 
 
+@pytest.fixture
+def repo_pushed_foreign(tmp_path: Path) -> Path:
+    """The *pushed* live form measured on the ``default`` board 2026-10-01.
+
+    Like ``repo``, but the foreign card's branch is **pushed and tracked**
+    (``push -u origin HEAD``): ``@{upstream}`` then resolves to
+    ``origin/wt/foreign`` — the foreign branch's own remote tip. That is the
+    state the review round 1 reproduction stood on (the primary tree was on
+    ``wt/t_acbeed4d-konsol-alarm``, whose upstream is a real remote ref), and
+    it is the state a base resolver that prefers ``@{upstream}`` gets wrong.
+    """
+    origin = tmp_path / "origin.git"
+    _git("init", "--bare", "-b", "main", str(origin))
+    project = tmp_path / "project"
+    _git("clone", str(origin), str(project))
+    _git("-C", str(project), "config", "user.email", "t@example.com")
+    _git("-C", str(project), "config", "user.name", "t")
+    _commit(project, "main-1")
+    _git("-C", str(project), "push", "origin", "HEAD:main")
+    _commit(project, "main-2")
+    _git("-C", str(project), "push", "origin", "HEAD:main")
+    _git("-C", str(project), "switch", "-c", "wt/foreign")
+    _commit(project, "foreign card's commit")
+    _git("-C", str(project), "push", "-u", "origin", "HEAD:wt/foreign")
+    return project
+
+
 def _new_tree(repo: Path, task_id: str) -> tuple[Path, str]:
     target = repo / ".worktrees" / task_id
     label = kbw._ensure_git_worktree(repo, target, f"wt/{task_id}")
@@ -116,6 +143,55 @@ def test_new_worktree_fetches_a_remote_tip_that_moved_after_the_clone(
 
     head = _git("-C", str(target), "rev-parse", "HEAD").strip()
     assert head == advanced, f"expected the refetched tip {advanced}, got {head} ({label!r})"
+
+
+# ---------------------------------------------------------------------------
+# (a2) the *pushed* live form: the primary tree tracks a foreign branch whose
+#      upstream resolves — the anchor must still be origin/main, not @{upstream}
+# ---------------------------------------------------------------------------
+
+
+def test_new_worktree_ignores_a_pushed_foreign_upstream(
+    repo_pushed_foreign: Path,
+) -> None:
+    # Premise: the current branch's upstream IS the foreign branch's own remote
+    # tip (push -u), and that tip is not origin/main.
+    upstream = _git("-C", str(repo_pushed_foreign), "rev-parse", "@{upstream}").strip()
+    assert upstream == _git("-C", str(repo_pushed_foreign), "rev-parse", "HEAD").strip(), (
+        "fixture premise: the primary tree tracks the pushed foreign branch"
+    )
+    remote_tip = _git("-C", str(repo_pushed_foreign), "rev-parse", "origin/main").strip()
+    assert upstream != remote_tip, "fixture premise: the foreign tip is not the remote tip"
+
+    target, label = _new_tree(repo_pushed_foreign, "t_abcd0001")
+
+    head = _git("-C", str(target), "rev-parse", "HEAD").strip()
+    assert head == remote_tip, (
+        f"worktree was cut from {head}, expected the remote default branch tip "
+        f"{remote_tip}; with the primary tree on a pushed foreign branch, "
+        f"@{{upstream}} resolves to the FOREIGN tip {upstream}, and that must not "
+        f"become the anchor. label was {label!r}"
+    )
+    assert (
+        _git("-C", str(target), "rev-list", "--count", "origin/main..HEAD").strip() == "0"
+    ), "the new tree must not carry any commit beyond origin/main"
+    assert "origin/main" in label, f"the base must be named, got {label!r}"
+
+
+def test_reuse_on_the_same_branch_names_origin_main_despite_a_pushed_foreign_upstream(
+    repo_pushed_foreign: Path,
+) -> None:
+    target, _ = _new_tree(repo_pushed_foreign, "t_abcd0002")
+    head = _git("-C", str(target), "rev-parse", "HEAD").strip()
+
+    label = kbw._ensure_git_worktree(repo_pushed_foreign, target, "wt/t_abcd0002") or ""
+
+    assert "wt/t_abcd0002" in label
+    assert head[:12] in label, f"the reused tree's HEAD must be named, got {label!r}"
+    assert "origin/main" in label, (
+        f"the reuse path names the intended base through the same resolver; "
+        f"a pushed foreign upstream must not leak into it, got {label!r}"
+    )
 
 
 # ---------------------------------------------------------------------------
