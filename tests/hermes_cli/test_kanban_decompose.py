@@ -113,6 +113,41 @@ def test_decompose_with_fanout_creates_children(kanban_home):
     assert c1.assignee == "engineer"
 
 
+def test_decompose_keeps_children_on_explicit_joakim_board(kanban_home):
+    """Board scope is explicit; the deterministic policy is no board-name
+    to profile inference, only the configured/default valid profile roster.
+    """
+    kb.create_board("joakim")
+    with kb.connect(board="joakim") as conn:
+        tid = kb.create_task(conn, title="joakim work", triage=True, board="joakim")
+
+    llm_payload = jsonlib.dumps({
+        "fanout": True,
+        "tasks": [{"title": "do work", "body": "details", "assignee": "fallback", "parents": []}],
+    })
+    patches = _patch_list_profiles(["default", "fallback"])
+    for p in patches:
+        p.start()
+    try:
+        with _patch_aux_client(llm_payload), _patch_extra_body(), patch(
+            "hermes_cli.kanban_decompose._load_config",
+            return_value={"kanban": {"default_assignee": "fallback"}},
+        ):
+            outcome = decomp.decompose_task(tid, author="joakim", board="joakim")
+    finally:
+        for p in patches:
+            p.stop()
+
+    assert outcome.ok, outcome.reason
+    with kb.connect(board="joakim") as conn:
+        child = kb.get_task(conn, outcome.child_ids[0])
+        root = kb.get_task(conn, tid)
+    assert root.status == "todo"
+    assert child.assignee == "fallback"
+    with kb.connect() as conn:
+        assert kb.get_task(conn, tid) is None
+
+
 def test_decompose_fanout_false_invalid_llm_assignee_uses_default(kanban_home):
     with kb.connect() as conn:
         tid = kb.create_task(conn, title="route me safely", triage=True)
