@@ -456,12 +456,28 @@ def _ensure_git_worktree(repo_root: Path, target: Path, branch_name: str) -> str
         # commits; name it rather than letting the base look like the remote tip.
         base_label = f"{branch_name} (existing branch tip)"
         args = ["worktree", "add", str(target), branch_name]
-    result = _git(repo_root, *args, timeout=60)
+    try:
+        result = _git(repo_root, *args, timeout=60)
+    except Exception as exc:
+        # subprocess.run raises TimeoutExpired instead of returning a CompletedProcess;
+        # cleanup must cover that path too, or a killed checkout poisons the retry.
+        _cleanup_failed_worktree_add(
+            str(repo_root), target, branch_name, delete_branch=creating_branch
+        )
+        if isinstance(exc, subprocess.TimeoutExpired):
+            reason = f"timed out after {exc.timeout}s"
+        else:
+            reason = f"raised {type(exc).__name__}: {exc}"
+        raise RuntimeError(
+            f"git worktree add {reason} for {target} on branch {branch_name} "
+            f"(base {base_label})"
+        ) from exc
     if result.returncode != 0:
-        if creating_branch:
-            # Leftovers poison a retry of the same name: the partial dir, the admin
-            # entry locked by a now-dead pid, and sometimes the just-created branch.
-            _cleanup_failed_worktree_add(str(repo_root), target, branch_name)
+        # A pre-existing branch is not ours to delete, but its partial checkout/admin
+        # entry is still ours to sweep so a retry can start cleanly.
+        _cleanup_failed_worktree_add(
+            str(repo_root), target, branch_name, delete_branch=creating_branch
+        )
         stderr = (result.stderr or result.stdout or "").strip()
         raise RuntimeError(
             f"git worktree add failed for {target} on branch {branch_name} "

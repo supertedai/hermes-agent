@@ -266,3 +266,72 @@ def test_failed_add_sweeps_the_leftover_before_raising(
         kbw._ensure_git_worktree(repo, repo / ".worktrees" / "t_gggg7777", "wt/t_gggg7777")
 
     assert swept, "the leftover of a failed add must be swept before the error propagates"
+
+
+def test_timed_out_add_sweeps_before_propagating_a_named_failure(
+    repo: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    swept: list[tuple] = []
+    monkeypatch.setattr(
+        kbw,
+        "_cleanup_failed_worktree_add",
+        lambda *args, **kwargs: swept.append((args, kwargs)),
+    )
+    real_git = kbw._git
+
+    def timing_out_git(repo_root, *args, **kwargs):
+        if args[:2] == ("worktree", "add"):
+            raise subprocess.TimeoutExpired(
+                cmd=["git", "worktree", "add"], timeout=kwargs.get("timeout", 60)
+            )
+        return real_git(repo_root, *args, **kwargs)
+
+    monkeypatch.setattr(kbw, "_git", timing_out_git)
+
+    with pytest.raises(RuntimeError, match="timed out"):
+        kbw._ensure_git_worktree(repo, repo / ".worktrees" / "t_hhhh8888", "wt/t_hhhh8888")
+
+    assert swept, "a timed-out add must be swept before the named failure propagates"
+    assert swept[0][1] == {"delete_branch": True}
+
+
+def test_failed_add_on_existing_branch_is_swept_and_retry_keeps_branch(
+    repo: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    branch = "wt/t_iiii9999"
+    target = repo / ".worktrees" / "t_iiii9999"
+    _git("-C", str(repo), "branch", branch, "origin/main")
+
+    real_git = kbw._git
+    failed_once = True
+
+    def fail_first_add(repo_root, *args, **kwargs):
+        nonlocal failed_once
+        if args[:2] == ("worktree", "add") and failed_once:
+            failed_once = False
+            target.mkdir(parents=True)
+            (target / "partial-checkout-marker").write_text("partial\n", encoding="utf-8")
+            return subprocess.CompletedProcess(
+                ["git", "worktree", "add"], 1, "", "fatal: simulated add failure"
+            )
+        return real_git(repo_root, *args, **kwargs)
+
+    monkeypatch.setattr(kbw, "_git", fail_first_add)
+
+    with pytest.raises(RuntimeError, match="simulated add failure"):
+        kbw._ensure_git_worktree(repo, target, branch)
+
+    assert not target.exists(), "failed add cleanup must remove the partial target"
+    assert (
+        subprocess.run(
+            ["git", "-C", str(repo), "show-ref", "--verify", f"refs/heads/{branch}"],
+            check=False,
+            capture_output=True,
+            text=True,
+        ).returncode
+        == 0
+    ), "cleanup of a failed add must not delete a pre-existing branch"
+
+    label = kbw._ensure_git_worktree(repo, target, branch)
+    assert target.is_dir()
+    assert branch in label
