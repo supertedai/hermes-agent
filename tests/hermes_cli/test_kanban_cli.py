@@ -122,6 +122,10 @@ def test_decompose_cli_passes_board_scope(kanban_home, board, monkeypatch):
 
     calls = []
     monkeypatch.setattr(kb, "init_db", lambda: None)
+    # Pin the author: ``_profile_author()`` reads HERMES_PROFILE_NAME /
+    # HERMES_PROFILE / HERMES_HOME from the ambient environment, so without this
+    # the assertion below depends on which profile the test happens to run under.
+    monkeypatch.setattr(kc, "_profile_author", lambda: "default")
     monkeypatch.setattr(
         kc,
         "_is_delegated_child_cli_mutation",
