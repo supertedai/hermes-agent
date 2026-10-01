@@ -114,6 +114,55 @@ def test_decompose_with_fanout_creates_children(kanban_home):
     assert c1.assignee == "engineer"
 
 
+def test_decompose_keeps_children_on_explicit_board(kanban_home):
+    """An explicit ``board=`` scopes every decomposition read/write to that
+    board's DB — root load, child insert and promotion alike. No inference
+    from the board name and no reliance on the ambient board resolution
+    (regression: a multi-board auto-decompose could cross-write children).
+    """
+    kb.create_board("other-board")
+    with kbc.connect(board="other-board") as conn:
+        tid = kb.create_task(conn, title="other work", triage=True, board="other-board")
+
+    llm_payload = jsonlib.dumps({
+        "fanout": True,
+        "tasks": [{"title": "do work", "body": "details", "assignee": "fallback", "parents": []}],
+    })
+    patches = _patch_list_profiles(["default", "fallback"])
+    for p in patches:
+        p.start()
+    try:
+        with _patch_aux_client(llm_payload), _patch_extra_body(), patch(
+            "hermes_cli.config.load_config_readonly",
+            return_value={"kanban": {"default_assignee": "fallback"}},
+        ):
+            outcome = decomp.decompose_task(tid, author="author-b", board="other-board")
+    finally:
+        for p in patches:
+            p.stop()
+
+    assert outcome.ok, outcome.reason
+    with kbc.connect(board="other-board") as conn:
+        root = kb.get_task(conn, tid)
+        child = kb.get_task(conn, outcome.child_ids[0])
+    assert root.status == "todo"
+    assert child.assignee == "fallback"
+    with kbc.connect() as conn:
+        assert kb.get_task(conn, tid) is None
+
+
+def test_list_triage_ids_scopes_to_explicit_board(kanban_home):
+    """``list_triage_ids(board=...)`` reads exactly that board's triage column."""
+    kb.create_board("other-board")
+    with kbc.connect() as conn:
+        default_tid = kb.create_task(conn, title="default work", triage=True)
+    with kbc.connect(board="other-board") as conn:
+        other_tid = kb.create_task(conn, title="other work", triage=True, board="other-board")
+
+    assert decomp.list_triage_ids(board="other-board") == [other_tid]
+    assert decomp.list_triage_ids(board="default") == [default_tid]
+
+
 def test_decompose_fanout_children_inherit_root_assignee_when_unrouted(kanban_home):
     """Unrouted children fall back to the ROOT task's assignee, not
     the decomposer's active profile (#114294). The active profile here is ``private``
