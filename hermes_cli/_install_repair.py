@@ -127,6 +127,7 @@ def ensure_windows_bin_launchers(
     # Only the launch producer knows the executable/boot contract. Old venv
     # paths below identify obsolete artifacts; they never select dependencies.
     from hermes_cli._launchers import (
+        LauncherPublicationRefused,
         ensure_install_launchers,
         exe_is_venv_bound,
         stage_launcher,
@@ -160,6 +161,11 @@ def ensure_windows_bin_launchers(
             try:
                 canonical.mkdir(parents=True, exist_ok=True)
                 restored.extend(ensure_install_launchers(root, canonical))
+            except LauncherPublicationRefused:
+                # The publisher's guard refused on purpose (a test process, or a
+                # store outside this home). That is a decision, not a crash: the
+                # heal reports what it has and every `hermes` start keeps working.
+                return restored
             except OSError:
                 return []
         if not restored and any(
@@ -194,7 +200,11 @@ def ensure_windows_bin_launchers(
                 # Already a store-python launcher (or a form this heal does
                 # not understand but that does not boot the venv): leave it.
                 continue
-            final = stage_launcher(name, root, target)
+            try:
+                final = stage_launcher(name, root, target)
+            except LauncherPublicationRefused:
+                # Never-raise helper: a deliberate refusal ends the heal here.
+                break
             if final is not None:
                 # Windows resolves .exe before .cmd. A surviving venv-bound
                 # launcher would shadow the successfully staged fallback.

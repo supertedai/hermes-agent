@@ -131,10 +131,12 @@ def test_a_store_from_a_sandbox_home_is_refused(tmp_path, monkeypatch):
 
     The tree lives under its own (custom) home and the process's ``~`` is
     elsewhere, so only the store/home mismatch can refuse this — which is what
-    wrote the sandbox interpreter into a real launcher.
+    wrote the sandbox interpreter into a real launcher. The installation already
+    has a store of its own, exactly as the live one had.
     """
     custom = tmp_path / "shared-hermes"
     tree, home = stand_in_installation(tmp_path, monkeypatch, home=custom)
+    store_for(home)                      # the installation's own, working store
     sandbox = tmp_path / "pytest-base" / "test_flytt_frem_og_tilbake0" / "hermes"
     sandbox_interpreter = store_for(sandbox)
     monkeypatch.setenv("HERMES_HOME", str(sandbox))
@@ -149,7 +151,6 @@ def test_a_store_from_a_sandbox_home_is_refused(tmp_path, monkeypatch):
     assert_nothing_published(tree, before)
 
     # The same installation published from its OWN home is the normal path.
-    store_for(home)
     monkeypatch.setenv("HERMES_HOME", str(home))
     assert _launchers.ensure_install_launchers(tree, tree / ".hermes" / "bin")
 
@@ -201,6 +202,105 @@ def test_the_documented_recovery_command_still_publishes(tmp_path, monkeypatch):
     assert published, "the recovery command must still publish"
     assert published_bytes(tree) != before
     assert str(interpreter) in published_bytes(tree).decode("utf-8")
+
+
+def clear_test_context(monkeypatch) -> None:
+    """Model a production process: no pytest environment, no pytest ancestor."""
+    monkeypatch.delenv("PYTEST_CURRENT_TEST", raising=False)
+    monkeypatch.delenv("PYTEST_VERSION", raising=False)
+    monkeypatch.delenv("HERMES_TEST_ISOLATION", raising=False)
+    monkeypatch.setattr(hermes_state_guard, "_PYTEST_ANCESTOR", False)
+
+
+@pytest.mark.platforms("posix", "windows")
+def test_a_fresh_installation_may_bind_the_store_its_installer_resolved(tmp_path, monkeypatch):
+    """`pm install` points HERMES_RUNTIME_DIR at its own tool store, on purpose.
+
+    Measured in this fork's install-e2e lane 2026-10-01: the first version of
+    this guard refused that and broke `install.sh` in CI (fail-closed against a
+    legitimate flow is still a defect). A tree that has neither a launcher nor a
+    store of its own has no binding to protect — the caller's store is its first.
+    """
+    tree, home = stand_in_installation(tmp_path, monkeypatch)
+    (tree / ".hermes" / "bin" / "hermes").unlink()
+    clear_test_context(monkeypatch)
+    harness = tmp_path / "setup-pm"
+    interpreter = store_for(harness)
+    # HERMES_RUNTIME_DIR *is* the store root (pm/environments.store_root), which
+    # is exactly how the installer points it at its own tool store.
+    monkeypatch.setenv("HERMES_RUNTIME_DIR", str(harness / "tools"))
+
+    published = _launchers.ensure_install_launchers(tree, tree / ".hermes" / "bin")
+
+    assert published, "a fresh installation must still be publishable"
+    assert str(interpreter) in published_bytes(tree).decode("utf-8")
+
+
+@pytest.mark.platforms("posix", "windows")
+def test_the_same_redirect_refuses_once_the_installation_is_bound(tmp_path, monkeypatch):
+    """The installer's redirect is only safe while the tree is fresh.
+
+    Once the tree carries a launcher or its own store, that binding is what
+    every `hermes` call on the host boots; a redirected store would rebind it.
+    """
+    tree, home = stand_in_installation(tmp_path, monkeypatch)
+    store_for(home)  # the installation has a store of its own: it is bound
+    clear_test_context(monkeypatch)
+    harness = tmp_path / "setup-pm"
+    store_for(harness)
+    monkeypatch.setenv("HERMES_RUNTIME_DIR", str(harness / "tools"))
+    before = published_bytes(tree)
+
+    with pytest.raises(_launchers.LauncherPublicationRefused):
+        _launchers.ensure_install_launchers(tree, tree / ".hermes" / "bin")
+
+    assert_nothing_published(tree, before)
+
+
+@pytest.mark.platforms("posix", "windows")
+def test_a_test_process_may_not_publish_through_another_checkouts_out_dir(tmp_path, monkeypatch):
+    """A bare checkout cannot be used as a bridge into the live installation.
+
+    ``stage_launcher``/``ensure_install_launchers`` write into the caller's
+    ``out_dir``: with a bare root (no owning home) the tree clause cannot see
+    that the TARGET is the live installation's own launcher directory.
+    """
+    tree, home = stand_in_installation(tmp_path, monkeypatch)
+    store_for(home)
+    checkout = tmp_path / "checkout"
+    checkout.mkdir()
+    before = published_bytes(tree)
+
+    with pytest.raises(_launchers.LauncherPublicationRefused) as refused:
+        _launchers.ensure_install_launchers(checkout, tree / ".hermes" / "bin")
+
+    assert str(tree / ".hermes" / "bin") in str(refused.value)
+    assert_nothing_published(tree, before)
+
+    # A target outside the live installation is still this process's business.
+    assert _launchers.ensure_install_launchers(checkout, checkout / "bin")
+
+
+@pytest.mark.platforms("posix", "windows")
+def test_the_escape_hatch_needs_its_documented_value(tmp_path, monkeypatch):
+    """``HERMES_LAUNCHER_GUARD_BYPASS=0`` (or "false") must not disarm the guard.
+
+    An inherited variable set to a false-looking value is the ordinary way a
+    protection silently disappears from a process tree.
+    """
+    tree, home = stand_in_installation(tmp_path, monkeypatch)
+    store_for(home)
+    before = published_bytes(tree)
+
+    for value in ("0", "false", "no", "", "1 "):
+        monkeypatch.setenv(_launchers._LAUNCHER_GUARD_BYPASS_ENV, value)
+        with pytest.raises(_launchers.LauncherPublicationRefused):
+            _launchers.ensure_install_launchers(tree, tree / ".hermes" / "bin")
+        assert_nothing_published(tree, before)
+
+    monkeypatch.setenv(_launchers._LAUNCHER_GUARD_BYPASS_ENV, "1")
+    assert _launchers.ensure_install_launchers(tree, tree / ".hermes" / "bin")
+    assert published_bytes(tree) != before
 
 
 #: Child probe: the guard is asked directly, so a regression here cannot write.
