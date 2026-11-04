@@ -148,7 +148,10 @@ def _owner_is_live(pid: int, started_at: Optional[int]) -> bool:
     if started_at is None:
         return pid == os.getpid()
     current = _process_start_time(pid)
-    return current is not None and current == started_at
+    # A live pid with an unreadable start time is not proof of exit.  Keep the
+    # recovery path fail-safe: uncertainty must not be turned into a lock-release
+    # claim while the owner may still be holding the shared flock.
+    return current is None or current == started_at
 
 
 def _live_owner_stale_after_seconds() -> Optional[float]:
@@ -458,9 +461,8 @@ _OWNER_WEDGED_GONE_REASON = (
 )
 _OWNER_WEDGED_SURVIVED_REASON = (
     "Owner process is still alive after the claim outlived the derived stale bound; treated "
-    "as wedged (#115692). Termination was attempted (SIGTERM, then SIGKILL) but the process "
-    "could not be proved gone, so the shared locks it holds may still be held and whether "
-    "side effects ran is unknown."
+    "as wedged (#115692). Termination was attempted but the process could not be proved gone, "
+    "so the shared locks it holds may still be held and whether side effects ran is unknown."
 )
 _OWNER_WEDGED_UNPROVEN_REASON = (
     "Owner process is still alive after the claim outlived the derived stale bound; treated "

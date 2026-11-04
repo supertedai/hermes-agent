@@ -282,6 +282,20 @@ def test_unobservable_owner_is_not_treated_as_gone(ledger, monkeypatch):
     assert executions_mod._wait_for_owner_exit(424242, 123, 0) == "unproven"
 
 
+def test_live_owner_with_unreadable_start_time_is_still_live(ledger, monkeypatch):
+    """A transient /proc failure must not turn a live owner into a gone owner."""
+    import gateway.status as status_mod
+
+    monkeypatch.setattr(status_mod, "_pid_exists", lambda pid: True)
+    monkeypatch.setattr(executions_mod, "_process_start_time", lambda pid: None)
+    # The identity gate already succeeded on its preceding probe; this isolates
+    # the later liveness read that transiently loses /proc visibility.
+    monkeypatch.setattr(executions_mod, "_owner_identity_proven", lambda pid, started_at: True)
+
+    assert executions_mod._owner_is_live(424242, 123) is True
+    assert executions_mod._owner_exit_state(424242, 123) == "owns"
+
+
 def test_the_job_can_fire_again_after_its_wedged_owner_is_terminated(ledger, tmp_path):
     """"Fire claim lost" is the symptom; a claimable job is the cure.
 
