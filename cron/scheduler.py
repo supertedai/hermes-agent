@@ -3748,8 +3748,9 @@ def _release_tick_lock(lock_fd) -> None:
 
 def _maybe_reap_dead_owners() -> None:
     """Dead-owner reclaim: a run that died mid-flight would leave its row 'claimed' forever. Rows
-    whose owner process is proved gone are released (_owner_is_live), as are rows whose live owner
-    holds a claim older than the derived stale bound (the process is not killed). Throttled."""
+    whose owner process is proved gone are released (_owner_is_live), and so are rows whose live
+    owner holds a claim older than the derived stale bound — that owner is then terminated so the
+    shared locks held by that process are released (#115692). Throttled."""
     # Dead-owner claim reclaim (#86721): execution rows carry their owner pid + process start time, but
     # recovery previously ran only at scheduler STARTUP. A one-shot `hermes cron run` that claimed a job and
     # died mid-run (its runner thread lived in the exiting CLI process) left the row 'claimed' forever while
@@ -3771,8 +3772,8 @@ def _maybe_reap_dead_owners() -> None:
         _reclaimed = recover_interrupted_executions()
         if _reclaimed:
             logger.warning(
-                "Reclaimed %d cron execution(s) whose owner process died "
-                "before reaching a terminal state (marked unknown)",
+                "Reclaimed %d cron execution(s) whose owner was proved gone or wedged "
+                "past the derived stale bound (marked unknown; a wedged owner is terminated)",
                 _reclaimed)
     except Exception as _reap_exc:
         logger.debug("Dead-owner execution reclaim failed: %s", _reap_exc)
