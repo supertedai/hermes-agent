@@ -191,28 +191,23 @@ def _owner_identity_proven(pid: int, started_at: Optional[int]) -> bool:
 
     Deliberately independent of ``_owner_is_live``: that predicate answers "is the owner still
     alive" (and is stubbed by tests), while this one answers "is the number still the owner" —
-    the only question that may be answered before signalling a foreign process. A recycled pid,
-    a zombie, an unreadable ``/proc`` or a missing fingerprint all answer *no*, and the caller
-    then leaves the process alone: a leaked claim beats killing a stranger.
+    the only question that may be answered before signalling a foreign process. A pid whose
+    current start time is not EXACTLY the claim's recorded start time, an unreadable ``/proc`` or
+    a missing start time all answer *no*, and the caller then leaves the process alone: a leaked
+    claim beats killing a stranger.
+
+    Exact start-time equality is the strictest identity test available, and that is deliberate:
+    a drift-tolerant process recogniser is built to re-identify a long-lived process, not to
+    authorise a kill, and any tolerance widens the window in which a recycled pid with a close
+    start time could be signalled. The caller re-asks this before every signal and every poll,
+    which narrows — but cannot close — the read→kill interval.
     """
     if started_at is None or pid <= 1 or pid == os.getpid():
         return False
     current = _process_start_time(pid)
     if current is None:
         return False
-    # ``getattr``, not ``from ... import``: older checkouts of gateway/status.py predate the
-    # drift-tolerant matcher, and this module must import cleanly against both.
-    try:
-        import gateway.status as gateway_status
-        matcher = getattr(gateway_status, "start_time_fingerprints_match", None)
-    except Exception:
-        matcher = None
-    if matcher is None:
-        return current == int(started_at)
-    try:
-        return bool(matcher(int(started_at), current))
-    except Exception:
-        return current == int(started_at)
+    return current == int(started_at)
 
 
 def _owner_still_owns(pid: int, started_at: Optional[int]) -> bool:
@@ -428,13 +423,14 @@ _OWNER_WEDGED_REASON = (
 _OWNER_WEDGED_TERMINATED_REASON = (
     "Owner process was still alive but the claim outlived the derived stale bound; "
     "treated as wedged (#115692) and terminated (SIGTERM, then SIGKILL if it ignored the "
-    "grace window) so the shared locks it held are released. Whether side effects ran "
-    "before the termination is unknown."
+    "grace window), so the shared locks held by this process are released (unless a forked "
+    "child inherited the lock's file descriptor). Whether side effects ran before the "
+    "termination is unknown."
 )
 _OWNER_WEDGED_GONE_REASON = (
     "Owner process was still alive when the claim outlived the derived stale bound, but "
-    "exited while the sweep ran; treated as wedged (#115692). Its shared locks are released "
-    "with it; whether side effects ran is unknown."
+    "exited while the sweep ran; treated as wedged (#115692). Shared locks held only by this "
+    "process are released with it; whether side effects ran is unknown."
 )
 _OWNER_WEDGED_SURVIVED_REASON = (
     "Owner process is still alive after the claim outlived the derived stale bound; treated "
@@ -445,8 +441,8 @@ _OWNER_WEDGED_SURVIVED_REASON = (
 _OWNER_WEDGED_UNPROVEN_REASON = (
     "Owner process is still alive after the claim outlived the derived stale bound; treated "
     "as wedged (#115692). The recorded pid no longer matches the claim's owner (start-time "
-    "mismatch), so it was NOT signalled — a recycled pid is never killed. Whether side effects "
-    "ran is unknown."
+    "mismatch), so it was NOT signalled rather than risk hitting a recycled pid. Whether side "
+    "effects ran is unknown."
 )
 
 
@@ -516,9 +512,11 @@ def recover_interrupted_executions() -> int:
     starves every other consumer of that lock. The termination happens between two ledger
     transactions so the ledger lock is never held while waiting on a foreign process.
 
-    Only a pid that still matches the claim's start-time fingerprint is signalled; a recycled
-    number is never killed. Rows owned by this process (``process_id == _PROCESS_ID``, in-process
-    runs) are skipped and remain out of scope.
+    Only a pid whose current start time still EXACTLY matches the claim's is signalled. The
+    identity is re-proved before every signal and poll, which narrows the read→kill interval to
+    an instant but cannot close it — a recycled number is extremely unlikely, not impossible, to
+    be hit. Rows owned by this process (``process_id == _PROCESS_ID``, in-process runs) are
+    skipped and remain out of scope.
     """
     now = _hermes_now().isoformat()
     changed = 0

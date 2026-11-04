@@ -139,7 +139,7 @@ def test_a_wedged_owner_is_terminated_and_its_flock_is_released(ledger, tmp_path
         row = _row(eid)
         assert row["status"] == "unknown"
         assert "terminated" in row["error"] and "#115692" in row["error"]
-        assert "shared locks it held are released" in row["error"]
+        assert "shared locks held by this process are released" in row["error"]
     finally:
         if holder.poll() is None:  # pragma: no cover - only on a fix regression
             holder.kill()

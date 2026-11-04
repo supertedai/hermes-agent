@@ -399,8 +399,8 @@ def _reap_stale_executions(job_name: str) -> None:
         # process -- e.g. a PRIOR one-shot `hermes cron run` invocation whose dispatched runner died with
         # the exiting process before writing a terminal status (issue #86721). Safe and cheap: provably-dead
         # A live owner whose claim is older than the derived stale bound is a wedged worker: its row is
-        # released and the owner process is terminated (SIGTERM, then SIGKILL) so the shared locks it
-        # held are released instead of starving every other consumer (#115692).
+        # released and the owner process is terminated (SIGTERM, then SIGKILL) so the shared locks
+        # held by that process are released instead of starving every other consumer (#115692).
         from cron.executions import recover_interrupted_executions
         _reclaimed = recover_interrupted_executions()
         if _reclaimed:
