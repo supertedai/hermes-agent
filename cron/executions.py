@@ -268,6 +268,10 @@ def terminate_wedged_owner(
     kill = getattr(signal, "SIGKILL", None)
     if kill is None:  # pragma: no cover - Windows has no SIGKILL
         return "survived"
+    # The final poll may have ended on the deadline. Re-prove ownership in the
+    # same control-flow turn as SIGKILL; do not reuse that older observation.
+    if not _owner_identity_proven(pid, started_at):
+        return "gone" if not _pid_alive(pid) else "unproven"
     if not _signal_quietly(pid, kill):
         return "gone"
     kill_window = WEDGED_KILL_GRACE_SECONDS if kill_grace is None else float(kill_grace)

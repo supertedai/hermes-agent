@@ -32,6 +32,7 @@ from cron.executions import (
     _process_start_time,
     _transaction,
     recover_interrupted_executions,
+    terminate_wedged_owner,
 )
 
 
@@ -198,6 +199,35 @@ def test_no_owner_is_signalled_without_a_bound_and_proof_of_ownership(
         if holder.poll() is None:
             holder.kill()
         holder.wait()
+
+
+def test_sigkill_is_not_sent_after_owner_identity_disappears(ledger, monkeypatch):
+    """Re-check ownership after the wait deadline and before escalating to SIGKILL."""
+    signals = []
+    identity = iter((True, False))
+
+    monkeypatch.setattr(
+        executions_mod,
+        "_owner_identity_proven",
+        lambda pid, started_at: next(identity),
+    )
+    monkeypatch.setattr(executions_mod, "_owner_is_live", lambda pid, started_at: True)
+    monkeypatch.setattr(executions_mod, "_pid_alive", lambda pid: True)
+    monkeypatch.setattr(
+        executions_mod,
+        "_signal_quietly",
+        lambda pid, sig: signals.append(sig) or True,
+    )
+    monkeypatch.setattr(
+        executions_mod,
+        "_wait_for_owner_exit",
+        lambda pid, started_at, deadline: False,
+    )
+
+    outcome = terminate_wedged_owner(424242, 123, term_grace=0, kill_grace=0)
+
+    assert outcome == "unproven"
+    assert signals == [signal.SIGTERM]
 
 
 def test_the_job_can_fire_again_after_its_wedged_owner_is_terminated(ledger, tmp_path):
