@@ -221,13 +221,65 @@ def test_sigkill_is_not_sent_after_owner_identity_disappears(ledger, monkeypatch
     monkeypatch.setattr(
         executions_mod,
         "_wait_for_owner_exit",
-        lambda pid, started_at, deadline: False,
+        lambda pid, started_at, deadline: "owns",
     )
 
     outcome = terminate_wedged_owner(424242, 123, term_grace=0, kill_grace=0)
 
     assert outcome == "unproven"
     assert signals == [signal.SIGTERM]
+
+
+def test_signal_failure_does_not_claim_owner_gone(ledger, monkeypatch):
+    """Permission/OSError is not ESRCH: the owner may still hold the shared lock."""
+    calls = []
+
+    monkeypatch.setattr(executions_mod, "_owner_identity_proven", lambda pid, started_at: True)
+    monkeypatch.setattr(executions_mod, "_pid_alive", lambda pid: True)
+    monkeypatch.setattr(executions_mod, "_owner_is_live", lambda pid, started_at: True)
+    monkeypatch.setattr(
+        executions_mod.os,
+        "kill",
+        lambda pid, sig: calls.append(sig) or (_ for _ in ()).throw(PermissionError("denied")),
+    )
+
+    outcome = terminate_wedged_owner(424242, 123, term_grace=0, kill_grace=0)
+
+    assert outcome == "survived"
+    assert calls == [signal.SIGTERM]
+    assert "shared locks it holds may still be held" in executions_mod._wedged_reason(outcome)
+    assert "released" not in executions_mod._wedged_reason(outcome)
+
+
+def test_sigkill_signal_failure_does_not_claim_owner_gone(ledger, monkeypatch):
+    """A failed escalation signal must not be recorded as an exited owner."""
+    calls = []
+
+    monkeypatch.setattr(executions_mod, "_owner_identity_proven", lambda pid, started_at: True)
+    monkeypatch.setattr(executions_mod, "_pid_alive", lambda pid: True)
+    monkeypatch.setattr(executions_mod, "_owner_is_live", lambda pid, started_at: True)
+    monkeypatch.setattr(executions_mod, "_wait_for_owner_exit", lambda pid, started_at, deadline: "owns")
+
+    def fail_kill(pid, sig):
+        calls.append(sig)
+        if sig == signal.SIGKILL:
+            raise PermissionError("denied")
+
+    monkeypatch.setattr(executions_mod.os, "kill", fail_kill)
+
+    outcome = terminate_wedged_owner(424242, 123, term_grace=0, kill_grace=0)
+
+    assert outcome == "survived"
+    assert calls == [signal.SIGTERM, signal.SIGKILL]
+    assert "released" not in executions_mod._wedged_reason(outcome)
+
+
+def test_unobservable_owner_is_not_treated_as_gone(ledger, monkeypatch):
+    """An unreadable identity with a live pid is uncertainty, not proof of exit."""
+    monkeypatch.setattr(executions_mod, "_owner_identity_proven", lambda pid, started_at: False)
+    monkeypatch.setattr(executions_mod, "_pid_alive", lambda pid: True)
+
+    assert executions_mod._wait_for_owner_exit(424242, 123, 0) == "unproven"
 
 
 def test_the_job_can_fire_again_after_its_wedged_owner_is_terminated(ledger, tmp_path):

@@ -9,6 +9,7 @@ derived stale bound is treated as wedged and the owner is terminated, see
 
 from __future__ import annotations
 
+import errno
 import logging
 import math
 import os
@@ -223,24 +224,34 @@ def _pid_alive(pid: int) -> bool:
         return True  # cannot prove death -> do not claim it
 
 
-def _signal_quietly(pid: int, sig: int) -> bool:
-    """Send one signal to a proven owner; never raise, never report a lost race as success."""
+def _signal_quietly(pid: int, sig: int) -> str:
+    """Send one signal and distinguish a gone pid from an unsignalable live one."""
     try:
         os.kill(pid, sig)
-        return True
+        return "sent"
     except ProcessLookupError:
-        return False
-    except (OSError, PermissionError) as exc:
+        return "gone"
+    except OSError as exc:
+        if exc.errno == errno.ESRCH:
+            return "gone"
         logger.warning("Could not signal wedged cron owner pid %d with %s: %s", pid, sig, exc)
-        return False
+        return "failed"
 
 
-def _wait_for_owner_exit(pid: int, started_at: Optional[int], deadline: float) -> bool:
+def _owner_exit_state(pid: int, started_at: Optional[int]) -> str:
+    """Return ``gone``, ``unproven`` or ``owns`` without treating uncertainty as death."""
+    if _owner_identity_proven(pid, started_at):
+        return "owns" if _owner_is_live(pid, started_at) else "gone"
+    return "gone" if not _pid_alive(pid) else "unproven"
+
+
+def _wait_for_owner_exit(pid: int, started_at: Optional[int], deadline: float) -> str:
     while time.monotonic() < deadline:
-        if not _owner_still_owns(pid, started_at):
-            return True
+        state = _owner_exit_state(pid, started_at)
+        if state != "owns":
+            return state
         time.sleep(_WEDGED_POLL_SECONDS)
-    return not _owner_still_owns(pid, started_at)
+    return _owner_exit_state(pid, started_at)
 
 
 def terminate_wedged_owner(
@@ -260,11 +271,17 @@ def terminate_wedged_owner(
     """
     if not _owner_identity_proven(pid, started_at):
         return "gone" if not _pid_alive(pid) else "unproven"
-    if not _signal_quietly(pid, signal.SIGTERM):
+    signal_result = _signal_quietly(pid, signal.SIGTERM)
+    if signal_result == "gone":
         return "gone"
+    if signal_result != "sent" and signal_result is not True:
+        return "survived"
     grace = WEDGED_TERM_GRACE_SECONDS if term_grace is None else float(term_grace)
-    if _wait_for_owner_exit(pid, started_at, time.monotonic() + max(0.0, grace)):
+    exit_state = _wait_for_owner_exit(pid, started_at, time.monotonic() + max(0.0, grace))
+    if exit_state == "gone":
         return "terminated"
+    if exit_state != "owns":
+        return "survived"
     kill = getattr(signal, "SIGKILL", None)
     if kill is None:  # pragma: no cover - Windows has no SIGKILL
         return "survived"
@@ -272,12 +289,15 @@ def terminate_wedged_owner(
     # same control-flow turn as SIGKILL; do not reuse that older observation.
     if not _owner_identity_proven(pid, started_at):
         return "gone" if not _pid_alive(pid) else "unproven"
-    if not _signal_quietly(pid, kill):
+    kill_result = _signal_quietly(pid, kill)
+    if kill_result == "gone":
         return "gone"
+    if kill_result != "sent" and kill_result is not True:
+        return "survived"
     kill_window = WEDGED_KILL_GRACE_SECONDS if kill_grace is None else float(kill_grace)
-    if _wait_for_owner_exit(pid, started_at, time.monotonic() + max(0.0, kill_window)):
-        return "killed"
-    return "survived"
+    return "killed" if _wait_for_owner_exit(
+        pid, started_at, time.monotonic() + max(0.0, kill_window)
+    ) == "gone" else "survived"
 
 
 def _prune_unlocked(conn: sqlite3.Connection) -> None:
