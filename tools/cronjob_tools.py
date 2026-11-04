@@ -398,13 +398,15 @@ def _reap_stale_executions(job_name: str) -> None:
         # Reap any execution row this job (or any job) left stranded 'claimed'/ 'running' by a dead owner
         # process -- e.g. a PRIOR one-shot `hermes cron run` invocation whose dispatched runner died with
         # the exiting process before writing a terminal status (issue #86721). Safe and cheap: provably-dead
-        # owners (PID gone, or PID reused by a different process per its start time) are reaped, as is a
-        # live owner whose claim is older than the derived stale bound (the process itself is not killed).
+        # A live owner whose claim is older than the derived stale bound is a wedged worker: its row is
+        # released and the owner process is terminated (SIGTERM, then SIGKILL) so the shared locks it
+        # held are released instead of starving every other consumer (#115692).
         from cron.executions import recover_interrupted_executions
         _reclaimed = recover_interrupted_executions()
         if _reclaimed:
             logger.warning(
-                "Reclaimed %d stale cron execution(s) from dead owner(s) before dispatching job '%s'",
+                "Reclaimed %d stale cron execution(s) from gone or wedged owner(s) "
+                "before dispatching job '%s'",
                 _reclaimed, job_name)
     except Exception as _reap_exc:
         logger.debug("Stale execution reclaim failed: %s", _reap_exc)

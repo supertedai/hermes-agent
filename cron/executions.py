@@ -1,14 +1,18 @@
 """Profile-local durable audit ledger for cron execution attempts.
 
 The ledger records what is known about each attempt; it is not a retry queue. Interrupted attempts
-become ``unknown`` only after their exact owner process is proved gone. Terminal states are
-immutable.
+become ``unknown`` only once the attempt can no longer reach a terminal state: its exact owner is
+proved gone, or the owner is alive but provably no longer working on it (a claim that outlived the
+derived stale bound is treated as wedged and the owner is terminated, see
+``recover_interrupted_executions``). Terminal states are immutable.
 """
 
 from __future__ import annotations
 
+import logging
 import math
 import os
+import signal
 import sqlite3
 import threading
 import time
@@ -33,6 +37,13 @@ LIVE_OWNER_STALE_CLAIM_FLOOR_SECONDS = 7200.0
 _TERMINAL_STATES = ("completed", "failed", "unknown")
 _lock = threading.RLock()
 _PROCESS_ID = uuid.uuid4().hex
+logger = logging.getLogger(__name__)
+
+#: Grace between SIGTERM and the escalated SIGKILL when a wedged owner is terminated. The sweep
+#: runs in the gateway tick, so the wait is bounded and only paid when a wedge is actually proven.
+WEDGED_TERM_GRACE_SECONDS = 10.0
+WEDGED_KILL_GRACE_SECONDS = 5.0
+_WEDGED_POLL_SECONDS = 0.05
 
 
 # --- executions ledger --------------------------------------------------------------------------
@@ -163,6 +174,111 @@ def _live_owner_stale_after_seconds() -> Optional[float]:
 def _claim_age_seconds(claimed_at: str) -> float:
     """Seconds since ``claimed_at`` (NOT NULL, always the aware ISO string from hermes_time.now)."""
     return (_hermes_now() - datetime.fromisoformat(claimed_at)).total_seconds()
+
+
+def _handoff_in_grace(row: Dict[str, Any]) -> bool:
+    """True while a freshly handed-off claim may still be adopted by its external worker."""
+    handoff_started_at = row["handoff_started_at"]
+    return bool(
+        row["handoff_pending"]
+        and handoff_started_at is not None
+        and time.time() - float(handoff_started_at) < HANDOFF_ADOPTION_GRACE_SECONDS
+    )
+
+
+def _owner_identity_proven(pid: int, started_at: Optional[int]) -> bool:
+    """True only when the process behind ``pid`` is provably the one that owns the claim.
+
+    Deliberately independent of ``_owner_is_live``: that predicate answers "is the owner still
+    alive" (and is stubbed by tests), while this one answers "is the number still the owner" —
+    the only question that may be answered before signalling a foreign process. A recycled pid,
+    a zombie, an unreadable ``/proc`` or a missing fingerprint all answer *no*, and the caller
+    then leaves the process alone: a leaked claim beats killing a stranger.
+    """
+    if started_at is None or pid <= 1 or pid == os.getpid():
+        return False
+    current = _process_start_time(pid)
+    if current is None:
+        return False
+    # ``getattr``, not ``from ... import``: older checkouts of gateway/status.py predate the
+    # drift-tolerant matcher, and this module must import cleanly against both.
+    try:
+        import gateway.status as gateway_status
+        matcher = getattr(gateway_status, "start_time_fingerprints_match", None)
+    except Exception:
+        matcher = None
+    if matcher is None:
+        return current == int(started_at)
+    try:
+        return bool(matcher(int(started_at), current))
+    except Exception:
+        return current == int(started_at)
+
+
+def _owner_still_owns(pid: int, started_at: Optional[int]) -> bool:
+    """Liveness AND identity in one probe, re-asked before every signal and every poll."""
+    return _owner_identity_proven(pid, started_at) and _owner_is_live(pid, started_at)
+
+
+def _pid_alive(pid: int) -> bool:
+    try:
+        from gateway.status import _pid_exists
+        return bool(_pid_exists(pid))
+    except Exception:
+        return True  # cannot prove death -> do not claim it
+
+
+def _signal_quietly(pid: int, sig: int) -> bool:
+    """Send one signal to a proven owner; never raise, never report a lost race as success."""
+    try:
+        os.kill(pid, sig)
+        return True
+    except ProcessLookupError:
+        return False
+    except (OSError, PermissionError) as exc:
+        logger.warning("Could not signal wedged cron owner pid %d with %s: %s", pid, sig, exc)
+        return False
+
+
+def _wait_for_owner_exit(pid: int, started_at: Optional[int], deadline: float) -> bool:
+    while time.monotonic() < deadline:
+        if not _owner_still_owns(pid, started_at):
+            return True
+        time.sleep(_WEDGED_POLL_SECONDS)
+    return not _owner_still_owns(pid, started_at)
+
+
+def terminate_wedged_owner(
+    pid: int, started_at: Optional[int], *, term_grace: Optional[float] = None,
+    kill_grace: Optional[float] = None,
+) -> str:
+    """Terminate the proven owner of a wedged claim: SIGTERM, bounded wait, then SIGKILL.
+
+    A process the kernel has already declared wedged must not keep holding a shared lock: a
+    ``flock`` outliving the run it belongs to stops every other consumer of that lock — including
+    the watchdog meant to measure the starvation (#115692). Killing the owner is what actually
+    releases the lock, because the lock lives in the owner's open file description.
+
+    Returns ``"gone"`` (nothing to terminate), ``"terminated"`` (SIGTERM was enough), ``"killed"``
+    (SIGKILL was needed), ``"survived"`` (still provably alive after both windows — e.g. stuck in
+    uninterruptible I/O) or ``"unproven"`` (identity could not be proved; nothing was signalled).
+    """
+    if not _owner_identity_proven(pid, started_at):
+        return "gone" if not _pid_alive(pid) else "unproven"
+    if not _signal_quietly(pid, signal.SIGTERM):
+        return "gone"
+    grace = WEDGED_TERM_GRACE_SECONDS if term_grace is None else float(term_grace)
+    if _wait_for_owner_exit(pid, started_at, time.monotonic() + max(0.0, grace)):
+        return "terminated"
+    kill = getattr(signal, "SIGKILL", None)
+    if kill is None:  # pragma: no cover - Windows has no SIGKILL
+        return "survived"
+    if not _signal_quietly(pid, kill):
+        return "gone"
+    kill_window = WEDGED_KILL_GRACE_SECONDS if kill_grace is None else float(kill_grace)
+    if _wait_for_owner_exit(pid, started_at, time.monotonic() + max(0.0, kill_window)):
+        return "killed"
+    return "survived"
 
 
 def _prune_unlocked(conn: sqlite3.Connection) -> None:
@@ -305,26 +421,116 @@ _OWNER_GONE_REASON = (
     "terminal state; whether side effects ran is unknown."
 )
 _OWNER_WEDGED_REASON = (
-    "Owner process is still alive but the claim outlived the derived stale bound; "
-    "treated as wedged (#115692). The process was not terminated; whether side effects "
+    "Owner process was still alive but the claim outlived the derived stale bound; treated as "
+    "wedged (#115692). Whether the process still holds its shared locks, and whether side "
+    "effects ran, is unknown."
+)
+_OWNER_WEDGED_TERMINATED_REASON = (
+    "Owner process was still alive but the claim outlived the derived stale bound; "
+    "treated as wedged (#115692) and terminated (SIGTERM, then SIGKILL if it ignored the "
+    "grace window) so the shared locks it held are released. Whether side effects ran "
+    "before the termination is unknown."
+)
+_OWNER_WEDGED_GONE_REASON = (
+    "Owner process was still alive when the claim outlived the derived stale bound, but "
+    "exited while the sweep ran; treated as wedged (#115692). Its shared locks are released "
+    "with it; whether side effects ran is unknown."
+)
+_OWNER_WEDGED_SURVIVED_REASON = (
+    "Owner process is still alive after the claim outlived the derived stale bound; treated "
+    "as wedged (#115692). Termination was attempted (SIGTERM, then SIGKILL) but the process "
+    "could not be proved gone, so the shared locks it holds may still be held and whether "
+    "side effects ran is unknown."
+)
+_OWNER_WEDGED_UNPROVEN_REASON = (
+    "Owner process is still alive after the claim outlived the derived stale bound; treated "
+    "as wedged (#115692). The recorded pid no longer matches the claim's owner (start-time "
+    "mismatch), so it was NOT signalled — a recycled pid is never killed. Whether side effects "
     "ran is unknown."
 )
 
 
+#: One row per termination outcome: the ledger reason it earns, the log level it deserves, and the
+#: phrase the log line uses. A table, not a ladder — the outcome space is closed by
+#: ``terminate_wedged_owner``'s contract.
+_WEDGED_OUTCOMES: Dict[str, tuple] = {
+    "terminated": (
+        _OWNER_WEDGED_TERMINATED_REASON, logging.WARNING, "terminated after SIGTERM",
+    ),
+    "killed": (
+        _OWNER_WEDGED_TERMINATED_REASON, logging.WARNING, "terminated after SIGTERM→SIGKILL",
+    ),
+    "gone": (
+        _OWNER_WEDGED_GONE_REASON, logging.WARNING, "exited while the sweep ran",
+    ),
+    "survived": (
+        _OWNER_WEDGED_SURVIVED_REASON, logging.ERROR,
+        "survived SIGTERM→SIGKILL; its shared locks may still be held",
+    ),
+    "unproven": (
+        _OWNER_WEDGED_UNPROVEN_REASON, logging.ERROR,
+        "pid could not be proved to be the claim's owner (start-time mismatch); not signalled",
+    ),
+}
+
+
+def _wedged_reason(outcome: str) -> str:
+    """Name what actually happened to the wedged owner; never claim a lock release unproven."""
+    return _WEDGED_OUTCOMES.get(outcome, (_OWNER_WEDGED_REASON,))[0]
+
+
+def _log_wedged_outcome(row: Dict[str, Any], outcome: str) -> None:
+    """One log line per wedged row, at a level that matches whether locks were released."""
+    _reason, level, note = _WEDGED_OUTCOMES.get(
+        outcome, (_OWNER_WEDGED_REASON, logging.DEBUG, "outcome not described")
+    )
+    logger.log(
+        level, "Wedged cron execution %s (job %s, pid %s): %s (#115692)",
+        row["id"], row.get("job_id", "?"), row["pid"], note,
+    )
+
+
+def _recover_row(conn: sqlite3.Connection, row: Dict[str, Any], reason: str, now: str) -> bool:
+    """CAS one claimed/running row to ``unknown``; True only for the writer that won."""
+    cur = conn.execute(
+        """UPDATE executions
+           SET status='unknown', finished_at=?, error=?,
+               handoff_pending=0, handoff_started_at=NULL
+           WHERE id=? AND status=? AND process_id=? AND pid=?
+             AND handoff_pending=?
+             AND handoff_started_at IS ?""",
+        (now, reason, row["id"], row["status"], row["process_id"], row["pid"],
+         row["handoff_pending"], row["handoff_started_at"]),
+    )
+    return cur.rowcount == 1
+
+
 def recover_interrupted_executions() -> int:
-    """Mark abandoned attempts unknown without scheduling retries: rows whose owner is provably
-    dead, plus rows whose live owner holds a claim older than the derived stale bound (the
-    process is not killed)."""
+    """Mark abandoned attempts unknown without scheduling retries.
+
+    Two classes are released: rows whose owner is provably dead, and rows whose LIVE owner holds
+    a claim older than the derived stale bound (a wedged worker, #115692). A wedged owner is
+    **terminated** — SIGTERM, then SIGKILL after a grace window — because the alternate reading,
+    "release the row but leave the process", leaves exactly the defect this sweep exists to fix:
+    the wedged process keeps holding whatever shared lock it took, and a lock outliving its run
+    starves every other consumer of that lock. The termination happens between two ledger
+    transactions so the ledger lock is never held while waiting on a foreign process.
+
+    Only a pid that still matches the claim's start-time fingerprint is signalled; a recycled
+    number is never killed. Rows owned by this process (``process_id == _PROCESS_ID``, in-process
+    runs) are skipped and remain out of scope.
+    """
     now = _hermes_now().isoformat()
     changed = 0
     recovered: List[Dict[str, Any]] = []
+    wedged: List[Dict[str, Any]] = []
     # Derived on the first live-owned row only: the bound reads config, and the idle gateway
     # tick must stay config-free (tests/cron/test_idle_tick_config_skip.py).
     stale_after: Optional[float] = None
     stale_after_resolved = False
     with _transaction() as conn:
         rows = conn.execute(
-            """SELECT id, status, process_id, pid, process_started_at,
+            """SELECT id, job_id, status, process_id, pid, process_started_at,
                       handoff_pending, handoff_started_at, claimed_at
                FROM executions
                WHERE status IN ('claimed','running')"""
@@ -332,42 +538,47 @@ def recover_interrupted_executions() -> int:
         for row in rows:
             if row["process_id"] == _PROCESS_ID:
                 continue
-            reason = _OWNER_GONE_REASON
+            if _handoff_in_grace(row):
+                continue
             if _owner_is_live(int(row["pid"]), row["process_started_at"]):
                 # A live owner is normally a legitimately running job. A worker permanently
                 # deadlocked (e.g. futex_wait behind a route/proxy flip, #115692) also passes
-                # this check, so a claim older than the derived bound is treated as wedged
-                # and released — the external-worker wait loop polls this ledger for a
-                # terminal status, so the job can fire again. The wedged worker PROCESS is
-                # NOT terminated here (leaked until host restart); rows owned by this process
-                # (process_id == _PROCESS_ID, in-process runs) are skipped above and remain
-                # out of scope.
+                # this check, so a claim older than the derived bound is treated as wedged and
+                # its owner is terminated after the transaction closes. Deferring the signal
+                # keeps the ledger lock out of the SIGTERM grace window.
                 if not stale_after_resolved:
                     stale_after = _live_owner_stale_after_seconds()
                     stale_after_resolved = True
                 if stale_after is None or _claim_age_seconds(row["claimed_at"]) <= stale_after:
                     continue
-                reason = _OWNER_WEDGED_REASON
-            handoff_started_at = row["handoff_started_at"]
-            if (
-                row["handoff_pending"]
-                and handoff_started_at is not None
-                and time.time() - float(handoff_started_at)
-                < HANDOFF_ADOPTION_GRACE_SECONDS
-            ):
+                wedged.append(dict(row))
                 continue
-            cur = conn.execute(
-                """UPDATE executions
-                   SET status='unknown', finished_at=?, error=?,
-                       handoff_pending=0, handoff_started_at=NULL
-                   WHERE id=? AND status=? AND process_id=? AND pid=?
-                     AND handoff_pending=?
-                     AND handoff_started_at IS ?""",
-                (now, reason, row["id"], row["status"], row["process_id"], row["pid"],
-                 row["handoff_pending"], row["handoff_started_at"]),
-            )
-            changed += cur.rowcount
-            if cur.rowcount:
+            if _recover_row(conn, dict(row), _OWNER_GONE_REASON, now):
+                changed += 1
+                record = _fetch(conn, row["id"])
+                if record is not None:
+                    recovered.append(record)
+        if changed:
+            _prune_unlocked(conn)
+    for record in recovered:
+        _emit_execution_state(record)
+
+    if not wedged:
+        return changed
+
+    outcomes: List[tuple] = []
+    for row in wedged:
+        outcome = terminate_wedged_owner(int(row["pid"]), row["process_started_at"])
+        _log_wedged_outcome(row, outcome)
+        outcomes.append((row, outcome))
+
+    with _transaction() as conn:
+        # Fresh stamp: the termination above may have taken the SIGTERM+SIGKILL grace window, and
+        # ``finished_at`` must not predate the death that released the locks.
+        wedged_now = _hermes_now().isoformat()
+        for row, outcome in outcomes:
+            if _recover_row(conn, row, _wedged_reason(outcome), wedged_now):
+                changed += 1
                 record = _fetch(conn, row["id"])
                 if record is not None:
                     recovered.append(record)
